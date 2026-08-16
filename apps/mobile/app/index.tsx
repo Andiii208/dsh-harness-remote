@@ -295,7 +295,7 @@ export default function ConnectScreen() {
         </View>
 
         {online ? (
-          <Button tone="danger" label="断开连接" onPress={() => { justConnected.current = false; void haptic("warning"); disconnect(); }} full />
+          <Button tone="danger" label="断开连接" onPress={() => { justConnected.current = false; void haptic("warning"); void disconnect(); }} full />
         ) : (
           <Button
             label={busy ? "连接中…" : "连接"}

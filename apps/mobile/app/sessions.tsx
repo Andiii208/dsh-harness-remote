@@ -33,6 +33,7 @@ export default function SessionsScreen() {
   const router = useRouter();
   const entering = useEntering();
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
   const autoRefreshed = useRef(false);
   // 每分钟刷新相对时间显示（"刚刚/×分钟前"）。
   const [, setTick] = useState(0);
@@ -41,18 +42,23 @@ export default function SessionsScreen() {
     return () => clearInterval(t);
   }, []);
 
-  // 上线后自动刷新一次会话列表（投影帧之外的全量校准）。
+  // 上线后自动刷新一次会话列表（投影帧之外的全量校准）；离线时重置标记，重连后再次刷新。
   useEffect(() => {
+    if (state === "offline") autoRefreshed.current = false;
     if (state === "online" && !autoRefreshed.current) {
       autoRefreshed.current = true;
-      void refreshSessions();
+      setRefreshError("");
+      void refreshSessions().catch(() => setRefreshError("刷新失败：连接异常"));
     }
   }, [state, refreshSessions]);
 
   const onRefresh = async () => {
     setRefreshing(true);
+    setRefreshError("");
     try {
       await refreshSessions();
+    } catch {
+      setRefreshError("刷新失败：连接异常");
     } finally {
       setRefreshing(false);
     }
@@ -81,6 +87,7 @@ export default function SessionsScreen() {
               <StatusChip tone={state === "online" ? "success" : state === "offline" ? "danger" : "warn"} label={STATE_LABEL[state] ?? state} />
             </View>
           </View>
+          {refreshError.length > 0 && <Text style={styles.refreshError}>{refreshError}</Text>}
           {pending.length > 0 && (
             <Pressable
               style={styles.pendingBanner}
@@ -183,6 +190,7 @@ const styles = StyleSheet.create({
   },
   pendingRail: { width: 3, alignSelf: "stretch", borderRadius: 2 },
   pendingText: { color: colors.warn, fontSize: font.body - 1, fontWeight: "600", flex: 1 },
+  refreshError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
   row: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,

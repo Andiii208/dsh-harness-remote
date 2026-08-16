@@ -4,6 +4,7 @@ import * as Linking from "expo-linking";
 import Constants from "expo-constants";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
 import { autoReconnectStore } from "../src/discovery/autoReconnectStoreAdapter";
+import { isExpoGo } from "../src/notify/expoEnv";
 import { Button } from "../src/ui/Button";
 import { colors, font, radius, space, stroke } from "../src/theme";
 import { SectionLabel } from "../src/ui/SectionLabel";
@@ -78,12 +79,15 @@ export default function SettingsScreen() {
           <Switch
             value={notificationsEnabled}
             onValueChange={setNotificationsEnabled}
+            disabled={isExpoGo()}
             trackColor={{ false: colors.surface3, true: colors.accent }}
             thumbColor={colors.text}
           />
         </View>
         <Row label="未读事件" value={notifications.length > 0 ? `${notifications.length} 条` : "无"} mono />
-        <Text style={styles.hint}>关闭后仍会在应用内记录事件，只是不弹系统通知（Expo Go 下通知本就禁用）。</Text>
+        <Text style={styles.hint}>
+          {isExpoGo() ? "Expo Go 不支持本地通知——此开关在 Expo Go 下不可用，development build 中生效。" : "关闭后仍会在应用内记录事件，只是不弹系统通知。"}
+        </Text>
       </Group>
 
       <Group eyebrow="About">

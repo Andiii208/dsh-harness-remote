@@ -216,9 +216,12 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       const r = await c.unary("session.list", {});
       if (r.ok && r.result && Array.isArray((r.result as { sessions?: unknown }).sessions)) {
         store.applySessionList((r.result as { sessions: Array<{ id?: unknown; title?: unknown; workspace?: unknown }> }).sessions);
+        return;
       }
+      throw new Error("session.list failed");
     } catch (err) {
       console.warn("[sessions] refresh failed", err);
+      throw err; // 让 UI 层给出刷新失败提示
     }
   }, []);
   const setGoalStatus = useCallback((sessionId: string, status: string) => {

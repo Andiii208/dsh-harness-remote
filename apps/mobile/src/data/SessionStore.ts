@@ -130,15 +130,22 @@ export class SessionStore {
       if (!item || typeof item !== "object") continue;
       const id = str((item as Record<string, unknown>).id);
       if (!id) continue;
-      const s = this.touchSession(id);
       const title = str((item as Record<string, unknown>).title);
       const workspace = str((item as Record<string, unknown>).workspace);
+      const existing = this.sessions.get(id);
+      // 仅新增或字段变化时 touchSession（刷新不改变排序/时间，评审 #4）。
+      const changed = !existing || existing.title !== title || existing.workspace !== workspace;
+      const s = changed ? this.touchSession(id) : existing!;
       if (title !== undefined) s.title = title;
       if (workspace !== undefined) s.workspace = workspace;
       seen.add(id);
     }
     for (const id of [...this.sessions.keys()]) {
-      if (!seen.has(id)) this.sessions.delete(id);
+      if (!seen.has(id)) {
+        this.sessions.delete(id);
+        this.transcripts.delete(id); // 孤儿转录一并清理（评审 #1）
+        this.streaming.delete(id);
+      }
     }
     this.notify();
   }
