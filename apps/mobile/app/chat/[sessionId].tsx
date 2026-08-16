@@ -29,6 +29,7 @@ export default function ChatScreen() {
   const [draft, setDraft] = useState("");
   const [sendError, setSendError] = useState("");
   const [showJump, setShowJump] = useState(false);
+  const showJumpRef = useRef(false);
   const listRef = useRef<FlashListRef<TranscriptMessage> | null>(null);
   const messages = id ? transcript(id) : [];
   const live = id ? liveMessage(id) : undefined;
@@ -36,6 +37,7 @@ export default function ChatScreen() {
   const summary = id ? sessions.find((s) => s.id === id) : undefined;
   const online = state === "online";
   const entering = useEntering(6, 200);
+  const fabEntering = useEntering(8, 160);
 
   // 新消息到达时滚到底部（终端流式习惯）。
   useEffect(() => {
@@ -52,7 +54,12 @@ export default function ChatScreen() {
   const onScroll = (e: { nativeEvent: { contentOffset: { y: number }; layoutMeasurement: { height: number }; contentSize: { height: number } } }) => {
     const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
     const distance = contentSize.height - (contentOffset.y + layoutMeasurement.height);
-    setShowJump(distance > 320);
+    // 迟滞窗口：显示后用 280 关闭，隐藏后用 360 打开，避免临界抖动（评审 #2）。
+    const shouldShow = showJumpRef.current ? distance > 280 : distance > 360;
+    if (shouldShow !== showJumpRef.current) {
+      showJumpRef.current = shouldShow;
+      setShowJump(shouldShow);
+    }
   };
 
   const send = async () => {
@@ -119,9 +126,11 @@ export default function ChatScreen() {
         }
       />
       {showJump && (
-        <Pressable style={styles.jumpFab} onPress={jumpToBottom} accessibilityRole="button" accessibilityLabel="回到底部">
-          <Text style={styles.jumpFabText}>↓</Text>
-        </Pressable>
+        <Animated.View entering={fabEntering} style={styles.jumpFabWrap}>
+          <Pressable style={styles.jumpFab} onPress={jumpToBottom} accessibilityRole="button" accessibilityLabel="回到底部">
+            <Text style={styles.jumpFabText}>↓</Text>
+          </Pressable>
+        </Animated.View>
       )}
       <View style={styles.inputBar}>
         {!online && <SectionLabel tone="danger">Offline</SectionLabel>}
@@ -195,10 +204,12 @@ const styles = StyleSheet.create({
   sendDisabled: { opacity: 0.4 },
   sendText: { color: "#FFFFFF", fontSize: font.body, fontWeight: "600" },
   sendError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
-  jumpFab: {
+  jumpFabWrap: {
     position: "absolute",
     right: space.x5,
     bottom: 96,
+  },
+  jumpFab: {
     width: 40,
     height: 40,
     borderRadius: 20,

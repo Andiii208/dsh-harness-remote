@@ -11,6 +11,15 @@ dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness�
 - **LAN 起步、传输可插拔**：自动发现 + 二维码配对 + 最近主机一键重连，也可以手动直连局域网内的 DSH（`host:3080`）；传输层抽象为 `Transport` 接口，中继/公网为预留演进方向，不平滑推翻重来。
 - **低门槛连接（P2）**：首启 3 步引导 → 扫码电脑上的配对二维码即连（`dshremote://pair` 深链）；同一局域网点「自动发现」列出可用实例；冷启动自动重连最近主机。
 - **协议对齐**：纯 TS 协议包（`packages/protocol`，零 RN 依赖）与 DSH 原生类型零失真对齐；宽容解码，线上层永不因未知数据崩溃。
+- **设计**：深色终端风 v2（docs/design/UI-SYSTEM.md）——JetBrains Mono 等宽数据、单一强调色 `#4D6BFE`、DeepSeek 黑色鲸鱼品牌；动效克制且尊重系统「减弱动态」。
+
+## 界面预览
+
+| 连接页 | 会话列表 | 聊天 | 首启引导 |
+|---|---|---|---|
+| ![connect](docs/screenshots/connect.png) | ![sessions](docs/screenshots/sessions.png) | ![chat](docs/screenshots/chat.png) | ![onboarding](docs/screenshots/onboarding.png) |
+
+> 截图来自 Web 预览（390×844 视口）；真机观感一致（通知/扫码为原生能力，Web 会优雅降级）。
 
 ## 仓库结构
 

@@ -133,6 +133,7 @@ export default function ConnectScreen() {
     setPort(String(p));
     if (t) setToken(t);
     setConnectError("");
+    // 注意：最近/发现主机连接不写 draft——手动草稿不被覆盖（评审 #6）。
     // 等待连接真正在线后再跳转（justConnected + online effect）
     justConnected.current = true;
     await connect(h, p, t);
@@ -262,6 +263,7 @@ export default function ConnectScreen() {
             autoCorrect={false}
             value={host}
             onChangeText={setHost}
+            onBlur={() => void draftStore.set(host.trim(), Number.parseInt(port || "3080", 10))}
             editable={!online}
           />
           <Field
@@ -271,6 +273,7 @@ export default function ConnectScreen() {
             keyboardType="number-pad"
             value={port}
             onChangeText={setPort}
+            onBlur={() => void draftStore.set(host.trim(), Number.parseInt(port || "3080", 10))}
             editable={!online}
           />
           <Field

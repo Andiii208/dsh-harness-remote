@@ -29,4 +29,14 @@ describe("DraftStore", () => {
     await api.setItemAsync("dsh-connect-draft", "nope");
     expect(await new DraftStore(api).get()).toBeNull();
   });
+
+  it("rejects invalid drafts (empty host / bad port)", async () => {
+    const api = memStore();
+    const s = new DraftStore(api);
+    await s.set("  ", 3080);
+    await s.set("192.168.1.5", NaN);
+    await s.set("192.168.1.5", 0);
+    await s.set("192.168.1.5", 70000);
+    expect(api.map.has("dsh-connect-draft")).toBe(false);
+  });
 });

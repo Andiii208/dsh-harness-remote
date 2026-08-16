@@ -30,8 +30,11 @@ export class DraftStore {
   }
 
   async set(host: string, port: number): Promise<void> {
+    if (!host || host.trim().length === 0 || !Number.isInteger(port) || port <= 0 || port > 65535) {
+      return; // 无效草稿不落盘
+    }
     try {
-      await this.api.setItemAsync(DRAFT_KEY, JSON.stringify({ host, port }));
+      await this.api.setItemAsync(DRAFT_KEY, JSON.stringify({ host: host.trim(), port }));
     } catch (err) {
       console.warn("[draft] write failed", err);
     }
