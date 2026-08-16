@@ -46,6 +46,8 @@
 ### 3.1 状态表达（色点 + 文本，不滥用徽章）
 - `StatusChip`：8px 色点 + 等宽 11 文本（如 `● ONLINE` / `● CONNECTING` /
   `● BACKOFF 3.2s` / `○ OFFLINE`）。底 `surface`，描边 `border`，胶囊。
+- 配对徽章：success 描边胶囊（1px + mono 11 + `配对`），仅用于「已保存 token 的最近主机」；
+  发现中/在线用 6px 色点，不用描边胶囊。
 - 状态色只做「点 + 首字符」强调，不用大面积底色块。
 
 ### 3.2 卡片

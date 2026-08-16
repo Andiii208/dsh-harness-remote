@@ -29,4 +29,18 @@ describe("splitCode", () => {
   it("treats odd fences as text", () => {
     expect(splitCode("a\n```\nb")).toEqual([{ code: false, text: "a\n```\nb" }]);
   });
+
+  it("handles multiple blocks interleaved with text", () => {
+    const segs = splitCode("A\n```\nx=1\n```\nB\n```\ny=2\n```");
+    expect(segs).toEqual([
+      { code: false, text: "A\n" },
+      { code: true, text: "x=1" },
+      { code: false, text: "B\n" },
+      { code: true, text: "y=2" },
+    ]);
+  });
+
+  it("keeps code without a language tag", () => {
+    expect(splitCode("```\nconst z = 3;\n```")).toEqual([{ code: true, text: "const z = 3;" }]);
+  });
 });

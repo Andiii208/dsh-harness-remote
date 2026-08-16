@@ -74,9 +74,8 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
             </Text>
           ),
         )}
-        {(live || m.interrupted) && (
-          <Text style={styles.tail}>{m.interrupted ? " ⏹" : ""}{live ? <StreamingCursor /> : null}</Text>
-        )}
+        {m.interrupted && <Text style={styles.tail}>⏹ 中断</Text>}
+        {live && <StreamingCursor />}
         {copied && <Text style={styles.copied}>已复制</Text>}
       </View>
     </Pressable>
@@ -113,5 +112,5 @@ const styles = StyleSheet.create({
   },
   codeText: { color: "#D7E3FF", fontSize: font.transcript, lineHeight: 20, fontFamily: font.mono },
   copied: { color: colors.accent, fontSize: font.eyebrow, fontFamily: font.mono, alignSelf: "flex-end" },
-  tail: { color: colors.text, fontSize: font.transcript, fontFamily: font.mono },
+  tail: { color: colors.warn, fontSize: font.caption, fontFamily: font.mono },
 });

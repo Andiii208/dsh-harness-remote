@@ -11,11 +11,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
-import Svg, { Path } from "react-native-svg";
 import * as Network from "expo-network";
 import { useEntering } from "../src/ui/anim";
-
-const WHALE_D = "M 320 585 C 305 545, 305 515, 330 488 C 360 455, 430 432, 520 420 C 640 405, 760 415, 850 460 C 890 480, 920 505, 940 535 C 955 505, 985 480, 1005 470 C 985 505, 965 525, 955 545 C 950 560, 950 570, 955 585 C 965 605, 985 625, 1000 640 C 975 625, 945 610, 920 605 C 870 592, 800 610, 720 630 C 620 655, 480 660, 400 640 C 360 630, 330 615, 320 585 Z M 480 598 C 452 640, 442 662, 452 684 C 474 668, 506 636, 532 608 Z";
+import { WhaleWatermark } from "../src/ui/WhaleWatermark";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
 import { tokenStore } from "../src/data/secureStoreAdapter";
 import { hostStore } from "../src/discovery/hostStoreAdapter";
@@ -180,9 +178,7 @@ export default function ConnectScreen() {
       style={[styles.screen, { paddingTop: insets.top + space.x5 }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <Svg style={styles.watermark} width="340" height="340" viewBox="0 0 1024 1024" pointerEvents="none">
-        <Path d={WHALE_D} fill={colors.accent} opacity={0.04} />
-      </Svg>
+      <WhaleWatermark size={340} style={styles.watermark} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Animated.View entering={heroEntering} style={styles.hero}>
           <WhaleMark size={44} />
