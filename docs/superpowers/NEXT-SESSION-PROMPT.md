@@ -4,7 +4,7 @@
 
 ## 0. 交接状态（先按顺序读）
 
-- 工作目录 D:dsh-remote；main = 2ca4a65（已推 origin、工作树干净）；tag v0.1.0；GitHub Release（prerelease）与 dsh-plugin 话题已建；CI 绿。
+- 工作目录 `D:\dsh-remote`；main = 9d4afbe（已推 origin、工作树干净）；tag v0.1.0；GitHub Release（prerelease）与 dsh-plugin 话题已建；CI 绿。
 - 全仓 `pnpm -r typecheck` 与 `pnpm -r test` = 179/179 绿（protocol 64 / mock-harness 26 / mobile 52 / capture 24 / harness-plugin 13）。
 - 评审与进度 ledger（必读）：`.superpowers/sdd/phase-b/progress.md`（含真机验证记录、Phase C 执行记录、环境怪癖）。
 - 文档：`docs/ARCHITECTURE.md`、`docs/PROTOCOL.md`、`docs/COMPATIBILITY.md`、`docs/SECURITY.md`、`docs/MANUAL.md`；设计规范 `docs/design/UI-SYSTEM.md`（v1）与 `docs/design/BRAND.md`。
