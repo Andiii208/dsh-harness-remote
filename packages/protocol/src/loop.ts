@@ -67,6 +67,11 @@ export class ConnectionLoop {
     return this.state;
   }
 
+  /** Live connection while online (null otherwise). */
+  get connection(): Connection | null {
+    return this.conn;
+  }
+
   lastDescribeResult(): unknown {
     return this.lastDescribe;
   }
