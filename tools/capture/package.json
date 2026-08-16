@@ -1,0 +1,30 @@
+{
+  "name": "@dsh-remote/capture",
+  "version": "0.1.0",
+  "description": "Record real DSH traffic into conformance fixtures (meta + unary + ws frames + scenarios).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "dsh-capture": "./dist/cli.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "dev": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4",
+    "@types/node": "^22.0.0",
+    "ws": "^8.18.0"
+  }
+}
