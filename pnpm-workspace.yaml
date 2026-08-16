@@ -3,3 +3,7 @@ packages:
   - "packages/*"
   - "mock-harness"
   - "tools/*"
+allowBuilds:
+  # esbuild postinstall only validates the platform binary (present via
+  # @esbuild/win32-x64); skip it — child-process pipe capture is restricted here.
+  esbuild: false
