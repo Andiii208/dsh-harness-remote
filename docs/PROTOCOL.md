@@ -22,7 +22,7 @@
 | `POST /api/<method>` | 一元调用（`session.prompt`、`commands/execute` 等） |
 | `POST /api/respond` | 应答 server-request（审批/提问） |
 | `POST /api/<namespace>/<method>` | typert 网关（`commands/*`、`goals/*`、`pluginInventory/*`） |
-| `GET /api/session.export` | 会话导出（无信封，直接流 ZIP） |
+| `GET /api/session.export` | 会话导出（无信封，直接流 ZIP）— **预留**：客户端/桩尚未实现，契约待录制验证后补充 |
 | `GET /api/events.mux` | WebSocket 下行（会话事件、审批、提问、队列、任务、投影） |
 | `GET /api/events.host` | WebSocket 下行（会话/工作区注册表） |
 

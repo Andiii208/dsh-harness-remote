@@ -11,35 +11,25 @@ dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness�
 ```
 dsh-remote/
 ├── apps/
-│   └── mobile/            # Expo RN App（iOS + Android）— 实现中
-│       ├── app/           # expo-router 页面：连接、会话列表、聊天、审批、通知
+│   └── mobile/            # Expo RN App（iOS + Android）
+│       ├── app/           # expo-router 页面：连接、会话列表、聊天、审批
 │       ├── src/
-│       │   ├── transport/ # LAN Transport 实例化与状态管理
+│       │   ├── transport/ # ConnectionProvider + pipeline（装配 ConnectionLoop）
 │       │   ├── data/      # SessionStore：会话镜像、折叠、投影派生
-│       │   ├── notify/    # 通知分类器 → 本地通知 + 后台任务保活
-│       │   └── ui/        # DSH 设计令牌主题、组件、屏幕
+│       │   ├── notify/    # 通知分类器 → 本地通知（expo-notifications）+ 后台保活
+│       │   └── theme.ts   # DSH 设计令牌（暗色终端质感）
 │       └── app.json       # EAS 配置（云构建）
 ├── packages/
-│   └── protocol/          # TS 协议核心（纯 JS，无 RN 依赖）— 实现中
-│       ├── src/
-│       │   ├── envelopes.ts      # client-request / server-response / server-request / client-response
-│       │   ├── codec.ts          # lenient 解码：未知 key/类型降级 Unknown*
-│       │   ├── rpc.ts            # RpcClient（unary + respond + typert 网关）
-│       │   ├── ws.ts             # WsDownlink（仅下行双流）
-│       │   ├── loop.ts           # ConnectionLoop（握手、退避、重同步）
-│       │   ├── transport.ts      # Transport 接口（LAN 实现 + 中继预留插槽）
-│       │   └── dto/              # DSH schemas 的 TS 移植（对齐 api/remotes 类型）
-│       └── test/
-├── mock-harness/          # TS 实现 /api + WS 的测试桩 — 实现中
+│   └── protocol/          # TS 协议核心（纯 TS，零运行时依赖）
+│       └── src/           # envelopes / codec / rpc / ws / transport / loop / dto
+├── mock-harness/          # DSH /api + WS 测试桩（回放 conformance fixtures）
 ├── tools/
-│   └── capture/           # 录制真实 DSH 流量 → conformance fixtures — 实现中
+│   └── capture/           # 录制真实 DSH 流量 → conformance fixtures
 ├── harness-plugin/        # （预留）dsh-remote 宿主插件：配对 token / 鉴权 / 中继客户端
 ├── relay/                 # （预留）中继服务器
 ├── docs/
-│   ├── ARCHITECTURE.md    # M0 后补
-│   ├── PROTOCOL.md        # M0 后补
-│   ├── COMPATIBILITY.md   # 协议版本矩阵 — M0 后补
-│   └── SECURITY.md        # M0 后补
+│   ├── ARCHITECTURE.md / PROTOCOL.md / COMPATIBILITY.md / SECURITY.md
+│   └── design/            # UI-SYSTEM.md / BRAND.md
 └── package.json / pnpm-workspace.yaml / tsconfig 等
 ```
 

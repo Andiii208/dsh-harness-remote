@@ -60,8 +60,8 @@ dsh-remote/
 
 | 里程碑 | 状态 |
 |---|---|
-| M0 骨架与协议（monorepo + protocol + mock-harness + capture + docs + App 壳） | 进行中 |
-| M1 遥控闭环（通知/保活/审批/提问/消息/goal-todo） | 计划 |
+| M0 骨架与协议（monorepo + protocol + mock-harness + capture + docs + App 壳） | ✅ 已交付 |
+| M1 遥控闭环（通知/保活/审批/提问/消息/goal-todo） | 进行中 |
 | M2 跨端与安全（iOS EAS、配对 token、开源发布） | 计划 |
 | M3 中继（预留：harness-plugin + E2E 加密 + APNs/FCM） | 预留 |
 
