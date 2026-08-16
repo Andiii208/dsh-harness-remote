@@ -52,7 +52,8 @@ async function main(argv: string[]): Promise<number> {
     return 1;
   }
 
-  const harness = await createMockHarness({ fixtures, host: opts.host, port: opts.port });
+  const harness = await createMockHarness(fixtures, { host: opts.host, port: opts.port });
+  await harness.start();
   console.log(
     `mock-harness ready on ${harness.url} (${fixtures.length} fixture set(s), ${fixtures.reduce(
       (n, f) => n + f.wsFrames.length,

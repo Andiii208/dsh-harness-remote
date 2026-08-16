@@ -1,65 +1,82 @@
 /**
  * createMockHarness — a real HTTP+WS server that mimics the DSH /api and
  * event streams, replaying conformance fixtures. No real harness needed.
+ *
+ * Contract (per design): createMockHarness(fixtures, opts) →
+ *   { start(), stop(), url, receivedResponds, wsClients }
  */
 
 import { createServer, type Server } from "node:http";
+import type { WebSocket } from "ws";
 import type { FixtureSet } from "@dsh-remote/capture";
 import { createApiHandler, type ApiServerState } from "./api-server.js";
 import { attachWs } from "./ws-server.js";
 
 export interface MockHarnessOptions {
-  fixtures: FixtureSet[];
   host?: string;
   /** 0 → ephemeral port. */
   port?: number;
 }
 
 export interface MockHarness {
+  /** Bind and start listening (idempotent). */
   start(): Promise<void>;
+  /** Close the server and all client connections. */
   stop(): Promise<void>;
   /** Base URL like http://127.0.0.1:41234 (valid after start()). */
   url: string;
   host: string;
   port: number;
-  state: ApiServerState;
+  /** client-responses received via /api/respond. */
+  receivedResponds: Array<{ rpcId: string; result: unknown }>;
+  /** live WebSocket clients connected to events.mux / events.host. */
+  wsClients: WebSocket[];
 }
 
-export async function createMockHarness(opts: MockHarnessOptions): Promise<MockHarness> {
+export async function createMockHarness(
+  fixtures: FixtureSet[],
+  opts: MockHarnessOptions = {},
+): Promise<MockHarness> {
   const host = opts.host ?? "127.0.0.1";
   const state: ApiServerState = { receivedResponds: [], wsViolations: 0 };
-  const api = createApiHandler(opts.fixtures, state);
+  const api = createApiHandler(fixtures, state);
   const server: Server = createServer((req, res) => {
     void api(req, res);
   });
-  attachWs(server, opts.fixtures, state);
+  const wsClients: WebSocket[] = [];
+  attachWs(server, fixtures, state, wsClients);
 
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(opts.port ?? 0, host, () => resolve());
-  });
-
-  const address = server.address();
-  if (address === null || typeof address === "string") {
-    throw new Error("mock-harness: failed to bind");
-  }
-
+  let started = false;
   const harness: MockHarness = {
+    url: "",
+    host,
+    port: 0,
+    receivedResponds: state.receivedResponds,
+    wsClients,
     async start() {
-      // already listening
+      if (started) return;
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(opts.port ?? 0, host, () => resolve());
+      });
+      const address = server.address();
+      if (address === null || typeof address === "string") {
+        throw new Error("mock-harness: failed to bind");
+      }
+      harness.url = `http://${host}:${address.port}`;
+      harness.port = address.port;
+      started = true;
     },
     async stop() {
+      if (!started) return;
+      for (const ws of wsClients) ws.close();
       await new Promise<void>((resolve) => {
-        server.closeAllConnections?.();
         server.close(() => resolve());
-        // If no connections keep the server open, close may not fire — force it.
+        // If keep-alive connections block close, force-resolve after a tick.
         setTimeout(resolve, 1000).unref();
       });
+      started = false;
     },
-    url: `http://${host}:${address.port}`,
-    host,
-    port: address.port,
-    state,
   };
   return harness;
 }

@@ -42,7 +42,12 @@ function playStream(
   })();
 }
 
-export function attachWs(server: Server, fixtures: FixtureSet[], state: ApiServerState): void {
+export function attachWs(
+  server: Server,
+  fixtures: FixtureSet[],
+  state: ApiServerState,
+  wsClients: WebSocket[],
+): void {
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (req, socket, head) => {
@@ -52,6 +57,11 @@ export function attachWs(server: Server, fixtures: FixtureSet[], state: ApiServe
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
+      wsClients.push(ws);
+      ws.on("close", () => {
+        const i = wsClients.indexOf(ws);
+        if (i >= 0) wsClients.splice(i, 1);
+      });
       ws.on("message", () => {
         // Downlink-only: the real DSH closes with 1008 on client sends.
         state.wsViolations += 1;
