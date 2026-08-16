@@ -19,6 +19,7 @@ import { StatusChip } from "../../src/ui/StatusChip";
 import { useEntering } from "../../src/ui/anim";
 import { GoalCard } from "../../src/ui/chat/GoalCard";
 import { MessageBubble } from "../../src/ui/chat/MessageBubble";
+import { SkeletonRow } from "../../src/ui/SkeletonRow";
 import { haptic } from "../../src/ui/haptics";
 
 export default function ChatScreen() {
@@ -88,12 +89,19 @@ export default function ChatScreen() {
           </Animated.View>
         )}
         ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <SectionLabel>{online ? "WAITING FOR STREAM" : "OFFLINE"}</SectionLabel>
-            <Text style={styles.emptyText}>
-              {online ? "等待消息流…" : "离线——先回到连接页建立连接"}
-            </Text>
-          </View>
+          state === "connecting" || state === "backoff" ? (
+            <View style={styles.skeletonStack}>
+              <SkeletonRow />
+              <SkeletonRow />
+            </View>
+          ) : (
+            <View style={styles.emptyWrap}>
+              <SectionLabel>{online ? "WAITING FOR STREAM" : "OFFLINE"}</SectionLabel>
+              <Text style={styles.emptyText}>
+                {online ? "等待消息流…" : "离线——先回到连接页建立连接"}
+              </Text>
+            </View>
+          )
         }
       />
       <View style={styles.inputBar}>
@@ -137,6 +145,7 @@ const styles = StyleSheet.create({
   },
   sessionTitle: { color: colors.text, fontSize: font.title, fontWeight: "600", flex: 1, letterSpacing: -0.2 },
   emptyWrap: { alignItems: "center", paddingTop: space.x7 * 2, gap: space.x2 },
+  skeletonStack: { gap: space.x3, paddingTop: space.x3 },
   emptyText: { color: colors.textMuted, fontSize: font.caption },
   inputBar: {
     gap: space.x2,

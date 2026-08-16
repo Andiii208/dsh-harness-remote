@@ -1,16 +1,28 @@
 /**
  * MessageBubble — 转录消息（UI-SYSTEM v2：3px 角色边条 + mono 内容 + 流式光标）。
- * 长按复制文本（expo-clipboard + haptic），复制后短暂显示「已复制」。
+ * 支持 ``` 围栏代码块渲染（surface3 + mono）；长按复制（clipboard + haptic）。
  */
 
 import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import type { TranscriptMessage } from "../../data/SessionStore";
-import { colors, font, radius, space } from "../../theme";
+import { colors, font, radius, space, stroke } from "../../theme";
 import { SectionLabel } from "../SectionLabel";
 import { StreamingCursor } from "../StreamingCursor";
 import { haptic } from "../haptics";
+
+/** 把内容按 ``` 围栏切成 [text, code, text, code, …]。 */
+function splitCode(content: string): Array<{ code: boolean; text: string }> {
+  const parts = content.split("```");
+  if (parts.length < 3) return [{ code: false, text: content }];
+  const out: Array<{ code: boolean; text: string }> = [];
+  parts.forEach((part, i) => {
+    if (part.length === 0) return;
+    out.push({ code: i % 2 === 1, text: part.replace(/^[a-zA-Z0-9_+#-]*\n/, "") });
+  });
+  return out;
+}
 
 export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolean }) {
   const [copied, setCopied] = useState(false);
@@ -28,6 +40,7 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
   }
   const isUser = m.role === "user";
   const isTool = m.role === "tool";
+  const segments = splitCode(m.content);
 
   const onLongPress = async () => {
     if (m.content.length === 0) return;
@@ -59,11 +72,21 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
             {isTool ? "tool" : (m.role ?? "assistant")}
           </SectionLabel>
         )}
-        <Text style={[styles.text, isTool && styles.toolText]} selectable>
-          {m.content}
-          {m.interrupted ? " ⏹" : ""}
-          {live && <StreamingCursor />}
-        </Text>
+        {segments.map((seg, i) =>
+          seg.code ? (
+            <View key={i} style={styles.codeBlock}>
+              <Text style={styles.codeText} selectable>
+                {seg.text}
+              </Text>
+            </View>
+          ) : (
+            <Text key={i} style={[styles.text, isTool && styles.toolText]} selectable>
+              {seg.text}
+              {i === segments.length - 1 && m.interrupted ? " ⏹" : ""}
+              {i === segments.length - 1 && live && <StreamingCursor />}
+            </Text>
+          ),
+        )}
         {copied && <Text style={styles.copied}>已复制</Text>}
       </View>
     </Pressable>
@@ -76,7 +99,7 @@ const styles = StyleSheet.create({
   bubble: {
     flexDirection: "row",
     borderRadius: radius.card,
-    maxWidth: "92%",
+    maxWidth: "94%",
     overflow: "hidden",
   },
   bubbleUser: { alignSelf: "flex-end", backgroundColor: colors.surface },
@@ -90,5 +113,14 @@ const styles = StyleSheet.create({
   roleTag: { fontSize: font.eyebrow - 1, letterSpacing: 1 },
   text: { color: colors.text, fontSize: font.transcript, lineHeight: 21, fontFamily: font.mono },
   toolText: { color: colors.textMuted },
+  codeBlock: {
+    backgroundColor: colors.surface3,
+    borderWidth: stroke.hairline,
+    borderColor: colors.border,
+    borderRadius: radius.control,
+    padding: space.x3,
+    marginVertical: space.x1,
+  },
+  codeText: { color: "#D7E3FF", fontSize: font.transcript, lineHeight: 20, fontFamily: font.mono },
   copied: { color: colors.accent, fontSize: font.eyebrow, fontFamily: font.mono, alignSelf: "flex-end" },
 });
