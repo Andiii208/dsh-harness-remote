@@ -11,8 +11,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
+import Svg, { Path } from "react-native-svg";
 import * as Network from "expo-network";
 import { useEntering } from "../src/ui/anim";
+
+const WHALE_D = "M 320 585 C 305 545, 305 515, 330 488 C 360 455, 430 432, 520 420 C 640 405, 760 415, 850 460 C 890 480, 920 505, 940 535 C 955 505, 985 480, 1005 470 C 985 505, 965 525, 955 545 C 950 560, 950 570, 955 585 C 965 605, 985 625, 1000 640 C 975 625, 945 610, 920 605 C 870 592, 800 610, 720 630 C 620 655, 480 660, 400 640 C 360 630, 330 615, 320 585 Z M 480 598 C 452 640, 442 662, 452 684 C 474 668, 506 636, 532 608 Z";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
 import { tokenStore } from "../src/data/secureStoreAdapter";
 import { hostStore } from "../src/discovery/hostStoreAdapter";
@@ -177,6 +180,9 @@ export default function ConnectScreen() {
       style={[styles.screen, { paddingTop: insets.top + space.x5 }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
+      <Svg style={styles.watermark} width="340" height="340" viewBox="0 0 1024 1024" pointerEvents="none">
+        <Path d={WHALE_D} fill={colors.accent} opacity={0.04} />
+      </Svg>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Animated.View entering={heroEntering} style={styles.hero}>
           <WhaleMark size={44} />
@@ -195,7 +201,7 @@ export default function ConnectScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <SectionLabel>{found.length > 0 ? "Discovered hosts" : "Recent hosts"}</SectionLabel>
-            <Pressable onPress={() => router.push("/scan" as never)} hitSlop={8} accessibilityRole="button" accessibilityLabel="扫码配对">
+            <Pressable style={({ pressed }) => pressed && styles.textPressed} onPress={() => router.push("/scan" as never)} hitSlop={8} accessibilityRole="button" accessibilityLabel="扫码配对">
               <Text style={styles.scanLink}>扫码配对 →</Text>
             </Pressable>
           </View>
@@ -216,9 +222,13 @@ export default function ConnectScreen() {
                 accessibilityLabel={`连接 ${h.host}:${h.port}`}
               >
                 <View style={styles.hostRowText}>
-                  <Text style={styles.hostRowTitle} numberOfLines={1}>
-                    {h.name ?? h.host}
-                  </Text>
+                  <View style={styles.hostRowTitleRow}>
+                    {h.version !== undefined && <View style={styles.hostDot} />}
+                    <Text style={styles.hostRowTitle} numberOfLines={1}>
+                      {h.name ?? h.host}
+                    </Text>
+                    {h.token && <Text style={styles.pairedBadge}>配对</Text>}
+                  </View>
                   <Text style={styles.hostRowMeta} numberOfLines={1}>
                     {`${h.host}:${h.port}${h.version ? ` · ${h.version}` : ""}`}
                   </Text>
@@ -270,7 +280,7 @@ export default function ConnectScreen() {
             secureTextEntry
           />
           {token.length > 0 && (
-            <Pressable style={styles.clearToken} onPress={onClearToken}>
+            <Pressable style={({ pressed }) => [styles.clearToken, pressed && styles.textPressed]} onPress={onClearToken} accessibilityRole="button" accessibilityLabel="清除已保存的配对">
               <Text style={styles.clearTokenText}>清除已保存的配对</Text>
             </Pressable>
           )}
@@ -314,6 +324,7 @@ const styles = StyleSheet.create({
   hero: { flexDirection: "row", alignItems: "center", gap: space.x4 },
   heroText: { gap: space.x1 },
   display: { color: colors.text, fontSize: font.display, fontWeight: "700", letterSpacing: -0.3 },
+  watermark: { position: "absolute", top: -space.x3, right: -space.x7 },
   statusRow: { flexDirection: "row", alignItems: "center", gap: space.x3, flexWrap: "wrap" },
   describe: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono, flexShrink: 1 },
   section: { gap: space.x2 },
@@ -339,7 +350,21 @@ const styles = StyleSheet.create({
   },
   hostRowPressed: { backgroundColor: colors.surface2 },
   hostRowText: { flex: 1, gap: 2 },
-  hostRowTitle: { color: colors.text, fontSize: font.body, fontWeight: "600" },
+  hostRowTitleRow: { flexDirection: "row", alignItems: "center", gap: space.x2 },
+  hostDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success },
+  hostRowTitle: { color: colors.text, fontSize: font.body, fontWeight: "600", flexShrink: 1 },
+  pairedBadge: {
+    color: colors.success,
+    fontSize: font.eyebrow - 1,
+    fontFamily: font.monoBold,
+    fontWeight: "700",
+    borderWidth: 1,
+    borderColor: colors.success,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.x2,
+    paddingVertical: 1,
+    overflow: "hidden",
+  },
   hostRowMeta: { color: colors.textDim, fontSize: font.eyebrow, fontFamily: font.mono },
   hostRowArrow: { color: colors.textDim, fontSize: font.body, fontFamily: font.mono },
   discoverError: { color: colors.warn, fontSize: font.caption, padding: space.x3 },
@@ -355,6 +380,7 @@ const styles = StyleSheet.create({
     gap: space.x3,
   },
   clearToken: { alignItems: "flex-start" },
+  textPressed: { opacity: 0.6 },
   clearTokenText: { color: colors.danger, fontSize: font.caption },
   connectError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
   linkRow: { alignItems: "center", paddingVertical: space.x2 },
