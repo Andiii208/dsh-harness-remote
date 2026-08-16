@@ -16,7 +16,13 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "dev.dshremote.mobile"
+      "bundleIdentifier": "dev.dshremote.mobile",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "NSLocalNetworkUsageDescription": "dsh-remote 通过本地网络连接你的 DeepSeek Harness 实例"
+      }
     },
     "android": {
       "package": "dev.dshremote.mobile",
