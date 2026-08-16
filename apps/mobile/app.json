@@ -34,11 +34,6 @@
     "plugins": ["expo-notifications", "expo-background-task", "expo-router"],
     "experiments": {
       "typedRoutes": true
-    },
-    "extra": {
-      "eas": {
-        "projectId": null
-      }
     }
   }
 }
