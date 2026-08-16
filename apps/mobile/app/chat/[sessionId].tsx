@@ -54,6 +54,8 @@ function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
         setGoalStatus(summary.id, next); // 乐观更新；下一条投影帧为准
         setOpen(true);
       }
+    } catch (err) {
+      console.warn("[goal] toggle failed", err);
     } finally {
       setBusy(false);
     }

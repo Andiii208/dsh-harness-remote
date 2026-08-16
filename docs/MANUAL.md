@@ -39,7 +39,8 @@ pnpm start
 
 - 锁屏推送依赖系统调度；厂商省电策略（小米/华为/OPPO）可能延迟或阻止后台任务。
 - iOS 后台任务频率由系统决定，不可保证。
-- 通知深链在 App 冷启动时依赖 expo-notifications 的 response listener（M2 完善）。
+- 后台保活期间状态快照可能冻结：App 被挂起时 `stateRef` 不更新，若 WS 已被 OS 断开，恢复后下一次心跳（≥15min）才判定离线并重连——这是尽力而为的边界。
+- 通知深链：warm tap 与冷启动均经 expo-notifications 响应监听处理；若系统延迟投递初始响应，可能漏一次跳转。
 
 ## 4. 回归命令
 

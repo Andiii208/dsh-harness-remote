@@ -126,6 +126,8 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     if (!c) return;
     await c.respond(rpcId, result);
     pipelineRef.current?.store.resolvePending(rpcId);
+    // 消除对应的系统通知（M1-T4：响应后清理）
+    void notificationService.dismissByRoute(`approval/${rpcId}`);
   }, []);
 
   const transcript = useCallback((sessionId: string) => {

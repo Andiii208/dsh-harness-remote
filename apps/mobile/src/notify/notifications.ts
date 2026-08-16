@@ -12,7 +12,7 @@ export interface NotificationParams {
   data: Record<string, string>;
 }
 
-const BODY_MAX = 80;
+const BODY_MAX = 60;
 
 function truncate(s: string, max = BODY_MAX): string {
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
@@ -62,11 +62,16 @@ export interface NotificationsApi {
   setNotificationChannelAsync?(channelId: string, config: unknown): Promise<unknown>;
   scheduleNotificationAsync(config: unknown): Promise<string>;
   setNotificationHandler?(handler: unknown): void;
+  /** 按 identifier 消除系统托盘通知（respond 后调用）。 */
+  dismissNotificationAsync?(identifier: string): Promise<void>;
 }
 
 export const CHANNEL_ID = "dsh-events";
 
 export class NotificationService {
+  /** route → 最近一次通知 identifier（用于 respond 后消除）。 */
+  private byRoute = new Map<string, string>();
+
   constructor(private readonly api: NotificationsApi) {}
 
   /** 请求权限；被拒返回 false，不抛错。 */
@@ -104,12 +109,12 @@ export class NotificationService {
     }
   }
 
-  /** 立即弹一条本地通知。失败不抛。 */
-  async present(ev: NotificationEvent): Promise<void> {
+  /** 立即弹一条本地通知；返回通知 identifier（无标题/空正文则跳过，返回 null）。 */
+  async present(ev: NotificationEvent): Promise<string | null> {
     const p = notificationParams(ev);
-    if (!p.title) return;
+    if (!p.title || !p.body) return null;
     try {
-      await this.api.scheduleNotificationAsync({
+      const id = await this.api.scheduleNotificationAsync({
         content: {
           title: p.title,
           body: p.body,
@@ -118,8 +123,23 @@ export class NotificationService {
         },
         trigger: null, // 立即
       });
+      if (p.data.route) this.byRoute.set(p.data.route, id);
+      return id;
     } catch (err) {
       console.warn("[notify] present failed", err);
+      return null;
+    }
+  }
+
+  /** 消除某 route 的最近通知（respond/处理完成后调用）。 */
+  async dismissByRoute(route: string): Promise<void> {
+    const id = this.byRoute.get(route);
+    if (!id) return;
+    this.byRoute.delete(route);
+    try {
+      await this.api.dismissNotificationAsync?.(id);
+    } catch (err) {
+      console.warn("[notify] dismiss failed", err);
     }
   }
 }

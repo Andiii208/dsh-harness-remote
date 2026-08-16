@@ -13,6 +13,7 @@ const api: NotificationsApi = {
   scheduleNotificationAsync: (config) =>
     Notifications.scheduleNotificationAsync(config as never),
   setNotificationHandler: (handler) => Notifications.setNotificationHandler(handler as never),
+  dismissNotificationAsync: (identifier) => Notifications.dismissNotificationAsync(identifier),
 };
 
 export const notificationService = new NotificationService(api);

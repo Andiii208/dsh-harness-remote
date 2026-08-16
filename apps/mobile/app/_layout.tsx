@@ -4,11 +4,13 @@ import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ConnectionProvider } from "../src/transport/ConnectionProvider";
 import { notificationService } from "../src/notify/expoAdapter";
+import { registerNotificationDeepLink } from "../src/notify/deeplink";
 import { colors } from "../src/theme";
 
 export default function RootLayout() {
   useEffect(() => {
-    // 通知：通道 + 前台 handler + 权限（幂等；被拒不打扰）
+    // 通知：通道 + 前台 handler + 权限 + 点击深链（均幂等；被拒不打扰）
+    registerNotificationDeepLink();
     void notificationService.configure();
     notificationService.setForegroundHandler();
     void notificationService.ensurePermissions();

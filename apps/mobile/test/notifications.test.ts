@@ -34,7 +34,7 @@ describe("notificationParams", () => {
   it("truncates long bodies", () => {
     const long = "x".repeat(200);
     const p = notificationParams(ev({ kind: "approval-waiting", rpcId: "r", prompt: long }));
-    expect(p.body.length).toBeLessThanOrEqual(80);
+    expect(p.body.length).toBeLessThanOrEqual(60);
     expect(p.body.endsWith("…")).toBe(true);
   });
 });
@@ -57,6 +57,9 @@ describe("NotificationService (injected api)", () => {
       },
       setNotificationHandler() {
         calls.push("handler");
+      },
+      async dismissNotificationAsync(id) {
+        calls.push(`dismiss:${id}`);
       },
     };
   }
@@ -100,12 +103,35 @@ describe("NotificationService (injected api)", () => {
     expect(api.calls).toContain(`channel:${CHANNEL_ID}`);
   });
 
-  it("present schedules an immediate notification with data", async () => {
+  it("present schedules an immediate notification and returns its id", async () => {
     const api = stubApi();
-    await new NotificationService(api).present(ev({ kind: "approval-waiting", rpcId: "r9", prompt: "run?" }));
+    const id = await new NotificationService(api).present(
+      ev({ kind: "approval-waiting", rpcId: "r9", prompt: "run?" }),
+    );
+    expect(id).toBe("id-1");
     const call = api.calls.find((c) => c.startsWith("schedule:")) ?? "";
     expect(call).toContain('"rpcId":"r9"');
     expect(call).toContain('"trigger":null');
+  });
+
+  it("present skips empty-body notifications (no schedule call)", async () => {
+    const api = stubApi();
+    const svc = new NotificationService(api);
+    // 未知 kind → default 分支：title 有值但 body 为空 → 跳过
+    const id = await svc.present({ kind: "weird" } as unknown as NotificationEvent);
+    expect(id).toBeNull();
+    expect(api.calls.some((c) => c.startsWith("schedule:"))).toBe(false);
+  });
+
+  it("dismissByRoute dismisses the latest notification for that route", async () => {
+    const api = stubApi();
+    const svc = new NotificationService(api);
+    await svc.present(ev({ kind: "approval-waiting", rpcId: "r9", prompt: "run?" }));
+    await svc.dismissByRoute("approval/r9");
+    expect(api.calls).toContain("dismiss:id-1");
+    // 再次消除为 no-op
+    await svc.dismissByRoute("approval/r9");
+    expect(api.calls.filter((c) => c.startsWith("dismiss:"))).toHaveLength(1);
   });
 
   it("present never throws", async () => {
@@ -118,6 +144,6 @@ describe("NotificationService (injected api)", () => {
       },
     };
     const svc = new NotificationService(api);
-    await expect(svc.present(ev({ kind: "turn-complete" }))).resolves.toBeUndefined();
+    await expect(svc.present(ev({ kind: "turn-complete" }))).resolves.toBeNull();
   });
 });
