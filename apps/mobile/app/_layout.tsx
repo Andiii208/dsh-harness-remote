@@ -9,7 +9,7 @@ import { colors } from "../src/theme";
 export default function RootLayout() {
   useEffect(() => {
     // 通知：通道 + 前台 handler + 权限（幂等；被拒不打扰）
-    notificationService.configure();
+    void notificationService.configure();
     notificationService.setForegroundHandler();
     void notificationService.ensurePermissions();
   }, []);

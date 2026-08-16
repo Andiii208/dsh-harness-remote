@@ -68,6 +68,9 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     void keepalive.register(15 * 60_000);
     return () => {
       void keepalive.unregister();
+      // 卸载时停止活动连接（loop/WS/退避定时器），避免悬挂重连
+      pipelineRef.current?.stop();
+      pipelineRef.current = null;
     };
   }, []);
 

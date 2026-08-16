@@ -80,10 +80,10 @@ export class NotificationService {
     }
   }
 
-  /** 配置 Android 通知通道（幂等）。 */
-  configure(): void {
+  /** 配置 Android 通知通道（幂等）；iOS 上该 API 会异步拒绝——吞掉。 */
+  async configure(): Promise<void> {
     try {
-      this.api.setNotificationChannelAsync?.(CHANNEL_ID, {
+      await this.api.setNotificationChannelAsync?.(CHANNEL_ID, {
         name: "会话事件",
         importance: 4,
         vibrationPattern: [0, 250, 250, 250],
