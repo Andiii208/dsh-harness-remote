@@ -13,8 +13,16 @@ export interface SessionSummary {
   lastMessage?: string;
   updatedAt: number;
   goalStatus?: string;
+  goalObjective?: string;
+  todos?: TranscriptTodo[];
+  plan?: unknown;
   tokenUsageTotal?: number;
   contextPercent?: number;
+}
+
+export interface TranscriptTodo {
+  content: string;
+  status: "pending" | "in_progress" | "completed" | string;
 }
 
 export interface TranscriptMessage {
@@ -22,6 +30,8 @@ export interface TranscriptMessage {
   role?: string;
   content: string;
   interrupted?: boolean;
+  /** 间隙标记：消息流中断/缺失导致的断点。 */
+  gap?: boolean;
 }
 
 export interface PendingRequest {
@@ -140,11 +150,27 @@ export class SessionStore {
     const title = str(f.title);
     if (title !== undefined) s.title = title;
 
-    const goal = f.goal as { status?: unknown } | undefined;
+    const goal = f.goal as { status?: unknown; objective?: unknown } | undefined;
     if (goal && typeof goal === "object") {
       const status = str(goal.status);
       if (status !== undefined) s.goalStatus = status;
+      const objective = str(goal.objective);
+      if (objective !== undefined) s.goalObjective = objective;
     }
+    if (Array.isArray(f.todos)) {
+      const todos: TranscriptTodo[] = [];
+      for (const t of f.todos) {
+        if (t && typeof t === "object") {
+          const content = str((t as Record<string, unknown>).content);
+          const status = str((t as Record<string, unknown>).status);
+          if (content !== undefined && status !== undefined) {
+            todos.push({ content, status });
+          }
+        }
+      }
+      if (todos.length > 0) s.todos = todos;
+    }
+    if (f.plan !== undefined) s.plan = f.plan;
     const usage = f.tokenUsage as { total?: unknown } | undefined;
     if (usage && typeof usage === "object") {
       const total = num(usage.total);
@@ -167,7 +193,19 @@ export class SessionStore {
 
     switch (ev) {
       case "turn/start": {
-        this.streaming.delete(id); // 新回合开始，清掉残留
+        // 新回合开始：若上一回合残留未完成消息 → 视为间隙
+        const leftover = this.streaming.get(id);
+        if (leftover && leftover.content.length > 0) {
+          this.pushMessage(id, { role: leftover.role, content: "…（间隙：消息流中断）", gap: true });
+        }
+        this.streaming.delete(id);
+        break;
+      }
+      case "gap": {
+        const cur = this.streaming.get(id);
+        if (cur) cur.interrupted = true;
+        this.pushMessage(id, { role: "system", content: "…（间隙：消息流缺失）", gap: true });
+        this.streaming.delete(id);
         break;
       }
       case "message/delta": {
@@ -227,10 +265,7 @@ export class SessionStore {
     const list = this.transcripts.get(sessionId) ?? [];
     list.push(m);
     this.transcripts.set(sessionId, list);
-    const s = this.sessions.get(sessionId);
-    if (s) {
-      s.lastMessage = m.content || s.lastMessage;
-      s.updatedAt = Date.now();
-    }
+    const s = this.touchSession(sessionId); // 保持 updatedAt 单调（tick 尺度）
+    s.lastMessage = m.content || s.lastMessage;
   }
 }

@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -25,18 +25,27 @@ export default function ConnectScreen() {
   const [host, setHost] = useState("");
   const [port, setPort] = useState("3080");
   const [busy, setBusy] = useState(false);
+  const justConnected = useRef(false);
 
   const online = state === "online";
+
+  // 连接成功后自动进入 Sessions（在 onStateChange 驱动的 state 更新后触发）
+  useEffect(() => {
+    if (online && justConnected.current) {
+      justConnected.current = false;
+      router.push("/sessions");
+    }
+  }, [online, router]);
 
   const onConnect = async () => {
     if (!host.trim() || busy) return;
     setBusy(true);
+    justConnected.current = true;
     try {
       await connect(host.trim(), Number.parseInt(port || "3080", 10));
     } finally {
       setBusy(false);
     }
-    if (state === "online") router.push("/sessions");
   };
 
   return (
@@ -99,9 +108,10 @@ export default function ConnectScreen() {
           </Text>
         </View>
 
-        {Boolean(describe) && (
+        {Boolean(describe) && typeof describe === "object" && (
           <Text style={styles.describe} numberOfLines={1}>
-            {(describe as { name?: string }).name} {(describe as { version?: string }).version}
+            {(describe as { name?: string }).name ?? ""}{" "}
+            {(describe as { version?: string }).version ?? ""}
           </Text>
         )}
       </View>

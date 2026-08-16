@@ -99,7 +99,8 @@ function parseJson(s: string): unknown {
   }
 }
 
-class FrameQueue implements AsyncIterable<DownlinkFrame> {
+/** Async queue fed by ws onmessage; consumed via async iteration. */
+export class FrameQueue implements AsyncIterable<DownlinkFrame> {
   private items: DownlinkFrame[] = [];
   private waiters: Array<(v: IteratorResult<DownlinkFrame>) => void> = [];
   private ended = false;

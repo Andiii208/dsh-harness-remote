@@ -1,6 +1,6 @@
 /**
- * ConnectionProvider — 装配 LanTransport + ConnectionLoop + SessionStore +
- * NotificationClassifier，向 UI 暴露连接状态、会话数据与操作。
+ * ConnectionProvider — 装配 LanTransport + ConnectionPipeline，向 UI 暴露
+ * 连接状态、会话数据与操作。装配逻辑在 pipeline.ts（可单测）。
  */
 
 import {
@@ -13,18 +13,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { LanTransport, type ConnectionState } from "@dsh-remote/protocol";
 import {
-  ConnectionLoop,
-  LanTransport,
-  type ConnectionState,
-} from "@dsh-remote/protocol";
-import {
-  SessionStore,
-  type PendingRequest,
-  type SessionSummary,
-  type TranscriptMessage,
-} from "../data/SessionStore";
-import { NotificationClassifier, type NotificationEvent } from "../notify/classifier";
+  createConnectionPipeline,
+  type ConnectionPipeline,
+} from "./pipeline";
+import type { PendingRequest, SessionSummary, TranscriptMessage } from "../data/SessionStore";
+import type { NotificationEvent } from "../notify/classifier";
 
 export interface ConnectionApi {
   state: ConnectionState;
@@ -42,34 +37,24 @@ export interface ConnectionApi {
 const ConnectionContext = createContext<ConnectionApi | null>(null);
 
 export function ConnectionProvider({ children }: { children: ReactNode }) {
-  const storeRef = useRef<SessionStore | null>(null);
-  const classifierRef = useRef<NotificationClassifier | null>(null);
-  const loopRef = useRef<ConnectionLoop | null>(null);
+  const pipelineRef = useRef<ConnectionPipeline | null>(null);
   const [state, setState] = useState<ConnectionState>("offline");
   const [describe, setDescribe] = useState<unknown>(null);
   const [version, setVersion] = useState(0);
   const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
 
   useEffect(() => {
-    const store = new SessionStore();
-    const classifier = new NotificationClassifier();
-    store.subscribe(() => setVersion((v) => v + 1));
-    storeRef.current = store;
-    classifierRef.current = classifier;
     return () => {
-      loopRef.current?.stop();
-      storeRef.current = null;
+      pipelineRef.current?.stop();
+      pipelineRef.current = null;
     };
   }, []);
 
   const connect = useCallback(async (host: string, port: number) => {
-    const store = storeRef.current;
-    if (!store) return;
-    loopRef.current?.stop();
-    store.clear();
+    pipelineRef.current?.stop();
     setNotifications([]);
 
-    const loop = new ConnectionLoop({
+    const pipeline = createConnectionPipeline({
       endpoint: { host, port },
       transport: new LanTransport({
         onDescribe: (d) => setDescribe(d),
@@ -78,52 +63,42 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       onError: (err) => {
         console.warn("[conn]", err);
       },
-      onResync: () => {
-        // 重连成功后：清空镜像等待注册表/投影帧重放（宽容：无帧则空列表）
-      },
+      onNotification: (n) => setNotifications((prev) => [...prev.slice(-49), n]),
     });
-    loopRef.current = loop;
-
-    const pump = async () => {
-      for await (const frame of loop.events) {
-        store.applyFrame(frame);
-        const ev = classifierRef.current?.classify(frame);
-        if (ev) setNotifications((n) => [...n.slice(-49), ev]);
-      }
-    };
-    void pump();
-    loop.start();
+    pipeline.store.subscribe(() => setVersion((v) => v + 1));
+    pipelineRef.current = pipeline;
+    pipeline.start();
   }, []);
 
   const disconnect = useCallback(() => {
-    loopRef.current?.stop();
-    storeRef.current?.clear();
+    pipelineRef.current?.stop();
+    pipelineRef.current = null;
     setState("offline");
   }, []);
 
   const sendMessage = useCallback(async (sessionId: string, text: string) => {
-    const c = loopRef.current?.connection;
+    const c = pipelineRef.current?.loop.connection;
     if (!c) return;
     await c.unary("session.prompt", { sessionId, prompt: text });
   }, []);
 
   const respond = useCallback(async (rpcId: string, result: unknown) => {
-    const c = loopRef.current?.connection;
+    const c = pipelineRef.current?.loop.connection;
     if (!c) return;
     await c.respond(rpcId, result);
-    storeRef.current?.resolvePending(rpcId);
+    pipelineRef.current?.store.resolvePending(rpcId);
   }, []);
 
   const transcript = useCallback((sessionId: string) => {
-    return storeRef.current?.getTranscript(sessionId) ?? [];
+    return pipelineRef.current?.store.getTranscript(sessionId) ?? [];
   }, []);
 
   const value = useMemo<ConnectionApi>(
     () => ({
       state,
       describe,
-      sessions: storeRef.current?.getSessions() ?? [],
-      pending: storeRef.current?.getPendingRequests() ?? [],
+      sessions: pipelineRef.current?.store.getSessions() ?? [],
+      pending: pipelineRef.current?.store.getPendingRequests() ?? [],
       notifications,
       transcript,
       connect,

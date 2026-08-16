@@ -29,12 +29,22 @@ function str(v: unknown): string | undefined {
 
 export class NotificationClassifier {
   private seen = new Map<string, string>();
+  private static readonly MAX_KEYS = 500;
 
   /** 返回需要通知的事件；无需通知返回 null。 */
   classify(frame: DownlinkFrame): NotificationEvent | null {
     if (!frame || typeof frame !== "object") return null; // 宽容：垃圾输入忽略
     const f = frame as Frame;
     if (f.type === "unknown") return null;
+
+    const markSeen = (key: string, value: string): void => {
+      if (this.seen.size >= NotificationClassifier.MAX_KEYS) {
+        // 有界去重：超限时丢弃最早的一条
+        const first = this.seen.keys().next().value;
+        if (first !== undefined) this.seen.delete(first);
+      }
+      this.seen.set(key, value);
+    };
 
     if (f.type === "server/request") {
       const rpcId = str(f.rpcId);
@@ -44,7 +54,7 @@ export class NotificationClassifier {
       if (kind === "approval") {
         const key = `approval:${rpcId}`;
         if (this.seen.get(key) === rpcId) return null;
-        this.seen.set(key, rpcId);
+        markSeen(key, rpcId);
         return {
           kind: "approval-waiting",
           rpcId,
@@ -55,7 +65,7 @@ export class NotificationClassifier {
       if (kind === "question") {
         const key = `question:${rpcId}`;
         if (this.seen.get(key) === rpcId) return null;
-        this.seen.set(key, rpcId);
+        markSeen(key, rpcId);
         return {
           kind: "question-waiting",
           rpcId,
@@ -75,7 +85,7 @@ export class NotificationClassifier {
         if (!turnId) return null; // 无 id 不通知（避免刷屏）
         const key = `turn:${sessionId}:${turnId}`;
         if (this.seen.get(key) === turnId) return null;
-        this.seen.set(key, turnId);
+        markSeen(key, turnId);
         return { kind: "turn-complete", sessionId, dedupeKey: key };
       }
       return null;
@@ -89,13 +99,13 @@ export class NotificationClassifier {
       if (status === "complete") {
         const key = `goal:complete:${sessionId}`;
         if (this.seen.get(key) === status) return null;
-        this.seen.set(key, status);
+        markSeen(key, status);
         return { kind: "goal-complete", sessionId, dedupeKey: key };
       }
       if (status === "blocked") {
         const key = `goal:blocked:${sessionId}`;
         if (this.seen.get(key) === status) return null;
-        this.seen.set(key, status);
+        markSeen(key, status);
         return { kind: "goal-blocked", sessionId, dedupeKey: key };
       }
       return null;

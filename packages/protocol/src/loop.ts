@@ -6,6 +6,7 @@
  */
 
 import type { DownlinkFrame } from "./codec.js";
+import { FrameQueue } from "./ws.js";
 import type {
   Auth,
   Connection,
@@ -47,11 +48,13 @@ export class ConnectionLoop {
   private readonly opts: Required<Pick<ConnectionLoopOptions, "baseBackoffMs" | "maxBackoffMs" | "jitter">> &
     ConnectionLoopOptions;
 
-  /** Forwarded downlink frames from the live connection. */
-  events: AsyncIterable<DownlinkFrame> = {
-    [Symbol.asyncIterator]: () => ({ next: async () => ({ value: undefined, done: true }) }),
-  };
+  /**
+   * Stable downlink frame stream: stays open across reconnects (frames from
+   * every connection are forwarded). Ends on stop().
+   */
+  events: AsyncIterable<DownlinkFrame>;
 
+  private readonly out = new FrameQueue();
   private lastDescribe: unknown = null;
 
   constructor(opts: ConnectionLoopOptions) {
@@ -61,6 +64,7 @@ export class ConnectionLoop {
       jitter: DEFAULT_JITTER,
       ...opts,
     };
+    this.events = this.out;
   }
 
   get connectionState(): ConnectionState {
@@ -91,6 +95,7 @@ export class ConnectionLoop {
     this.running = false;
     this.conn?.close();
     this.conn = null;
+    this.out.end();
     this.setState("offline");
   }
 
@@ -113,14 +118,14 @@ export class ConnectionLoop {
         this.conn = conn;
         this.attempt = 0;
         this.setState("online");
-        this.events = conn.events;
         // Sync point after every successful (re)connect: re-run host.describe
         // and let the caller re-pull session state.
         this.opts.onResync?.();
 
-        // Await stream termination (either socket closed / queue ended).
-        for await (const _ of conn.events) {
-          /* drain frames; loop ends when the stream ends */
+        // Forward frames into the stable out stream; ends when the socket
+        // stream ends (disconnect).
+        for await (const f of conn.events) {
+          this.out.push(f);
         }
         conn.close(); // release resources
         this.setState("offline");
