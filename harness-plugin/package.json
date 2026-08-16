@@ -1,0 +1,26 @@
+{
+  "name": "@dsh-remote/harness-plugin",
+  "version": "0.1.0",
+  "description": "dsh-remote host plugin (M2): one-time pairing token issuance + validation for non-loopback /api access (pairing fence).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "cordis.patch.yml"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "dev": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4",
+    "@types/node": "^22.0.0"
+  }
+}

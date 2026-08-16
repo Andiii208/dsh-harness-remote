@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
   - "mock-harness"
+  - "harness-plugin"
   - "tools/*"
 allowBuilds:
   # esbuild postinstall only validates the platform binary (present via
