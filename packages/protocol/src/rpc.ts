@@ -30,6 +30,8 @@ export interface RpcClientOptions {
   baseUrl: string;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  /** 配对 token（M2）→ 请求携带 Authorization: Bearer <token>。 */
+  token?: string;
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -38,11 +40,13 @@ export class RpcClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
+  private readonly token?: string;
 
   constructor(opts: RpcClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/+$/, "");
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = opts.fetchImpl ?? fetch;
+    this.token = opts.token;
   }
 
   /** POST /api/<method> — unary call. */
@@ -72,7 +76,10 @@ export class RpcClient {
     try {
       res = await this.fetchImpl(this.baseUrl + path, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(this.token ? { authorization: `Bearer ${this.token}` } : {}),
+        },
         body: JSON.stringify(body),
         signal: ctrl.signal,
       });

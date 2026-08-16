@@ -133,6 +133,37 @@ describe("RpcClient.respond & call", () => {
   });
 });
 
+describe("RpcClient pairing token", () => {
+  it("sends Authorization Bearer when a token is configured", async () => {
+    const headers: Record<string, string> = {};
+    const client = new RpcClient({
+      baseUrl: "http://h:3080",
+      token: "pair-tok-1",
+      fetchImpl: (async (_url, init) => {
+        const h = (init?.headers ?? {}) as Record<string, string>;
+        for (const [k, v] of Object.entries(h)) headers[k.toLowerCase()] = String(v);
+        return jsonResponse({ rpcId: "r", ok: true, result: {} });
+      }) as typeof fetch,
+    });
+    await client.unary("host.describe", {});
+    expect(headers["authorization"]).toBe("Bearer pair-tok-1");
+  });
+
+  it("omits the header without a token", async () => {
+    const headers: Record<string, string> = {};
+    const client = new RpcClient({
+      baseUrl: "http://h:3080",
+      fetchImpl: (async (_url, init) => {
+        const h = (init?.headers ?? {}) as Record<string, string>;
+        for (const [k, v] of Object.entries(h)) headers[k.toLowerCase()] = String(v);
+        return jsonResponse({ rpcId: "r", ok: true, result: {} });
+      }) as typeof fetch,
+    });
+    await client.unary("host.describe", {});
+    expect(headers["authorization"]).toBeUndefined();
+  });
+});
+
 describe("RpcError", () => {
   it("is an Error with code", () => {
     const e = new RpcError("X", "msg", { detail: 1 });

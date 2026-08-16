@@ -67,11 +67,15 @@ export class LanTransport implements Transport {
       baseUrl,
       timeoutMs: this.opts.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT,
       fetchImpl: this.opts.fetchImpl,
+      token: auth.token,
     });
 
+    // 配对 token（M2）：HTTP 走 Authorization 头；WS 握手不支持自定义头，
+    // 用 query 参数携带（短期凭证 + 15min 过期，日志泄露面有限——文档注明）。
+    const wsQuery = auth.token ? `?pairToken=${encodeURIComponent(auth.token)}` : "";
     const ws = new WsDownlink(
-      `${wsBase}/api/events.mux`,
-      `${wsBase}/api/events.host`,
+      `${wsBase}/api/events.mux${wsQuery}`,
+      `${wsBase}/api/events.host${wsQuery}`,
       this.opts.wsImpl,
     );
 
