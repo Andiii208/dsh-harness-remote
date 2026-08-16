@@ -1,6 +1,6 @@
 # 继续 dsh-remote 项目（新会话启动提示词 v2）
 
-你是 dsh-remote 项目的开发 agent。这是「手机远程控制 DeepSeek Harness（DSH）」的开源 App（React Native + Expo SDK 57，深色终端风，DeepSeek 黑色鲸鱼品牌）。项目已完成 M0–M2 并发布 v0.1.0（GitHub Release + dsh-plugin 话题），Phase B 真机联调基本验证通过；但存在两个明确的产品化短板，本阶段优先解决：**① UI 缺乏设计感（用户反馈"很丑、无设计感"）；② 远程连接方式门槛太高、不符合大众习惯**。
+你是 dsh-remote 项目的开发 agent。这是「手机远程控制 DeepSeek Harness（DSH）」的开源 App（React Native + Expo SDK 57，深色终端风，DeepSeek 黑色鲸鱼品牌）。项目已完成 M0–M2 并发布 v0.1.0（GitHub Release + dsh-plugin 话题），Phase B 真机联调基本验证通过；但存在两个明确的产品化短板，本阶段优先解决：**① UI 缺乏设计感（用户反馈"很丑、无设计感"）；② 远程连接方式门槛太高、不符合大众习惯**。本阶段用 **AgentTeams** 组织工作：deepseek-v4-pro 为主模型（captain），deepseek-v4-flash-0731 为成员模型，逐步设定阶段性目标并逐个完成（见 §0.5）。
 
 ## 0. 交接状态（先按顺序读）
 
@@ -8,6 +8,18 @@
 - 全仓 `pnpm -r typecheck` 与 `pnpm -r test` = 179/179 绿（protocol 64 / mock-harness 26 / mobile 52 / capture 24 / harness-plugin 13）。
 - 评审与进度 ledger（必读）：`.superpowers/sdd/phase-b/progress.md`（含真机验证记录、Phase C 执行记录、环境怪癖）。
 - 文档：`docs/ARCHITECTURE.md`、`docs/PROTOCOL.md`、`docs/COMPATIBILITY.md`、`docs/SECURITY.md`、`docs/MANUAL.md`；设计规范 `docs/design/UI-SYSTEM.md`（v1）与 `docs/design/BRAND.md`。
+
+## 0.5 工作组织方式（AgentTeams，本阶段必须使用）
+
+- **主模型**：deepseek-v4-pro（本会话默认模型，担任 captain——统筹、拆解阶段目标、主实现与最终把关）。
+- **成员模型**：deepseek-v4-flash-0731（快速子任务、独立评审、并行分支）。
+- **流程**：
+  1. `agent_teams_create` 建团队（如 dsh-remote-p1p2）；
+  2. `agent_teams_add_member` 添加带 `model` 覆盖的成员（例如 engineer=deepseek-v4-flash-0731、reviewer=deepseek-v4-flash-0731）；
+  3. 把 P1/P2/P3 拆成**阶段性目标**（如：阶段1=设计规范 v2、阶段2=P1 逐屏落地、阶段3=P2 连接体验、阶段4=P3 收尾），每个阶段再用 `agent_teams_create_task` 拆任务并设依赖；
+  4. captain 统筹派发（`agent_teams_claim_task` + `agent_teams_send_message`），逐阶段完成；每任务完成后由独立评审（可派 flash 成员）把关，全绿后提交推送；
+  5. 每完成一个阶段更新 `.superpowers/sdd/phase-b/progress.md` 与 GitHub。
+- **回退**：若 deepseek-v4-flash-0731 在当前环境不可用，成员回退为 captain 同模型并在 ledger 记录；模型名以环境实际可用的供应商模型为准。
 
 ## 1. 本阶段任务（按优先级）
 
