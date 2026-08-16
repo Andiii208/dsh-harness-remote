@@ -10,7 +10,8 @@
 - 使用方式：
   - 全图标（iOS/Android 主图标）：白底圆角方 + 黑色鲸鱼（Expo `icon.png` 1024×1024；圆角由系统遮罩，给全出血白底）。
   - Android 自适应图标：`foregroundImage` 用透明底 SVG 转 PNG（缩放 ~66% 安全区），`backgroundImage` 纯白。当前 `adaptive-icon.png` 为白底鲸鱼 PNG，配合 `backgroundColor: "#FFFFFF"` 显示一致。
-  - 生成 PNG：用 `npx sharp-cli`（或浏览器打开 SVG 截图）输出 1024×1024，存 `apps/mobile/assets/icon.png` 与 `adaptive-icon.png`。⚠️ 重生成后务必肉眼/工具检查非空白（playwright 直开 SVG 截图在此环境会产出空白，需 `sharp` 或带背景合成）。
+  - 生成 PNG（已验证可用）：`npx -y sharp-cli -i <svg> -o <png> resize 1024 1024`，存 `apps/mobile/assets/icon.png` 与 `adaptive-icon.png`。⚠️ 不要用 playwright 直开 SVG 截图（此环境产出空白）。
+  - 启动屏：`apps/mobile/assets/splash.svg`（#0A0C10 底 + 白色鲸鱼，含鲸眼抠色）→ sharp 栅格化 `splash.png`；app.json `splash` 用 `resizeMode: cover` 铺满。
 
 ## 视觉原则（App UI，避免 AI 味）
 
