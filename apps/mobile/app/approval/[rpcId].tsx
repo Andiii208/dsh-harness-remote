@@ -6,6 +6,7 @@ import { colors, font, radius, space, stroke } from "../../src/theme";
 import { SectionLabel } from "../../src/ui/SectionLabel";
 import { Field } from "../../src/ui/Field";
 import { Button } from "../../src/ui/Button";
+import { haptic } from "../../src/ui/haptics";
 
 export default function ApprovalScreen() {
   const { rpcId } = useLocalSearchParams<{ rpcId: string }>();
@@ -20,6 +21,8 @@ export default function ApprovalScreen() {
   const done = async (result: unknown) => {
     if (!id || busy) return;
     setBusy(true);
+    const approved = (result as { approved?: boolean })?.approved === true;
+    void haptic(approved ? "success" : "warning");
     try {
       await respond(id, result);
       router.back();
@@ -51,9 +54,12 @@ export default function ApprovalScreen() {
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={[styles.card, { borderLeftColor: rail }]}>
-          <SectionLabel tone={isApproval ? "muted" : "accent"}>
-            {isApproval ? "Permission request" : "Question"}
-          </SectionLabel>
+          <View style={styles.kindRow}>
+            <SectionLabel tone={isApproval ? "muted" : "accent"}>
+              {isApproval ? "Permission request" : "Question"}
+            </SectionLabel>
+            {id && <Text style={styles.rpcId}>{id}</Text>}
+          </View>
           <Text style={styles.prompt}>{String(payload.prompt ?? (isApproval ? "允许执行？" : "请回答"))}</Text>
 
           {isApproval ? (
@@ -117,5 +123,7 @@ const styles = StyleSheet.create({
   },
   command: { color: colors.text, fontFamily: font.mono, fontSize: font.transcript },
   buttonRow: { flexDirection: "row", gap: space.x3 },
+  kindRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x3 },
+  rpcId: { color: colors.textDim, fontSize: font.eyebrow, fontFamily: font.mono },
   answerInput: { minHeight: 88, textAlignVertical: "top", height: undefined },
 });

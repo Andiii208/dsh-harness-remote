@@ -27,6 +27,7 @@ import { SectionLabel } from "../src/ui/SectionLabel";
 import { Field } from "../src/ui/Field";
 import { Button } from "../src/ui/Button";
 import { ConnectingBar } from "../src/ui/ConnectingBar";
+import { haptic } from "../src/ui/haptics";
 
 const STATE_TONE: Record<string, StatusTone> = {
   online: "success",
@@ -99,6 +100,7 @@ export default function ConnectScreen() {
     if (!host.trim() || busy) return;
     setBusy(true);
     justConnected.current = true;
+    void haptic("light");
     try {
       const t = token.trim();
       if (t) await tokenStore.set(t);
@@ -158,8 +160,8 @@ export default function ConnectScreen() {
       : "";
 
   const list = found.length > 0
-    ? found.map((f) => ({ key: `found-${f.host}`, host: f.host, port: f.port, name: f.name, token: undefined }))
-    : recent.map((r) => ({ key: `recent-${r.host}-${r.port}`, host: r.host, port: r.port, name: r.name, token: r.token }));
+    ? found.map((f) => ({ key: `found-${f.host}`, host: f.host, port: f.port, name: f.name, version: f.version, token: undefined }))
+    : recent.map((r) => ({ key: `recent-${r.host}-${r.port}`, host: r.host, port: r.port, name: r.name, version: undefined, token: r.token }));
 
   return (
     <KeyboardAvoidingView
@@ -207,7 +209,7 @@ export default function ConnectScreen() {
                     {h.name ?? h.host}
                   </Text>
                   <Text style={styles.hostRowMeta} numberOfLines={1}>
-                    {`${h.host}:${h.port}`}
+                    {`${h.host}:${h.port}${h.version ? ` · ${h.version}` : ""}`}
                   </Text>
                 </View>
                 <Text style={styles.hostRowArrow}>→</Text>
@@ -261,7 +263,7 @@ export default function ConnectScreen() {
         </View>
 
         {online ? (
-          <Button tone="danger" label="断开连接" onPress={disconnect} full />
+          <Button tone="danger" label="断开连接" onPress={() => { void haptic("warning"); disconnect(); }} full />
         ) : (
           <Button
             label={busy ? "连接中…" : "连接"}

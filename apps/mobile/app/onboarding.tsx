@@ -46,6 +46,11 @@ export default function OnboardingScreen() {
         <SectionLabel tone="accent">{`Step ${step + 1} / ${STEPS.length}`}</SectionLabel>
         <Text style={styles.title}>{current.title}</Text>
         <Text style={styles.body}>{current.body}</Text>
+        {step === 2 && (
+          <View style={styles.codeBox}>
+            <Text style={styles.code}>dshremote://pair?host=192.168.1.5&port=3080&token=…</Text>
+          </View>
+        )}
         <View style={styles.dots}>
           {STEPS.map((_, i) => (
             <View key={i} style={[styles.dot, i === step && styles.dotActive]} />
@@ -78,6 +83,14 @@ const styles = StyleSheet.create({
   },
   title: { color: colors.text, fontSize: font.title, fontWeight: "600", letterSpacing: -0.2, lineHeight: 28 },
   body: { color: colors.textMuted, fontSize: font.body, lineHeight: 21 },
+  codeBox: {
+    backgroundColor: colors.surface3,
+    borderRadius: radius.control,
+    borderWidth: stroke.hairline,
+    borderColor: colors.border,
+    padding: space.x3,
+  },
+  code: { color: colors.textMuted, fontFamily: font.mono, fontSize: font.transcript - 1, lineHeight: 20 },
   dots: { flexDirection: "row", gap: space.x2, justifyContent: "center", paddingTop: space.x2 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.surface3 },
   dotActive: { backgroundColor: colors.accent },

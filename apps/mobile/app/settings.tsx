@@ -1,5 +1,6 @@
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
+import { Button } from "../src/ui/Button";
 import { colors, font, radius, space, stroke } from "../src/theme";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { StatusChip } from "../src/ui/StatusChip";
@@ -25,7 +26,7 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
 }
 
 export default function SettingsScreen() {
-  const { state, describe, lastEndpoint, notifications } = useConnection();
+  const { state, describe, lastEndpoint, notifications, disconnect } = useConnection();
   const describeName =
     describe && typeof describe === "object"
       ? `${(describe as { name?: string }).name ?? ""} ${(describe as { version?: string }).version ?? ""}`.trim()
@@ -43,6 +44,11 @@ export default function SettingsScreen() {
         </View>
         <Row label="目标主机" value={lastEndpoint ? `${lastEndpoint.host}:${lastEndpoint.port}` : "未连接"} mono />
         <Row label="远端实例" value={describeName} mono />
+        {state === "online" && (
+          <View style={styles.disconnectRow}>
+            <Button tone="danger" label="断开连接" onPress={disconnect} full />
+          </View>
+        )}
       </Group>
 
       <Group eyebrow="Notifications">
@@ -89,6 +95,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   rowLabel: { color: colors.text, fontSize: font.body },
+  disconnectRow: { paddingVertical: space.x3 },
   rowValue: { color: colors.textMuted, fontSize: font.caption, flexShrink: 1, textAlign: "right" },
   rowValueMono: { fontFamily: font.mono, color: colors.textMuted },
 });

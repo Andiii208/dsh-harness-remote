@@ -10,6 +10,7 @@ import { tokenStore } from "../src/data/secureStoreAdapter";
 import { colors, font, radius, space, stroke } from "../src/theme";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { Button } from "../src/ui/Button";
+import { haptic } from "../src/ui/haptics";
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -35,6 +36,7 @@ export default function ScanScreen() {
       return;
     }
     setScanning(false);
+    void haptic("success");
     if (payload.token) await tokenStore.set(payload.token);
     await hostStore.add(payload.host, payload.port, undefined, payload.token);
     setError("");
@@ -70,6 +72,7 @@ export default function ScanScreen() {
         </View>
         <View style={styles.overlay}>
           <Text style={styles.overlayTitle}>对准电脑上的配对二维码</Text>
+          <Text style={styles.overlayHint}>配对码由 dsh-remote 插件生成，15 分钟内有效</Text>
           {error.length > 0 && <Text style={styles.error}>{error}</Text>}
           {!permission?.granted && (
             <Button label="授权相机权限" onPress={() => void requestPermission()} full />
@@ -100,6 +103,7 @@ const styles = StyleSheet.create({
   cornerBR: { bottom: "38%", right: "22%", borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
   overlay: { padding: space.x5, paddingBottom: space.x7, gap: space.x3, backgroundColor: "rgba(10,12,16,0.55)" },
   overlayTitle: { color: colors.text, fontSize: font.body, fontWeight: "600", textAlign: "center" },
+  overlayHint: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
   error: { color: colors.danger, fontSize: font.caption, textAlign: "center" },
   cancel: { alignItems: "center", paddingVertical: space.x3 },
   cancelText: { color: colors.textMuted, fontSize: font.body, fontWeight: "600" },
