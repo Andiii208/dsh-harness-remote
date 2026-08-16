@@ -6,6 +6,7 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { FixtureSet, UnaryFixture } from "@dsh-remote/capture";
+import { buildPairPayload } from "@dsh-remote/protocol";
 
 export interface ApiServerState {
   receivedResponds: Array<{ rpcId: string; result: unknown }>;
@@ -108,6 +109,22 @@ export function createApiHandler(
     if (req.method === "GET" && path === "/api/host.describe") {
       const describe = fixtures[0]?.meta.describe ?? { name: "mock-harness", version: "0.1.0-rc.5" };
       sendJson(res, { rpcId: "", ok: true, result: describe });
+      return;
+    }
+
+    // P2：配对二维码载荷（模拟宿主侧生成；仅在配置 pairToken 时启用）。
+    if (req.method === "GET" && path === "/api/pairing/qr") {
+      if (!opts.pairToken) {
+        sendJson(
+          res,
+          { rpcId: "", ok: false, error: { code: "NOT_CONFIGURED", message: "pairing token not configured" } },
+          404,
+        );
+        return;
+      }
+      const host = req.headers.host ? req.headers.host.split(":")[0] : "127.0.0.1";
+      const port = url.port ? Number(url.port) : 3080;
+      sendJson(res, { rpcId: "", ok: true, result: { url: buildPairPayload({ host, port, token: opts.pairToken }) } });
       return;
     }
 

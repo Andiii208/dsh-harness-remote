@@ -19,6 +19,8 @@ import {
   type ConnectionPipeline,
 } from "./pipeline";
 import { notificationService } from "../notify/expoAdapter";
+import { hostStore } from "../discovery/hostStoreAdapter";
+import { tokenStore } from "../data/secureStoreAdapter";
 import { KeepaliveScheduler } from "../notify/keepalive";
 import { backgroundTaskApi, KEEPALIVE_TASK } from "../notify/keepaliveAdapter";
 import { GoalsClient, type GoalsApi } from "../data/goals";
@@ -28,6 +30,8 @@ import type { NotificationEvent } from "../notify/classifier";
 export interface ConnectionApi {
   state: ConnectionState;
   describe: unknown;
+  /** 最近一次连接的端点（自动重连/设置页用）。 */
+  lastEndpoint: { host: string; port: number } | null;
   sessions: SessionSummary[];
   pending: PendingRequest[];
   notifications: NotificationEvent[];
@@ -58,6 +62,19 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     setState(s);
   }, []);
 
+  // P2：冷启动自动重连最近主机（离线且从未主动连接时）。
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [recent, token] = await Promise.all([hostStore.latest(), tokenStore.get()]);
+      if (cancelled || !recent || stateRef.current !== "offline") return;
+      await connectRef.current(recent.host, recent.port, token ?? undefined);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // 后台保活：注册一次；tick 时若离线超阈值则重连最近端点
   useEffect(() => {
     const keepalive = new KeepaliveScheduler(
@@ -78,18 +95,23 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const connectRef = useRef<(host: string, port: number) => Promise<void>>(async () => {});
+  const connectRef = useRef<(host: string, port: number, token?: string) => Promise<void>>(async () => {});
 
   const connect = useCallback(async (host: string, port: number, token?: string) => {
     pipelineRef.current?.stop();
     setNotifications([]);
     lastEndpointRef.current = { host, port };
+    void hostStore.add(host, port);
 
     const pipeline = createConnectionPipeline({
       endpoint: { host, port },
       auth: token ? { token } : {},
       transport: new LanTransport({
-        onDescribe: (d) => setDescribe(d),
+        onDescribe: (d) => {
+          setDescribe(d);
+          const name = d && typeof d === "object" ? (d as { name?: string }).name : undefined;
+          if (name) void hostStore.add(host, port, name);
+        },
       }),
       onStateChange: (s) => setStateBoth(s),
       onError: (err) => {
@@ -156,6 +178,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     () => ({
       state,
       describe,
+      lastEndpoint: lastEndpointRef.current,
       sessions: pipelineRef.current?.store.getSessions() ?? [],
       pending: pipelineRef.current?.store.getPendingRequests() ?? [],
       notifications,

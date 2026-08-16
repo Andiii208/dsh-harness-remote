@@ -6,7 +6,14 @@
 
 - `src/token.ts` — `PairingTokenStore`：签发/校验/过期/吊销（纯 TS，可注入时钟与随机源）。
 - `src/gate.ts` — `decideAccess` 访问决策 + `extractToken` 头解析（纯函数）。
-- `src/plugin.ts` — `createPairingPlugin`：接线骨架（issueToken / revoke / authorize / extractToken）。
+- `src/plugin.ts` — `createPairingPlugin`：接线骨架（issueToken / pairingUrl / revoke / authorize / extractToken）。
+
+## 二维码配对（P2）
+
+- `plugin.pairingUrl(host, port)`：签发新 token 并返回配对深链
+  `dshremote://pair?host=<host>&port=<port>&token=<token>`（契约见 docs/PROTOCOL.md §8）。
+- 宿主把该 URL 渲染为 QR 显示在终端；App 扫码即一键连接（token 随 URL 传递，仍受 15 分钟 TTL 限制）。
+- 单测：`test/pairing-url.test.ts`（构造 → `parsePairPayload` 解析 → token 生效）。
 
 ## 安装（user patch 层，不改 DSH 源码）
 

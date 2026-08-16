@@ -107,4 +107,28 @@ describe("mock-harness pairing fence", () => {
     const res = await post(h.url, "/api/host.describe", { rpcId: "a", method: "host.describe", payload: {} });
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
   });
+
+  it("serves a pairing QR payload containing the configured token", async () => {
+    const h = await pairingHarness("pair-tok-1");
+    const res = await fetch(h.url + "/api/pairing/qr");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; result: { url: string } };
+    expect(body.ok).toBe(true);
+    const parsed = new URL(body.result.url);
+    expect(parsed.protocol).toBe("dshremote:");
+    expect(parsed.hostname).toBe("pair");
+    expect(parsed.searchParams.get("host")).toBeTruthy();
+    expect(parsed.searchParams.get("port")).toBeTruthy();
+    expect(parsed.searchParams.get("token")).toBe("pair-tok-1");
+  });
+
+  it("refuses the pairing QR endpoint without a configured token", async () => {
+    const all = await loadFixtureDir(fixturesDir);
+    const h = await createMockHarness(all, { port: 0 });
+    await h.start();
+    harnesses.push(h);
+    const res = await fetch(h.url + "/api/pairing/qr");
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as Record<string, unknown>).ok).toBe(false);
+  });
 });

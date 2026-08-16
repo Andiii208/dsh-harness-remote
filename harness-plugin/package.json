@@ -11,7 +11,9 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
@@ -19,8 +21,11 @@
     "dev": "vitest"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.2.4",
-    "@types/node": "^22.0.0"
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@dsh-remote/protocol": "workspace:^"
   }
 }

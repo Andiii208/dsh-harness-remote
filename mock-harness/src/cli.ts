@@ -24,19 +24,21 @@ Usage:
 Options:
   --port <n>      listen port (default 3080)
   --host <h>      bind host (default 127.0.0.1)
+  --pair-token <t> enable the pairing fence with this token (also enables GET /api/pairing/qr)
   --fixtures <p>  fixture file or directory (default: built-in stable samples;
                   scenario fixtures like disconnect.json are excluded from the
                   default set — pass --fixtures explicitly to include them)
   --help          show this help
 `;
 
-function parse(argv: string[]): { port: number; host: string; fixtures: string | null; help: boolean } {
-  const out = { port: 3080, host: "127.0.0.1", fixtures: null as string | null, help: false };
+function parse(argv: string[]): { port: number; host: string; fixtures: string | null; pairToken: string | null; help: boolean } {
+  const out = { port: 3080, host: "127.0.0.1", fixtures: null as string | null, pairToken: null as string | null, help: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--help" || a === "-h") out.help = true;
     else if (a === "--port") out.port = Number.parseInt(argv[++i] ?? "", 10);
     else if (a === "--host") out.host = argv[++i] ?? "127.0.0.1";
+    else if (a === "--pair-token") out.pairToken = argv[++i] ?? null;
     else if (a === "--fixtures") out.fixtures = argv[++i] ?? null;
   }
   return out;
@@ -71,7 +73,11 @@ async function main(argv: string[]): Promise<number> {
     }
   }
 
-  const harness = await createMockHarness(fixtures, { host: opts.host, port: opts.port });
+  const harness = await createMockHarness(fixtures, {
+    host: opts.host,
+    port: opts.port,
+    ...(opts.pairToken ? { pairToken: opts.pairToken } : {}),
+  });
   await harness.start();
   console.log(
     `mock-harness ready on ${harness.url} (${fixtures.length} fixture set(s), ${fixtures.reduce(

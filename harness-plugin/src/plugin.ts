@@ -16,9 +16,12 @@
 
 import { PairingTokenStore, type PairingToken } from "./token.js";
 import { decideAccess, extractToken, type AccessDecision } from "./gate.js";
+import { buildPairPayload } from "@dsh-remote/protocol";
 
 export interface PairingPlugin {
   issueToken(): PairingToken;
+  /** 签发新 token 并构造配对深链（dshremote://pair?host&port&token），宿主可打印为 QR。 */
+  pairingUrl(host: string, port: number): string;
   revoke(): void;
   /** 对一次 /api 请求做访问决策（宿主中间件调用）。 */
   authorize(req: { isLoopback: boolean; headers: Record<string, string | undefined> }): AccessDecision;
@@ -38,6 +41,7 @@ export function createPairingPlugin(opts: PairingPluginOptions = {}): PairingPlu
   return {
     store,
     issueToken: () => store.issue(),
+    pairingUrl: (host, port) => buildPairPayload({ host, port, token: store.issue().token }),
     revoke: () => store.revoke(),
     extractToken: (headers) => extractToken(headers),
     authorize: (req) => decideAccess(req, store),
