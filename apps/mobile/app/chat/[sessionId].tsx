@@ -28,6 +28,7 @@ export default function ChatScreen() {
   const { sessions, transcript, liveMessage, sendMessage, state } = useConnection();
   const [draft, setDraft] = useState("");
   const [sendError, setSendError] = useState("");
+  const [showJump, setShowJump] = useState(false);
   const listRef = useRef<FlashListRef<TranscriptMessage> | null>(null);
   const messages = id ? transcript(id) : [];
   const live = id ? liveMessage(id) : undefined;
@@ -42,6 +43,17 @@ export default function ChatScreen() {
       listRef.current?.scrollToEnd({ animated: data.length <= 4 });
     }
   }, [data.length]);
+
+  const jumpToBottom = () => {
+    listRef.current?.scrollToEnd({ animated: true });
+    void haptic("light");
+  };
+
+  const onScroll = (e: { nativeEvent: { contentOffset: { y: number }; layoutMeasurement: { height: number }; contentSize: { height: number } } }) => {
+    const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+    const distance = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    setShowJump(distance > 320);
+  };
 
   const send = async () => {
     const text = draft.trim();
@@ -88,6 +100,8 @@ export default function ChatScreen() {
             <MessageBubble m={item} live={index === messages.length && item.id === live?.id} />
           </Animated.View>
         )}
+        onScroll={onScroll}
+        scrollEventThrottle={64}
         ListEmptyComponent={
           state === "connecting" || state === "backoff" ? (
             <View style={styles.skeletonStack}>
@@ -104,6 +118,11 @@ export default function ChatScreen() {
           )
         }
       />
+      {showJump && (
+        <Pressable style={styles.jumpFab} onPress={jumpToBottom} accessibilityRole="button" accessibilityLabel="回到底部">
+          <Text style={styles.jumpFabText}>↓</Text>
+        </Pressable>
+      )}
       <View style={styles.inputBar}>
         {!online && <SectionLabel tone="danger">Offline</SectionLabel>}
         {sendError.length > 0 && <Text style={styles.sendError}>{sendError}</Text>}
@@ -176,4 +195,20 @@ const styles = StyleSheet.create({
   sendDisabled: { opacity: 0.4 },
   sendText: { color: "#FFFFFF", fontSize: font.body, fontWeight: "600" },
   sendError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
+  jumpFab: {
+    position: "absolute",
+    right: space.x5,
+    bottom: 96,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+      android: { elevation: 5 },
+    }),
+  },
+  jumpFabText: { color: "#FFFFFF", fontSize: 18, fontWeight: "700" },
 });
