@@ -37,6 +37,18 @@ docs               架构 / 协议 / 兼容矩阵 / 安全 / 设计系统 / 联�
 - 每个 PR 保持小、聚焦；先跑 `pnpm -r typecheck && pnpm -r test` 全绿再提。
 - CI（GitHub Actions）会在 push/PR 上自动跑 typecheck + test。
 
+## Web 预览与视觉 QA（改 UI 后必做）
+
+无真机时用 web 预览验证 UI 渲染与交互：
+
+```bash
+pnpm --filter mock-harness build && node mock-harness/dist/cli.js --port 3080
+cd apps/mobile && npx expo export --platform web --output-dir dist-web
+# 任意静态服务器托管 dist-web（SPA 回退到 index.html），如 node 脚本或 npx serve
+```
+
+然后用 playwright 驱动页面（连接 127.0.0.1:3080 → 会话 → 审批 → 聊天），截图对照 `docs/design/UI-SYSTEM.md` 逐屏检查。注意 web 预览的限制：通知/保活/安全存储是原生能力，web 上会优雅降级（console.warn，不崩溃）；审批/提问经会话页「待处理请求」横幅进入。
+
 ## 行为准则
 
 见 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。安全问题走 [SECURITY.md](SECURITY.md) 的私密披露渠道，不要开公开 issue。
