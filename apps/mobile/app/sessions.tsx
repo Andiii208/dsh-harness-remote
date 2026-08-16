@@ -13,7 +13,7 @@ function GoalBar({ percent }: { percent?: number }) {
 }
 
 export default function SessionsScreen() {
-  const { sessions } = useConnection();
+  const { sessions, pending } = useConnection();
   const router = useRouter();
 
   return (
@@ -22,6 +22,20 @@ export default function SessionsScreen() {
       contentContainerStyle={{ padding: space.x4, gap: space.x3 }}
       data={sessions}
       keyExtractor={(s) => s.id}
+      ListHeaderComponent={
+        pending.length > 0 ? (
+          <Pressable
+            style={styles.pendingBanner}
+            onPress={() =>
+              pending[0] && router.push(`/approval/${encodeURIComponent(pending[0].rpcId)}`)
+            }
+          >
+            <Text style={styles.pendingText}>
+              ⚠ {pending.length} 个待处理请求（审批 / 提问）
+            </Text>
+          </Pressable>
+        ) : null
+      }
       ListEmptyComponent={
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>没有会话</Text>
@@ -70,6 +84,15 @@ const styles = StyleSheet.create({
   empty: { alignItems: "center", paddingTop: space.x6 * 2, gap: space.x2 },
   emptyTitle: { color: colors.text, fontSize: font.section, fontWeight: "600" },
   emptyText: { color: colors.textMuted, fontSize: font.body - 3, textAlign: "center" },
+  pendingBanner: {
+    backgroundColor: "rgba(251,191,36,0.12)",
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warn,
+    borderRadius: radius.card,
+    padding: space.x3,
+    marginBottom: space.x2,
+  },
+  pendingText: { color: "#FCD34D", fontSize: font.body - 1, fontWeight: "700" },
   row: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,
@@ -81,16 +104,17 @@ const styles = StyleSheet.create({
   rowHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x2 },
   rowTitle: { color: colors.text, fontSize: font.body, fontWeight: "600", flex: 1 },
   goal: {
-    color: colors.warn,
+    color: "#0E0E10",
     fontSize: font.body - 3,
     fontFamily: font.mono,
-    backgroundColor: colors.surface2,
+    fontWeight: "700",
+    backgroundColor: colors.warn,
     borderRadius: radius.pill,
     paddingHorizontal: space.x2,
     paddingVertical: 2,
     overflow: "hidden",
   },
-  goalDone: { color: colors.success },
+  goalDone: { backgroundColor: colors.success },
   rowPreview: { color: colors.textMuted, fontSize: font.body - 3 },
   rowMeta: { flexDirection: "row", alignItems: "center", gap: space.x3 },
   metaText: { color: colors.textMuted, fontSize: font.body - 4, fontFamily: font.mono },

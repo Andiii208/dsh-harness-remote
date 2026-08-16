@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NotificationClassifier } from "../src/notify/classifier.js";
+import { NotificationClassifier } from "../src/notify/classifier";
 
 function frame(type: string, extra: Record<string, unknown> = {}): unknown {
   return { type, ...extra };

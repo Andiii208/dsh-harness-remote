@@ -103,6 +103,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     pipeline.store.subscribe(() => setVersion((v) => v + 1));
     pipelineRef.current = pipeline;
     keepaliveRef.current?.markPing();
+    // 调试钩子（仅开发构建暴露 store，便于浏览器控制台排查）
+    if (process.env.NODE_ENV !== "production") {
+      (globalThis as Record<string, unknown>).__dshDebug = pipeline.store;
+    }
     pipeline.start();
   }, [setStateBoth]);
 

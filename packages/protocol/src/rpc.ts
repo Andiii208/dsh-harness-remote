@@ -45,7 +45,10 @@ export class RpcClient {
   constructor(opts: RpcClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/+$/, "");
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.fetchImpl = opts.fetchImpl ?? fetch;
+    // 浏览器里 fetch 是 WebIDL 方法，脱离 window 接收者调用会抛
+    // "Illegal invocation"——bind 到 globalThis 保留正确接收者。
+    const impl = opts.fetchImpl ?? fetch;
+    this.fetchImpl = impl.bind(globalThis) as typeof fetch;
     this.token = opts.token;
   }
 

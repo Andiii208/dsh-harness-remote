@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SessionStore } from "../src/data/SessionStore.js";
+import { SessionStore } from "../src/data/SessionStore";
 
 function frame(type: string, extra: Record<string, unknown> = {}): unknown {
   return { type, ...extra };

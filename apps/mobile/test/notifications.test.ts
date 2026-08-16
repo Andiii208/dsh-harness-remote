@@ -4,8 +4,8 @@ import {
   NotificationService,
   notificationParams,
   type NotificationsApi,
-} from "../src/notify/notifications.js";
-import type { NotificationEvent } from "../src/notify/classifier.js";
+} from "../src/notify/notifications";
+import type { NotificationEvent } from "../src/notify/classifier";
 
 function ev(partial: Partial<NotificationEvent> & { kind: NotificationEvent["kind"] }): NotificationEvent {
   return { sessionId: "s1", dedupeKey: "k", ...partial };

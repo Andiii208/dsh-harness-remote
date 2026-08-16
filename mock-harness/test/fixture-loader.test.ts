@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import { loadFixtureDir, loadFixtureFile, FixtureLoadError } from "../src/fixture-loader.js";
+import { isStableFixture } from "../src/cli.js";
 
 const fixturesDir = fileURLToPath(new URL("../fixtures", import.meta.url));
 
@@ -19,5 +20,15 @@ describe("fixture-loader", () => {
     await expect(loadFixtureFile("C:\\Windows\\does-not-exist.json")).rejects.toBeInstanceOf(
       FixtureLoadError,
     );
+  });
+
+  it("isStableFixture excludes scenario fixtures (disconnect.json)", async () => {
+    const sets = await loadFixtureDir(fixturesDir);
+    const disconnect = sets.find((f) => JSON.stringify(f).includes("drop-after"));
+    const sessions = sets.find((f) => JSON.stringify(f).includes("session.list"));
+    expect(disconnect).toBeDefined();
+    expect(sessions).toBeDefined();
+    expect(isStableFixture(disconnect!)).toBe(false);
+    expect(isStableFixture(sessions!)).toBe(true);
   });
 });

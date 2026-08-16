@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TokenStore, TOKEN_KEY, type SecureStoreApi } from "../src/data/tokenStore.js";
+import { TokenStore, TOKEN_KEY, type SecureStoreApi } from "../src/data/tokenStore";
 
 function stubApi(): SecureStoreApi & { store: Map<string, string>; calls: string[] } {
   const store = new Map<string, string>();

@@ -7,7 +7,7 @@
 
 import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
-import { routeFromNotificationData } from "./route.js";
+import { routeFromNotificationData } from "./route";
 
 let registered = false;
 

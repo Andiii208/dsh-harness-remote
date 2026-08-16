@@ -5,7 +5,7 @@
 
 import * as BackgroundTask from "expo-background-task";
 import * as TaskManager from "expo-task-manager";
-import { KEEPALIVE_TASK, type BackgroundTaskApi } from "./keepalive.js";
+import { KEEPALIVE_TASK, type BackgroundTaskApi } from "./keepalive";
 
 export const backgroundTaskApi: BackgroundTaskApi = {
   defineTask: (name, task) => TaskManager.defineTask(name, task as never),

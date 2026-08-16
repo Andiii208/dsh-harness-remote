@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import type { Connection, ConnectionState, DownlinkFrame, Transport } from "@dsh-remote/protocol";
-import { createConnectionPipeline } from "../src/transport/pipeline.js";
+import { createConnectionPipeline } from "../src/transport/pipeline";
 
 class FeedableConnection implements Connection {
   private waiters: Array<(v: IteratorResult<DownlinkFrame>) => void> = [];

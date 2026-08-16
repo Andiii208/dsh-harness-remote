@@ -4,7 +4,7 @@
  * 便于在 node 环境单测（注入桩）。
  */
 
-import type { NotificationEvent } from "./classifier.js";
+import type { NotificationEvent } from "./classifier";
 
 export interface NotificationParams {
   title: string;

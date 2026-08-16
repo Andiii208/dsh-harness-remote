@@ -4,8 +4,17 @@
  */
 
 import { fileURLToPath, pathToFileURL } from "node:url";
+import type { FixtureSet } from "@dsh-remote/capture";
 import { createMockHarness } from "./index.js";
 import { loadFixtures } from "./fixture-loader.js";
+
+/**
+ * 稳定 fixture 判定：不含断连 scenario（断连场景专为重连测试，
+ * 留在默认集会周期性断开连接）。默认内置集只加载稳定 fixture。
+ */
+export function isStableFixture(f: FixtureSet): boolean {
+  return !f.scenarios || f.scenarios.length === 0;
+}
 
 const HELP = `mock-harness — DSH /api + WS test stub (replays conformance fixtures)
 
@@ -15,7 +24,9 @@ Usage:
 Options:
   --port <n>      listen port (default 3080)
   --host <h>      bind host (default 127.0.0.1)
-  --fixtures <p>  fixture file or directory (default: built-in samples)
+  --fixtures <p>  fixture file or directory (default: built-in stable samples;
+                  scenario fixtures like disconnect.json are excluded from the
+                  default set — pass --fixtures explicitly to include them)
   --help          show this help
 `;
 
@@ -50,6 +61,14 @@ async function main(argv: string[]): Promise<number> {
   } catch (err) {
     console.error(`fixture load failed: ${(err as Error).message}`);
     return 1;
+  }
+  if (!opts.fixtures) {
+    // 默认内置集：排除带 scenario 的 fixture（断连场景专为重连测试；
+    // 留在默认集会周期性断开连接，破坏联调体验）。显式 --fixtures 不过滤。
+    const stable = fixtures.filter(isStableFixture);
+    if (stable.length !== fixtures.length) {
+      fixtures = stable;
+    }
   }
 
   const harness = await createMockHarness(fixtures, { host: opts.host, port: opts.port });

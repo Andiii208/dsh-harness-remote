@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { routeFromNotificationData } from "../src/notify/route.js";
+import { routeFromNotificationData } from "../src/notify/route";
 
 describe("routeFromNotificationData", () => {
   it("extracts known chat routes", () => {

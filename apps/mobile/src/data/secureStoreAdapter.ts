@@ -4,7 +4,7 @@
  */
 
 import * as SecureStore from "expo-secure-store";
-import { TokenStore, type SecureStoreApi } from "./tokenStore.js";
+import { TokenStore, type SecureStoreApi } from "./tokenStore";
 
 const api: SecureStoreApi = {
   getItemAsync: (key) => SecureStore.getItemAsync(key),

@@ -4,7 +4,7 @@
  */
 
 import * as Notifications from "expo-notifications";
-import { NotificationService, type NotificationsApi } from "./notifications.js";
+import { NotificationService, type NotificationsApi } from "./notifications";
 
 const api: NotificationsApi = {
   requestPermissionsAsync: () => Notifications.requestPermissionsAsync(),

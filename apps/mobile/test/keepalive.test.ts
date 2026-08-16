@@ -4,7 +4,7 @@ import {
   KEEPALIVE_TASK,
   shouldReconnect,
   type BackgroundTaskApi,
-} from "../src/notify/keepalive.js";
+} from "../src/notify/keepalive";
 
 describe("shouldReconnect", () => {
   const now = 1_000_000;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GoalsClient, type GoalsApi } from "../src/data/goals.js";
+import { GoalsClient, type GoalsApi } from "../src/data/goals";
 
 function stubApi(handler: (ns: string, method: string, payload: unknown) => unknown): GoalsApi {
   return {
