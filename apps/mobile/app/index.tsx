@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
+import { tokenStore } from "../src/data/secureStoreAdapter";
 import { colors, font, radius, space, stroke } from "../src/theme";
 
 const DOT: Record<string, string> = {
@@ -24,8 +25,16 @@ export default function ConnectScreen() {
   const router = useRouter();
   const [host, setHost] = useState("");
   const [port, setPort] = useState("3080");
+  const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const justConnected = useRef(false);
+
+  // 加载已保存的配对 token（Keychain/Keystore）
+  useEffect(() => {
+    void tokenStore.get().then((t) => {
+      if (t) setToken(t);
+    });
+  }, []);
 
   const online = state === "online";
 
@@ -42,10 +51,17 @@ export default function ConnectScreen() {
     setBusy(true);
     justConnected.current = true;
     try {
-      await connect(host.trim(), Number.parseInt(port || "3080", 10));
+      const t = token.trim();
+      if (t) await tokenStore.set(t); // 配对 token 入安全存储
+      await connect(host.trim(), Number.parseInt(port || "3080", 10), t || undefined);
     } finally {
       setBusy(false);
     }
+  };
+
+  const onClearToken = async () => {
+    setToken("");
+    await tokenStore.clear();
   };
 
   return (
@@ -81,6 +97,22 @@ export default function ConnectScreen() {
           onChangeText={setPort}
           editable={!online}
         />
+        <TextInput
+          style={[styles.input, styles.tokenInput]}
+          placeholder="配对 token（可选，M2）"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={token}
+          onChangeText={setToken}
+          editable={!online}
+          secureTextEntry
+        />
+        {token.length > 0 && (
+          <Pressable style={styles.clearToken} onPress={onClearToken}>
+            <Text style={styles.clearTokenText}>清除已保存的配对</Text>
+          </Pressable>
+        )}
 
         {online ? (
           <Pressable style={[styles.button, styles.buttonGhost]} onPress={disconnect}>
@@ -144,6 +176,9 @@ const styles = StyleSheet.create({
     paddingVertical: space.x3,
     fontSize: font.body,
   },
+  tokenInput: { fontFamily: font.mono, fontSize: font.body - 2 },
+  clearToken: { alignItems: "flex-start" },
+  clearTokenText: { color: colors.danger, fontSize: font.body - 3 },
   button: {
     borderRadius: radius.card,
     alignItems: "center",

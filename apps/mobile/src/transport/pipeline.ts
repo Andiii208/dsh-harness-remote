@@ -6,6 +6,7 @@
 
 import {
   ConnectionLoop,
+  type Auth,
   type ConnectionState,
   type Endpoint,
   type Transport,
@@ -16,6 +17,8 @@ import { NotificationClassifier, type NotificationEvent } from "../notify/classi
 export interface ConnectionPipelineOptions {
   endpoint: Endpoint;
   transport: Transport;
+  /** 配对 token（M2）→ LanTransport auth。 */
+  auth?: Auth;
   onStateChange?: (s: ConnectionState) => void;
   onError?: (err: unknown) => void;
   onNotification?: (n: NotificationEvent) => void;
@@ -35,6 +38,7 @@ export function createConnectionPipeline(opts: ConnectionPipelineOptions): Conne
   const loop = new ConnectionLoop({
     endpoint: opts.endpoint,
     transport: opts.transport,
+    auth: opts.auth,
     onStateChange: opts.onStateChange,
     onError: opts.onError,
   });

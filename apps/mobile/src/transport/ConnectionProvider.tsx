@@ -35,7 +35,7 @@ export interface ConnectionApi {
   goals: GoalsClient;
   /** 乐观更新 goal 状态（暂停/恢复后立即反映）。 */
   setGoalStatus(sessionId: string, status: string): void;
-  connect(host: string, port: number): Promise<void>;
+  connect(host: string, port: number, token?: string): Promise<void>;
   disconnect(): void;
   sendMessage(sessionId: string, text: string): Promise<void>;
   respond(rpcId: string, result: unknown): Promise<void>;
@@ -80,13 +80,14 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
   const connectRef = useRef<(host: string, port: number) => Promise<void>>(async () => {});
 
-  const connect = useCallback(async (host: string, port: number) => {
+  const connect = useCallback(async (host: string, port: number, token?: string) => {
     pipelineRef.current?.stop();
     setNotifications([]);
     lastEndpointRef.current = { host, port };
 
     const pipeline = createConnectionPipeline({
       endpoint: { host, port },
+      auth: token ? { token } : {},
       transport: new LanTransport({
         onDescribe: (d) => setDescribe(d),
       }),
