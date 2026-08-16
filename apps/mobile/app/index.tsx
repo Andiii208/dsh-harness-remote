@@ -99,7 +99,7 @@ export default function ConnectScreen() {
         />
         <TextInput
           style={[styles.input, styles.tokenInput]}
-          placeholder="配对 token（可选，M2）"
+          placeholder="配对 token（可选）"
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}

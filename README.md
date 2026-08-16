@@ -43,6 +43,7 @@ dsh-remote/
 pnpm install
 pnpm test
 pnpm typecheck
+pnpm audit --prod   # 发布前依赖审计
 
 # 起 mock-harness（无需真实 DSH 即可联调）
 pnpm --filter mock-harness build
@@ -52,6 +53,17 @@ node mock-harness/dist/cli.js --port 3080
 pnpm --filter @dsh-remote/capture build
 node tools/capture/dist/cli.js record --host 127.0.0.1 --port 3080 --out ./fixtures
 ```
+
+## 构建（EAS 云构建，无需 Mac 出 iOS 包）
+
+```bash
+cd apps/mobile
+npx eas-cli build --profile development   # 开发版（development client）
+npx eas-cli build --profile preview       # 内部预览
+npx eas-cli build --profile production    # 商店版（自动递增 build number）
+```
+
+前置：`eas.json` 已配置三个 profile；首次运行 `npx eas-cli login` + `npx eas-cli init`（写入 `extra.eas.projectId`）。真机联调步骤见 [docs/MANUAL.md](docs/MANUAL.md)。
 
 ## 文档
 

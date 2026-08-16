@@ -43,8 +43,15 @@ function playStream(
 }
 
 export interface WsServerOptions {
-  /** 配置后启用配对围栏：WS 握手必须携带 ?pairToken= 匹配值。 */
+  /** 配置后启用配对围栏：非回环握手必须携带 ?pairToken= 匹配值。 */
   pairToken?: string;
+  /** 测试旋钮：true 时回环也强制配对。 */
+  enforcePairing?: boolean;
+}
+
+/** 回环判定（与 harness-plugin 的 gate 语义一致：回环豁免配对）。 */
+function isLoopbackAddr(address: string | undefined): boolean {
+  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
 }
 
 export function attachWs(
@@ -62,9 +69,12 @@ export function attachWs(
       socket.destroy();
       return;
     }
-    if (opts.pairToken && url.searchParams.get("pairToken") !== opts.pairToken) {
-      socket.destroy(); // 配对失败：不升级
-      return;
+    const remoteAddr = (socket as { remoteAddress?: string }).remoteAddress;
+    if (opts.pairToken && (opts.enforcePairing || !isLoopbackAddr(remoteAddr))) {
+      if (url.searchParams.get("pairToken") !== opts.pairToken) {
+        socket.destroy(); // 配对失败：不升级
+        return;
+      }
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
       wsClients.push(ws);

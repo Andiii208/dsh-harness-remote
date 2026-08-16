@@ -56,8 +56,10 @@ export interface ApiRequest {
 }
 
 export interface ApiServerOptions {
-  /** 配置后启用配对围栏：所有 /api POST 必须携带匹配的配对 token。 */
+  /** 配置后启用配对围栏：非回环请求必须携带匹配的配对 token。 */
   pairToken?: string;
+  /** 测试旋钮：true 时回环也强制配对（模拟全部为远端请求）。 */
+  enforcePairing?: boolean;
 }
 
 /** 从请求头提取配对 token（Authorization: Bearer 或 x-dsh-pair-token）。 */
@@ -74,6 +76,11 @@ export function extractPairToken(headers: Record<string, string | string[] | und
   const trimmed = raw.trim();
   if (trimmed.toLowerCase().startsWith("bearer ")) return trimmed.slice("bearer ".length).trim();
   return trimmed;
+}
+
+/** 回环判定（与 harness-plugin 的 gate 语义一致：回环豁免配对）。 */
+function isLoopbackAddr(address: string | undefined): boolean {
+  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
 }
 
 export function createApiHandler(
@@ -100,8 +107,8 @@ export function createApiHandler(
     const body = (await readBody(req)) as ApiRequest;
     const rpcId = typeof body.rpcId === "string" ? body.rpcId : "unknown";
 
-    // 配对围栏（M2 模拟）：配置了 pairToken 时，非回环语义下所有调用必须带 token
-    if (opts.pairToken) {
+    // 配对围栏（M2 模拟）：回环请求豁免；非回环必须携带匹配的配对 token
+    if (opts.pairToken && (opts.enforcePairing || !isLoopbackAddr(req.socket.remoteAddress))) {
       const provided = extractPairToken(req.headers);
       if (provided !== opts.pairToken) {
         sendJson(res, {

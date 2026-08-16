@@ -13,10 +13,10 @@ afterEach(async () => {
   await Promise.all(harnesses.splice(0).map((h) => h.stop()));
 });
 
-async function pairingHarness(token: string): Promise<MockHarness> {
+async function pairingHarness(token: string, enforce = true): Promise<MockHarness> {
   const all = await loadFixtureDir(fixturesDir);
   const selected = all.filter((f) => JSON.stringify(f).includes("sessions"));
-  const h = await createMockHarness(selected, { port: 0, pairToken: token });
+  const h = await createMockHarness(selected, { port: 0, pairToken: token, enforcePairing: enforce });
   await h.start();
   harnesses.push(h);
   return h;
@@ -62,6 +62,22 @@ describe("mock-harness pairing fence", () => {
   it("accepts WS upgrades with the pairToken query", async () => {
     const h = await pairingHarness("pair-tok-1");
     const ws = new WebSocket(`${h.url.replace(/^http/, "ws")}/api/events.mux?pairToken=pair-tok-1`);
+    const opened = await new Promise<boolean>((resolve) => {
+      ws.onopen = () => resolve(true);
+      ws.onerror = () => resolve(false);
+      setTimeout(() => resolve(false), 2000);
+    });
+    expect(opened).toBe(true);
+    ws.close();
+  });
+
+  it("exempts loopback requests (trust fence preserved)", async () => {
+    // enforce=false（默认语义）：回环连接无需 token
+    const h = await pairingHarness("pair-tok-1", false);
+    const res = await post(h.url, "/api/host.describe", { rpcId: "a", method: "host.describe", payload: {} });
+    expect(((await res.json()) as Record<string, unknown>).ok).toBe(true);
+
+    const ws = new WebSocket(`${h.url.replace(/^http/, "ws")}/api/events.mux`);
     const opened = await new Promise<boolean>((resolve) => {
       ws.onopen = () => resolve(true);
       ws.onerror = () => resolve(false);

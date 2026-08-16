@@ -16,8 +16,10 @@ export interface MockHarnessOptions {
   host?: string;
   /** 0 → ephemeral port. */
   port?: number;
-  /** 配置后启用配对围栏模拟（HTTP Authorization 头 + WS ?pairToken=）。 */
+  /** 配置后启用配对围栏模拟（HTTP Authorization 头 + WS ?pairToken=）；回环豁免。 */
   pairToken?: string;
+  /** 测试旋钮：true 时回环也强制配对。 */
+  enforcePairing?: boolean;
 }
 
 export interface MockHarness {
@@ -41,12 +43,18 @@ export async function createMockHarness(
 ): Promise<MockHarness> {
   const host = opts.host ?? "127.0.0.1";
   const state: ApiServerState = { receivedResponds: [], wsViolations: 0 };
-  const api = createApiHandler(fixtures, state, { pairToken: opts.pairToken });
+  const api = createApiHandler(fixtures, state, {
+    pairToken: opts.pairToken,
+    enforcePairing: opts.enforcePairing,
+  });
   const server: Server = createServer((req, res) => {
     void api(req, res);
   });
   const wsClients: WebSocket[] = [];
-  attachWs(server, fixtures, state, wsClients, { pairToken: opts.pairToken });
+  attachWs(server, fixtures, state, wsClients, {
+    pairToken: opts.pairToken,
+    enforcePairing: opts.enforcePairing,
+  });
 
   let started = false;
   const harness: MockHarness = {

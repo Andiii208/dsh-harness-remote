@@ -145,4 +145,21 @@ describe("LanTransport.connect", () => {
       "ws://h:3080/api/events.host?pairToken=pair-tok-9",
     ]);
   });
+
+  it("omits token header and ws query when auth has no token", async () => {
+    const authHeaders: Record<string, string> = {};
+    const fetchImpl = (async (_url, init) => {
+      const h = (init?.headers ?? {}) as Record<string, string>;
+      for (const [k, v] of Object.entries(h)) authHeaders[k.toLowerCase()] = String(v);
+      const req = JSON.parse(String(init?.body)) as { rpcId: string };
+      return new Response(
+        JSON.stringify({ rpcId: req.rpcId, ok: true, result: { name: "dsh" } }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+    const transport = new LanTransport({ fetchImpl, wsImpl: AutoOpenWs });
+    await transport.connect({ host: "h", port: 3080 }, {});
+    expect(authHeaders["authorization"]).toBeUndefined();
+    expect(FakeWs.instances.every((w) => !w.url.includes("pairToken"))).toBe(true);
+  });
 });
