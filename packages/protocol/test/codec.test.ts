@@ -18,9 +18,17 @@ describe("decodeEnvelope", () => {
     expect(e).toMatchObject({ ok: false, error: { code: "NOT_FOUND", message: "x" } });
   });
 
-  it("degrades unknown error code to UnknownError", () => {
+  it("degrades unknown error code to UnknownError, preserving original", () => {
     const e = decodeEnvelope({ rpcId: "abc", ok: false, error: { code: "WEIRD_CODE", message: "?" } });
-    expect(e).toMatchObject({ ok: false, error: { code: "WEIRD_CODE" } });
+    expect(e).toMatchObject({ ok: false, error: { code: "UnknownError", message: "?" } });
+    if ("error" in e && e.error) {
+      expect(e.error.details).toMatchObject({ originalCode: "WEIRD_CODE" });
+    }
+  });
+
+  it("keeps known error codes as-is", () => {
+    const e = decodeEnvelope({ rpcId: "abc", ok: false, error: { code: "NOT_FOUND", message: "x" } });
+    expect(e).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
   });
 
   it("normalizes a non-object error", () => {
@@ -50,6 +58,21 @@ describe("decodeEnvelope", () => {
   it("ignores unknown keys on typed envelopes", () => {
     const e = decodeEnvelope({ rpcId: "r", method: "m", payload: {}, unknownKey: { nested: true } });
     expect("unknownKey" in e).toBe(false);
+  });
+
+  it("is idempotent: re-decoding a degraded UnknownEnvelope stays unknown", () => {
+    const first = decodeEnvelope({ kind: "unknown", raw: { foo: 1 } });
+    expect(first).toMatchObject({ kind: "unknown" });
+    const second = decodeEnvelope(first);
+    expect(second).toMatchObject({ kind: "unknown" });
+    expect(second).toEqual(first);
+  });
+
+  it("is idempotent for typed envelopes", () => {
+    const sr = decodeEnvelope({ rpcId: "r", kind: "approval", payload: {} });
+    expect(decodeEnvelope(sr)).toEqual(sr);
+    const ok = decodeEnvelope({ rpcId: "r", ok: true, result: 1 });
+    expect(decodeEnvelope(ok)).toEqual(ok);
   });
 });
 

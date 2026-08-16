@@ -12,6 +12,7 @@ import type {
   ServerRequest,
   UnknownEnvelope,
 } from "./envelopes.js";
+import { isKnownErrorCode } from "./dto/errors.js";
 
 /** Downlink frame types (events.mux + events.host). */
 export const KNOWN_FRAME_TYPES = [
@@ -46,10 +47,18 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 function normalizeError(v: unknown): RpcErrorInfo {
   if (isRecord(v)) {
+    const rawCode = typeof v.code === "string" ? v.code : undefined;
+    // Unknown error codes degrade to UnknownError; the original code is
+    // preserved in details.originalCode (lenient: never lose information).
+    const unknown = rawCode !== undefined && !isKnownErrorCode(rawCode);
+    const code = unknown ? "UnknownError" : (rawCode ?? "UnknownError");
+    const details = unknown
+      ? { ...(v.details !== undefined ? { raw: v.details } : {}), originalCode: rawCode }
+      : v.details;
     return {
-      code: typeof v.code === "string" ? v.code : "UnknownError",
+      code,
       message: typeof v.message === "string" ? v.message : "unknown error",
-      ...(v.details !== undefined ? { details: v.details } : {}),
+      ...(details !== undefined ? { details } : {}),
     };
   }
   return { code: "UnknownError", message: "unknown error", details: v };
@@ -84,6 +93,10 @@ export function decodeEnvelope(input: unknown): Envelope {
     }
     const s: ServerResponse = { ...base, ok: false as const, error: normalizeError(input.error) };
     return s;
+  }
+  if (typeof input.kind === "string" && input.kind === "unknown") {
+    // Already degraded — return as-is (idempotent).
+    return input as unknown as UnknownEnvelope;
   }
   if (typeof input.kind === "string") {
     const s: ServerRequest = { rpcId, kind: input.kind, payload: input.payload };
