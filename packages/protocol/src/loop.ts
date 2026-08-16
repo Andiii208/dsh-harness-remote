@@ -6,9 +6,16 @@
  */
 
 import type { DownlinkFrame } from "./codec.js";
-import type { Auth, Connection, ConnectionState, Endpoint, Transport } from "./transport.js";
+import type {
+  Auth,
+  Connection,
+  ConnectionState,
+  Endpoint,
+  Transport,
+  TransportEvents,
+} from "./transport.js";
 
-export interface ConnectionLoopOptions {
+export interface ConnectionLoopOptions extends TransportEvents {
   endpoint: Endpoint;
   auth?: Auth;
   transport: Transport;
@@ -34,6 +41,7 @@ const DEFAULT_JITTER = 0.25;
 export class ConnectionLoop {
   private state: ConnectionState = "offline";
   private stopped = false;
+  private running = false;
   private attempt = 0;
   private conn: Connection | null = null;
   private readonly opts: Required<Pick<ConnectionLoopOptions, "baseBackoffMs" | "maxBackoffMs" | "jitter">> &
@@ -63,8 +71,11 @@ export class ConnectionLoop {
     return this.lastDescribe;
   }
 
-  /** Kick off the connection loop in the background (observe via onStateChange). */
+  /** Kick off the connection loop in the background. Idempotent: a second
+   *  start() while the loop is running is a no-op. */
   start(): void {
+    if (this.running) return;
+    this.running = true;
     this.stopped = false;
     this.attempt = 0;
     void this.run();
@@ -72,6 +83,7 @@ export class ConnectionLoop {
 
   stop(): void {
     this.stopped = true;
+    this.running = false;
     this.conn?.close();
     this.conn = null;
     this.setState("offline");
@@ -97,6 +109,8 @@ export class ConnectionLoop {
         this.attempt = 0;
         this.setState("online");
         this.events = conn.events;
+        // Sync point after every successful (re)connect: re-run host.describe
+        // and let the caller re-pull session state.
         this.opts.onResync?.();
 
         // Await stream termination (either socket closed / queue ended).
@@ -106,17 +120,22 @@ export class ConnectionLoop {
         conn.close(); // release resources
         this.setState("offline");
         this.conn = null;
-      } catch {
+      } catch (err) {
+        this.opts.onError?.(err);
         this.setState("offline");
       }
 
-      if (this.stopped) return;
+      if (this.stopped) {
+        this.running = false;
+        return;
+      }
 
       const delay = this.backoffDelay();
       this.setState("backoff");
       const sleep = this.opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
       await sleep(delay);
     }
+    this.running = false;
   }
 
   /** 500ms × 2ⁿ, capped at maxBackoffMs, with jitter. */

@@ -5,7 +5,7 @@
  */
 
 import { decodeEnvelope } from "./codec.js";
-import type { Envelope, RpcErrorInfo } from "./envelopes.js";
+import type { ClientRequest, RpcErrorInfo } from "./envelopes.js";
 import { makeRpcId } from "./envelopes.js";
 
 export interface RpcResult {
@@ -48,22 +48,24 @@ export class RpcClient {
   /** POST /api/<method> — unary call. */
   async unary(method: string, payload: unknown): Promise<RpcResult> {
     const rpcId = makeRpcId();
-    const envelope: Envelope = { rpcId, method, payload };
+    const envelope: ClientRequest = { rpcId, method, payload };
     return this.post(`/api/${method}`, envelope);
   }
 
   /** POST /api/respond — answer a server-request (approval / question). */
   async respond(rpcId: string, result: unknown): Promise<void> {
-    await this.post("/api/respond", { rpcId, result });
+    const body = { rpcId, result };
+    await this.post("/api/respond", body);
   }
 
   /** POST /api/<namespace>/<method> — typert gateway (commands/*, goals/*, …). */
   async call(namespace: string, method: string, payload: unknown): Promise<RpcResult> {
     const rpcId = makeRpcId();
-    return this.post(`/api/${namespace}/${method}`, { rpcId, method, payload });
+    const body = { rpcId, method, payload };
+    return this.post(`/api/${namespace}/${method}`, body);
   }
 
-  private async post(path: string, body: unknown): Promise<RpcResult> {
+  private async post(path: string, body: { rpcId: string }): Promise<RpcResult> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
     let res: Response;
@@ -93,6 +95,12 @@ export class RpcClient {
 
     const env = decodeEnvelope(data);
     if ("ok" in env && typeof env.ok === "boolean") {
+      if (env.rpcId !== body.rpcId) {
+        throw new RpcError("RPC_ID_MISMATCH", "response rpcId does not echo the request rpcId", {
+          expected: body.rpcId,
+          got: env.rpcId,
+        });
+      }
       if (env.ok) return { rpcId: env.rpcId, ok: true, result: env.result };
       const err = env.error ?? { code: "UnknownError", message: "unknown error" };
       throw new RpcError(err.code, err.message, err.details);

@@ -127,6 +127,92 @@ describe("ConnectionLoop states & resync", () => {
     expect(states).toEqual(expect.arrayContaining(["online", "offline", "backoff", "connecting"]));
   });
 
+  it("start() is idempotent: second call does not spawn another loop", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    let connects = 0;
+    const transport: Transport = {
+      async connect() {
+        connects += 1;
+        return {
+          async unary() {
+            return { rpcId: "r", ok: true, result: {} };
+          },
+          async respond() {},
+          events: {
+            async *[Symbol.asyncIterator]() {
+              yield { type: "session/event" as const };
+              await gate; // stream stays open
+            },
+          },
+          close() {},
+        };
+      },
+    };
+    const loop = new ConnectionLoop({
+      endpoint: { host: "h", port: 3080 },
+      transport,
+      sleep: async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      },
+    });
+    loop.start();
+    loop.start(); // second call must be a no-op
+    loop.start();
+    await vi.waitFor(() => expect(loop.connectionState).toBe("online"), { timeout: 3000 });
+    expect(connects).toBe(1);
+    loop.stop();
+    release();
+  });
+
+  it("jitter bounds: delays stay within [0.875, 1.125] × raw", async () => {
+    const delays: number[] = [];
+    const mk = (rand: () => number) => {
+      let loop!: ConnectionLoop;
+      loop = new ConnectionLoop({
+        endpoint: { host: "h", port: 3080 },
+        transport: alwaysFailingTransport(),
+        random: rand,
+        sleep: async (ms) => {
+          delays.push(ms);
+          loop.stop();
+        },
+      });
+      return loop;
+    };
+    // random=0 → 500 * 0.875 = 437.5 → 438; random=1 → 500 * 1.125 = 562.5 → 563
+    mk(() => 0).start();
+    await vi.waitFor(() => expect(delays.length).toBe(1), { timeout: 3000 });
+    const lowDelay = delays[0];
+    delays.length = 0;
+    mk(() => 1).start();
+    await vi.waitFor(() => expect(delays.length).toBe(1), { timeout: 3000 });
+    expect(lowDelay).toBe(438);
+    expect(delays[0]).toBe(563);
+  });
+
+  it("emits onError when connect fails", async () => {
+    const errors: unknown[] = [];
+    const loop = new ConnectionLoop({
+      endpoint: { host: "h", port: 3080 },
+      transport: alwaysFailingTransport(),
+      onError: (e) => {
+        errors.push(e);
+      },
+      sleep: async (ms) => {
+        await new Promise((r) => setTimeout(r, 0));
+        if (errors.length >= 1) loop.stop();
+      },
+    });
+    loop.start();
+    await vi.waitFor(() => expect(errors.length).toBeGreaterThanOrEqual(1), { timeout: 3000 });
+    expect(errors[0]).toBeInstanceOf(Error);
+  });
+});
+
+describe("ConnectionLoop states & resync", () => {
   it("releases the connection when the event stream ends", async () => {
     let closed = false;
     const transport: Transport = {

@@ -33,6 +33,12 @@ export interface Transport {
   connect(endpoint: Endpoint, auth: Auth): Promise<Connection>;
 }
 
+/** State-change and error notifications from the connection layer. */
+export interface TransportEvents {
+  onStateChange?: (state: ConnectionState) => void;
+  onError?: (err: unknown) => void;
+}
+
 export interface LanTransportOptions {
   /** Handshake timeout for host.describe (ms). */
   handshakeTimeoutMs?: number;
@@ -67,7 +73,17 @@ export class LanTransport implements Transport {
       this.opts.wsImpl,
     );
 
-    await ws.ready;
+    // Stream-open handshake: fail fast (close both streams) on rejection/timeout.
+    try {
+      await withTimeout(
+        ws.ready,
+        this.opts.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT,
+        "streams did not open before handshake timeout",
+      );
+    } catch (err) {
+      ws.close();
+      throw err;
+    }
 
     let describe;
     try {
@@ -91,4 +107,20 @@ export class LanTransport implements Transport {
       close: () => ws.close(),
     };
   }
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
 }
