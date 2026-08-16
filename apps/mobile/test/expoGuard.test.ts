@@ -25,9 +25,21 @@ describe("native module fallbacks (Expo Go SDK 53+)", () => {
   });
 
   it("background task api degrades to no-op when modules cannot load", async () => {
-    const api = createBackgroundTaskApi(() => null);
+    const api = createBackgroundTaskApi(() => ({ bg: null, tm: null }));
     expect(() => api.defineTask("x", () => {})).not.toThrow();
     await expect(api.registerTaskAsync("x", {})).resolves.toBeUndefined();
     await expect(api.unregisterTaskAsync("x")).resolves.toBeUndefined();
+  });
+
+  it("background task api uses real modules when available", async () => {
+    const api = createBackgroundTaskApi(() => ({
+      bg: {
+        registerTaskAsync: async () => undefined,
+        unregisterTaskAsync: async () => undefined,
+      },
+      tm: { defineTask: () => {} },
+    }));
+    expect(() => api.defineTask("x", () => {})).not.toThrow();
+    await expect(api.registerTaskAsync("x", {})).resolves.toBeUndefined();
   });
 });

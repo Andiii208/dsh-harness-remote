@@ -2,12 +2,14 @@
  * 通知点击 → 深链（M1-T1 闭环）。
  * 模块作用域注册 expo-notifications 响应监听：点击通知后按 data.route
  * 跳转（warm tap 与冷启动均可处理，冷启动依赖 expo 的初始响应投递）。
- * Expo Go（SDK 53+）下 expo-notifications 不可用 → 深链监听禁用（不崩）。
+ * Expo Go 下完全跳过 expo-notifications（require 即致命错误）→ 深链禁用（不崩）。
  */
+
+declare const require: (id: string) => unknown;
 
 import { router, type Href } from "expo-router";
 import { routeFromNotificationData } from "./route";
-import { loadModule } from "./expoGuard";
+import { isExpoGo } from "./expoEnv";
 
 interface NotificationResponseLike {
   notification: {
@@ -23,6 +25,19 @@ interface NotificationsModule {
   ) => unknown;
 }
 
+function loadNotifications(): NotificationsModule | null {
+  if (isExpoGo()) {
+    console.warn("[notify] deep-link disabled in Expo Go (SDK 53+) — use a development build");
+    return null;
+  }
+  try {
+    return require("expo-notifications") as NotificationsModule;
+  } catch (err) {
+    console.warn("[notify] expo-notifications unavailable — deep-link disabled", err);
+    return null;
+  }
+}
+
 let registered = false;
 
 /** 幂等注册响应监听。 */
@@ -30,7 +45,7 @@ export function registerNotificationDeepLink(): void {
   if (registered) return;
   registered = true;
   try {
-    const mod = loadModule("expo-notifications") as NotificationsModule | null;
+    const mod = loadNotifications();
     if (!mod?.addNotificationResponseReceivedListener) {
       console.warn("[notify] deep-link disabled: expo-notifications unavailable");
       return;
