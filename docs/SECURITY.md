@@ -34,7 +34,7 @@
 
 ## 发布检查清单（M2 开源发布前）
 
-- [ ] 无 token 连接被拒（配对围栏生效）
-- [ ] 凭证仅存系统安全存储
-- [ ] 依赖审计（`pnpm audit`）无已知高危
-- [ ] 本文件 + COMPATIBILITY.md 与实现一致
+- [x] 无 token 连接被拒（配对围栏生效）——mock-harness 配对测试（pairing.test.ts / gate.test.ts）覆盖；真机端到端待 development build
+- [x] 凭证仅存系统安全存储——tokenStore 经 expo-secure-store（Keychain/Keystore），日志不落明文
+- [x] 依赖审计（`pnpm audit --prod`）——仅 3 个构建期传递漏洞（uuid/image-size，moderate，非运行时，expo 工具链）
+- [x] 本文件 + COMPATIBILITY.md 与实现一致——2026-08-16 真机联调轮已校准

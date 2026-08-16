@@ -1,6 +1,7 @@
 # dsh-remote — 手机远程连接 DeepSeek Harness
 
 [![CI](https://github.com/Andiii208/dsh-remote/actions/workflows/ci.yml/badge.svg)](https://github.com/Andiii208/dsh-remote/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Andiii208/dsh-remote)](https://github.com/Andiii208/dsh-remote/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![DeepSeek Harness](https://img.shields.io/badge/DSH%20baseline-0.1.0--rc.5-black.svg)](docs/COMPATIBILITY.md)
 
