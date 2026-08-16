@@ -49,12 +49,25 @@ dsh-remote/
 pnpm install
 pnpm test
 pnpm typecheck
+
+# 起 mock-harness（无需真实 DSH 即可联调）
+pnpm --filter mock-harness build
+node mock-harness/dist/cli.js --port 3080
+
+# 录制真实 DSH 流量 → conformance fixtures（需要可达的 DSH）
+pnpm --filter @dsh-remote/capture build
+node tools/capture/dist/cli.js record --host 127.0.0.1 --port 3080 --out ./fixtures
 ```
 
 ## 文档
 
 - 设计文档（v0，已确认）：[docs/superpowers/specs/2026-08-16-dsh-remote-mobile-design.md](docs/superpowers/specs/2026-08-16-dsh-remote-mobile-design.md)
-- `docs/`：架构 / 协议 / 兼容矩阵 / 安全文档（M0 阶段补齐，当前为空位）
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — 架构与数据流
+- [docs/PROTOCOL.md](docs/PROTOCOL.md) — 协议参考（信封/端点/WS/连接生命周期）
+- [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) — 协议版本矩阵与 fixtures 回归流程
+- [docs/SECURITY.md](docs/SECURITY.md) — 安全模型（MVP LAN → M2 配对 → M3 中继）
+- [docs/design/UI-SYSTEM.md](docs/design/UI-SYSTEM.md) — App UI 设计系统（暗色终端质感）
+- [docs/design/BRAND.md](docs/design/BRAND.md) — 品牌与 App 图标（DeepSeek 黑色鲸鱼）
 
 ## 致谢
 
