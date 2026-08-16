@@ -85,7 +85,7 @@ npx eas-cli build --profile production    # 商店版（自动递增 build numbe
 | M2 跨端与安全（iOS EAS、配对 token 鉴权、开源发布） | ✅ 已交付 |
 | M3 中继（预留） | 预留 |
 
-> 状态：M0–M2 已通过评审（全仓 typecheck/test 绿），发布就绪；真机联调（Phase B）清单见 [docs/MANUAL.md](docs/MANUAL.md)。
+> 状态：M0–M2 已通过评审（全仓 typecheck/test 绿）；Phase B 真机联调已在 Android 真机（Expo Go）验证通过（连接/会话/流式聊天/发消息/审批/提问/goal 暂停/断线重连），通知与后台保活需 development build 验证（Expo Go SDK 53+ 限制，见 [docs/MANUAL.md](docs/MANUAL.md)）。
 
 ## 贡献
 

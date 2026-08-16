@@ -20,21 +20,21 @@ pnpm start
 
 ## 1. M0 清单（连接与聊天）
 
-- [ ] 连接页输入 `host:port` → 点连接 → 状态徽章变为「在线」，自动跳转 Sessions
-- [ ] 会话列表出现 mock fixtures 的两个会话（sessions.json），含标题/工作区/投影缩略
-- [ ] 进入会话 → 流式气泡按 chat-stream.json 顺序渲染（delta 累积 → complete）
-- [ ] 断线重连：关掉 mock-harness 再启动 → 状态「退避重试」→ 自动恢复「在线」
-- [ ] 安全警告横幅在连接页可见（"LAN 直连，无鉴权"）
+- [x] 连接页输入 `host:port` → 点连接 → 状态徽章变为「在线」，自动跳转 Sessions
+- [x] 会话列表出现 mock fixtures 的两个会话（sessions.json），含标题/工作区/投影缩略
+- [x] 进入会话 → 流式气泡按 chat-stream.json 顺序渲染（delta 累积 → complete）
+- [x] 断线重连：关掉 mock-harness 再启动 → 状态「退避重试」→ 自动恢复「在线」
+- [x] 安全警告横幅在连接页可见（"LAN 直连，无鉴权"）
 
 ## 2. M1 清单（遥控闭环）
 
-- [ ] 首次启动弹出通知权限；拒绝后 App 不崩溃
-- [ ] 审批：mock approval.json 的 server-request 到来 → 本地通知「权限请求」→ 点击深链进审批页 → 批准/拒绝 → mock-harness `receivedResponds` 记录到应答（可在测试中断言）
-- [ ] 提问：通知「提问」→ 深链 → 输入回答或「跳过」
-- [ ] 通知去重：同一 rpcId 不重复弹
-- [ ] goal 控制：进入有 goal 投影的会话 → GoalCard 显示 objective/todos → 「暂停」→ 状态变 paused（乐观）→「恢复」
-- [ ] 发消息：聊天页输入 → 发送 → 输入框清空（mock 回放 `session.prompt` 返回 `accepted:true`；若返回 NOT_FOUND，App 会把草稿还原到输入框）
-- [ ] 后台保活（尽力而为）：App 切后台 >15min 后回来，若离线会自动重连（Android 厂商省电可能限制频率）
+- [ ] 首次启动弹出通知权限；拒绝后 App 不崩溃（Expo Go 下通知模块禁用，需 development build 验证）
+- [x] 审批：mock approval.json 的 server-request 到来 → 待处理横幅进入审批页 → 批准 → pending 计数减少（Expo Go 下本地通知深链禁用，横幅入口等效）
+- [x] 提问：待处理横幅进入提问页 → 输入回答并提交 → pending 清零（同上）
+- [ ] 通知去重：同一 rpcId 不重复弹（classifier 单测覆盖；Expo Go 下通知禁用，真机验证待 development build）
+- [x] goal 控制：进入有 goal 投影的会话 → GoalCard 显示 objective/todos → 「暂停」→ 状态变 paused（乐观）→「恢复」
+- [x] 发消息：聊天页输入 → 发送 → 输入框清空（mock 回放 `session.prompt` 返回 `accepted:true`）
+- [ ] 后台保活（尽力而为）：App 切后台 >15min 后回来，若离线会自动重连（Expo Go 限制；前台断线自动重连已真机验证，后台保活待 development build）
 
 ## 2.5 日志排查
 
@@ -42,6 +42,16 @@ pnpm start
 - Android 真机：`adb logcat -s ReactNativeJS:* ExpoModulesCore:* *:S`（只看 App 日志），或 `adb logcat | findstr /i dsh`。
 - App 内协议/通知错误以 `[conn]` / `[notify]` / `[keepalive]` / `[goal]` 前缀输出到 console。
 - 连接失败排查顺序：mock-harness 是否在跑 → 绑定地址（Wi-Fi 联调必须 `--host 0.0.0.0`）→ 端口 → Windows 防火墙 → 手机与电脑是否同一网络 / `adb reverse` 是否已建（`adb reverse --list`）。
+
+## 2.6 真机验证记录（2026-08-16）
+
+- 设备：Xiaomi/Honor（MXW_AN00，Android，USB + `adb reverse tcp:3080 tcp:3080` + `tcp:8081`），Expo Go 57.0.3。
+- 连接：USB reverse 通道（此机型 Wi-Fi 直连不稳、adb reverse 经实测可用；Expo Go 加载 exp://127.0.0.1:8081）。
+- 已验证（见上方勾选项）：连接/会话列表/流式聊天/发消息/审批/提问/goal 暂停/前台断线自动重连。
+- 真机发现并已修复的 bug（提交 be951c5 / 5213b64 / d2b0689）：
+  1. `app.json` 的 `extra.eas.projectId: null` 会被 Expo 归一化为 `{}`，@expo/cli 57.0.15 codesigning 路径崩溃 → Expo Go manifest 请求超时（"Failed to download remote update"）→ 已移除该字段。
+  2. expo-notifications / expo-background-task / expo-task-manager 在 Expo Go（SDK 53+）require 即触发致命错误且绕过 try/catch → 新增 `src/notify/expoEnv.ts`（`isExpoGo()` 检测）+ 三处适配器前置跳过，dev build 下功能不受影响。
+- 待验证（需 development build / EAS）：通知权限与去重、深链、后台保活、锁屏推送。
 
 ## 3. 已知限制（如实告知用户）
 
