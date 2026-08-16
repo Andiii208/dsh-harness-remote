@@ -1,5 +1,9 @@
 # dsh-remote — 手机远程连接 DeepSeek Harness
 
+[![CI](https://github.com/Andiii208/dsh-remote/actions/workflows/ci.yml/badge.svg)](https://github.com/Andiii208/dsh-remote/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![DeepSeek Harness](https://img.shields.io/badge/DSH%20baseline-0.1.0--rc.5-black.svg)](docs/COMPATIBILITY.md)
+
 dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness（DSH），离开电脑后也能盯住 agent、接收通知、一键审批、回答提问、继续对话。对标 Claude Code Remote Control 的定位，但面向 DSH 开源生态，代码与数据都留在用户本机，手机只是视口。
 
 - **跨端**：React Native + Expo（TypeScript），iOS + Android 一套代码，EAS 云构建无需 Mac 即可出 iOS 包。
@@ -68,6 +72,12 @@ node tools/capture/dist/cli.js record --host 127.0.0.1 --port 3080 --out ./fixtu
 | M1 遥控闭环（通知/保活/审批提问/消息/goal-todo 控制） | ✅ 已交付 |
 | M2 跨端与安全（iOS EAS、配对 token 鉴权、开源发布） | 进行中 |
 | M3 中继（预留） | 预留 |
+
+## 贡献
+
+- 开发流程与协议改动规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+- 行为准则见 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
+- 安全问题请走 [SECURITY.md](docs/SECURITY.md) 的私密披露渠道。
 
 ## 致谢
 
