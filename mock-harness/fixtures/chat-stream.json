@@ -11,6 +11,13 @@
         "ok": true,
         "result": { "accepted": true, "input": "pnpm test" }
       }
+    },
+    {
+      "method": "session.prompt",
+      "response": {
+        "ok": true,
+        "result": { "accepted": true }
+      }
     }
   ],
   "wsFrames": [

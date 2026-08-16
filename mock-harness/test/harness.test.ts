@@ -44,6 +44,17 @@ describe("api-server unary replay", () => {
     expect(body).toMatchObject({ rpcId: "r1", ok: true, result: { accepted: true } });
   });
 
+  it("replays session.prompt (send-message path)", async () => {
+    const h = await harnessWith("session.prompt");
+    const res = await post(h.url, "/api/session.prompt", {
+      rpcId: "r2",
+      method: "session.prompt",
+      payload: { sessionId: "s1", prompt: "继续" },
+    });
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ rpcId: "r2", ok: true, result: { accepted: true } });
+  });
+
   it("returns ok:false NOT_FOUND for unmatched methods", async () => {
     const h = await harnessWith("sessions");
     const res = await post(h.url, "/api/session.get", { rpcId: "r1", method: "session.get", payload: {} });
