@@ -88,4 +88,22 @@ describe("SessionStore", () => {
     s.applyFrame(frame("session/registry", { action: "added", sessionId: "new" }) as never);
     expect(s.getSessions().map((x) => x.id)).toEqual(["new", "old"]);
   });
+
+  it("exposes live streaming message before completion", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("session/event", { sessionId: "s1", event: "message/delta", message: { id: "m1", role: "assistant", delta: "正在" } }) as never);
+    s.applyFrame(frame("session/event", { sessionId: "s1", event: "message/delta", message: { id: "m1", role: "assistant", delta: "思考" } }) as never);
+    expect(s.getLiveMessage("s1")).toMatchObject({ id: "m1", role: "assistant", content: "正在思考" });
+    s.applyFrame(frame("session/event", { sessionId: "s1", event: "message/complete", message: { id: "m1", role: "assistant", content: "正在思考", done: true } }) as never);
+    expect(s.getLiveMessage("s1")).toBeUndefined();
+  });
+
+  it("records lastActiveAt timestamps for recency display", () => {
+    const s = new SessionStore();
+    const before = Date.now();
+    s.applyFrame(frame("session/registry", { action: "added", sessionId: "s1", title: "t" }) as never);
+    const sum = s.getSessions()[0];
+    expect(sum?.lastActiveAt).toBeGreaterThanOrEqual(before);
+    expect(sum?.lastActiveAt).toBeLessThanOrEqual(Date.now());
+  });
 });

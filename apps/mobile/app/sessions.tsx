@@ -7,7 +7,15 @@ import { colors, font, radius, space, stroke } from "../src/theme";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { StatusChip } from "../src/ui/StatusChip";
 import { EmptyState } from "../src/ui/EmptyState";
+import { SkeletonRow } from "../src/ui/SkeletonRow";
 import { useEntering } from "../src/ui/anim";
+
+function formatRelative(ms: number): string {
+  const diff = Date.now() - ms;
+  if (diff < 60_000) return "刚刚";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 
 function GoalPill({ status }: { status?: string }) {
   if (!status) return null;
@@ -60,7 +68,15 @@ export default function SessionsScreen() {
         </View>
       }
       ListEmptyComponent={
-        <EmptyState eyebrow="NO SESSIONS" text="等待注册表 / 投影帧推送（可先连接 mock-harness）" />
+        state === "connecting" || state === "backoff" ? (
+          <View style={styles.skeletonStack}>
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </View>
+        ) : (
+          <EmptyState eyebrow="NO SESSIONS" text="等待注册表 / 投影帧推送（可先连接 mock-harness）" />
+        )
       }
       renderItem={({ item: s }) => (
         <Animated.View entering={entering}>
@@ -87,6 +103,9 @@ export default function SessionsScreen() {
               )}
               {s.tokenUsageTotal !== undefined && (
                 <Text style={styles.metaText}>{s.tokenUsageTotal.toLocaleString()} tok</Text>
+              )}
+              {s.lastActiveAt !== undefined && (
+                <Text style={[styles.metaText, styles.metaTime]}>{formatRelative(s.lastActiveAt)}</Text>
               )}
               {s.contextPercent !== undefined && (
                 <View style={styles.miniBar}>
@@ -139,6 +158,7 @@ const styles = StyleSheet.create({
     gap: space.x2,
   },
   rowPressed: { backgroundColor: colors.surface2 },
+  skeletonStack: { gap: space.x3 },
   rowHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x2 },
   rowTitle: { color: colors.text, fontSize: font.section, fontWeight: "600", flex: 1 },
   goalPill: {
@@ -164,4 +184,5 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   miniBarFill: { height: 3, backgroundColor: colors.accent, borderRadius: 2 },
+  metaTime: { marginLeft: "auto" },
 });

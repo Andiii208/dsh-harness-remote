@@ -12,6 +12,8 @@ export interface SessionSummary {
   workspace?: string;
   lastMessage?: string;
   updatedAt: number;
+  /** 最近一次活动的时间戳（Date.now()，用于列表相对时间显示）。 */
+  lastActiveAt?: number;
   goalStatus?: string;
   goalObjective?: string;
   todos?: TranscriptTodo[];
@@ -89,6 +91,11 @@ export class SessionStore {
     return this.transcripts.get(sessionId) ?? [];
   }
 
+  /** 当前正在流式累积的消息（message/delta 未 complete 前）。 */
+  getLiveMessage(sessionId: string): TranscriptMessage | undefined {
+    return this.streaming.get(sessionId);
+  }
+
   getPendingRequests(): PendingRequest[] {
     return [...this.pending.values()].sort((a, b) => a.receivedAt - b.receivedAt);
   }
@@ -133,6 +140,7 @@ export class SessionStore {
     // 严格单调递增，保证同一毫秒内的多次更新排序稳定
     this.tick += 1;
     s.updatedAt = this.tick;
+    s.lastActiveAt = Date.now();
     this.sessions.set(id, s);
     return s;
   }

@@ -36,6 +36,8 @@ export interface ConnectionApi {
   pending: PendingRequest[];
   notifications: NotificationEvent[];
   transcript(sessionId: string): TranscriptMessage[];
+  /** 当前流式消息（未 complete 前；聊天页渲染闪烁光标）。 */
+  liveMessage(sessionId: string): TranscriptMessage | undefined;
   goals: GoalsClient;
   /** 乐观更新 goal 状态（暂停/恢复后立即反映）。 */
   setGoalStatus(sessionId: string, status: string): void;
@@ -162,6 +164,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     return pipelineRef.current?.store.getTranscript(sessionId) ?? [];
   }, []);
 
+  const liveMessage = useCallback((sessionId: string) => {
+    return pipelineRef.current?.store.getLiveMessage(sessionId);
+  }, []);
+
   // goals/* typert 调用（经活动连接的 unary，路径即 /api/goals/<method>）
   const goalsApi: GoalsApi = {
     call: async (ns, method, payload) => {
@@ -184,6 +190,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       pending: pipelineRef.current?.store.getPendingRequests() ?? [],
       notifications,
       transcript,
+      liveMessage,
       goals,
       setGoalStatus,
       connect,
@@ -191,7 +198,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       sendMessage,
       respond,
     }),
-    [state, describe, version, notifications, goals, setGoalStatus, connect, disconnect, sendMessage, respond, transcript],
+    [state, describe, version, notifications, goals, setGoalStatus, connect, disconnect, sendMessage, respond, transcript, liveMessage],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;
