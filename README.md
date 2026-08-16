@@ -29,7 +29,7 @@ dsh-remote/
 ├── mock-harness/          # DSH /api + WS 测试桩（回放 conformance fixtures）
 ├── tools/
 │   └── capture/           # 录制真实 DSH 流量 → conformance fixtures
-├── harness-plugin/        # （预留）dsh-remote 宿主插件：配对 token / 鉴权 / 中继客户端
+├── harness-plugin/        # DSH 宿主配对插件（M2：token 签发/校验/配对围栏）
 ├── relay/                 # （预留）中继服务器
 ├── docs/
 │   ├── ARCHITECTURE.md / PROTOCOL.md / COMPATIBILITY.md / SECURITY.md

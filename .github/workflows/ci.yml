@@ -18,5 +18,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # workspace 依赖的类型/产物来自各自 dist（gitignored）——先构建再检查
+      - run: pnpm -r build
       - run: pnpm typecheck
       - run: pnpm test
