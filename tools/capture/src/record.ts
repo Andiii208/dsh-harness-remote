@@ -21,6 +21,8 @@ export interface RecordOptions {
   durationMs: number;
   /** Unary methods to probe before recording (default host.describe). */
   probes?: string[];
+  /** Per-probe timeout (default 10s). */
+  probeTimeoutMs?: number;
   /** Override base URL (tests). */
   baseUrl?: string;
   wsImpl?: WsCtor;
@@ -57,6 +59,7 @@ export async function recordTraffic(opts: RecordOptions): Promise<FixtureSet> {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ rpcId: "capture", method, payload: {} }),
+        signal: AbortSignal.timeout(opts.probeTimeoutMs ?? 10_000),
       });
       const data: unknown = await res.json().catch(() => null);
       const env = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
@@ -139,7 +142,9 @@ export async function recordToFile(
   outDir: string,
 ): Promise<RecordResult> {
   const fixture = await recordTraffic(opts);
+  const fs = await import("node:fs/promises");
+  await fs.mkdir(outDir, { recursive: true });
   const file = `${outDir.replace(/[\\/]+$/, "")}/${fixtureFileName()}`;
-  await import("node:fs/promises").then((fs) => fs.writeFile(file, serializeFixture(fixture), "utf8"));
+  await fs.writeFile(file, serializeFixture(fixture), "utf8");
   return { fixture, file, frameCount: fixture.wsFrames.length, probeCount: fixture.unaryResponses.length };
 }

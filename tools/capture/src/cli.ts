@@ -12,16 +12,17 @@ import { validatePath } from "./validate.js";
 const HELP = `dsh-capture — record DSH traffic into conformance fixtures
 
 Usage:
-  dsh-capture record --host <h> --port <p> --out <dir> [--duration <sec>] [--probe <method>]...
+  dsh-capture record --host <h> --port <p> --out <dir> [--duration <sec>] [--probe <method>]... [--probe-timeout <ms>]
   dsh-capture validate <path>            (file or directory of *.fixture.json)
   dsh-capture --help
 
 Options:
-  --host <h>        DSH host (default 127.0.0.1)
-  --port <p>        DSH port (default 3080)
-  --out <dir>       output directory for recorded fixtures (required for record)
-  --duration <sec>  collection window in seconds (default 15)
-  --probe <method>  unary method to probe (repeatable; default host.describe)
+  --host <h>          DSH host (default 127.0.0.1)
+  --port <p>          DSH port (default 3080)
+  --out <dir>         output directory for recorded fixtures (required for record)
+  --duration <sec>    collection window in seconds (default 15)
+  --probe <method>    unary method to probe (repeatable; default host.describe)
+  --probe-timeout <ms> per-probe timeout (default 10000)
 `;
 
 interface CliArgs {
@@ -62,7 +63,8 @@ function last(flags: Map<string, string[]>, key: string, def: string): string {
   return v && v.length > 0 ? (v[v.length - 1] ?? def) : def;
 }
 
-async function main(argv: string[]): Promise<number> {
+/** Exported for tests. */
+export async function main(argv: string[]): Promise<number> {
   const { command, flags, positional } = parseArgs(argv);
   if (command === "help") {
     console.log(HELP);
@@ -74,18 +76,19 @@ async function main(argv: string[]): Promise<number> {
     const port = Number.parseInt(last(flags, "port", "3080"), 10);
     const out = last(flags, "out", "");
     const duration = Number.parseInt(last(flags, "duration", "15"), 10);
-    const probes = flags.get("probe") ?? [];
+    const probeTimeout = Number.parseInt(last(flags, "probe-timeout", "10000"), 10);
+    const probes = flags.get("probe") ?? ["host.describe"];
     if (!out) {
       console.error("record requires --out <dir>");
       return 2;
     }
-    if (Number.isNaN(port) || Number.isNaN(duration) || duration <= 0) {
-      console.error("invalid --port or --duration");
+    if (Number.isNaN(port) || Number.isNaN(duration) || duration <= 0 || Number.isNaN(probeTimeout)) {
+      console.error("invalid --port, --duration or --probe-timeout");
       return 2;
     }
     try {
       const result = await recordToFile(
-        { host, port, durationMs: duration * 1000, probes },
+        { host, port, durationMs: duration * 1000, probes, probeTimeoutMs: probeTimeout },
         resolve(out),
       );
       console.log(`recorded ${result.frameCount} frames, ${result.probeCount} probes → ${result.file}`);

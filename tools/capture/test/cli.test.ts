@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { parseArgs } from "../src/cli.js";
+import { main, parseArgs } from "../src/cli.js";
 import { validateFixtureFile, validatePath } from "../src/validate.js";
 import { serializeFixture, type FixtureSet } from "../src/fixture-format.js";
 
@@ -70,5 +70,50 @@ describe("validateFixtureFile / validatePath", () => {
     expect(r.total).toBe(2);
     expect(r.ok).toBe(false);
     expect(r.results.filter((x) => x.ok)).toHaveLength(1);
+  });
+});
+
+describe("cli main() exit codes", () => {
+  it("--help exits 0", async () => {
+    expect(await main(["--help"])).toBe(0);
+  });
+
+  it("validate without a path exits 2", async () => {
+    expect(await main(["validate"])).toBe(2);
+  });
+
+  it("validate on a valid file exits 0", async () => {
+    const dir = await tmpDir();
+    const f = join(dir, "ok.fixture.json");
+    await writeFile(f, serializeFixture(valid), "utf8");
+    expect(await main(["validate", f])).toBe(0);
+  });
+
+  it("record with an unreachable host exits 1", async () => {
+    const dir = await tmpDir();
+    // Bind+close to get a guaranteed-closed localhost port (ECONNREFUSED).
+    const { createServer } = await import("node:http");
+    const probe = createServer();
+    await new Promise<void>((r) => probe.listen(0, "127.0.0.1", () => r()));
+    const addr = probe.address() as { port: number };
+    await new Promise<void>((r) => probe.close(() => r()));
+    const code = await main([
+      "record",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(addr.port),
+      "--out",
+      join(dir, "out"),
+      "--probe-timeout",
+      "500",
+    ]);
+    expect(code).toBe(1);
+  });
+
+  it("record with invalid --port exits 2", async () => {
+    const dir = await tmpDir();
+    const code = await main(["record", "--port", "abc", "--out", join(dir, "out")]);
+    expect(code).toBe(2);
   });
 });
