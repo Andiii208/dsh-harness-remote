@@ -35,27 +35,46 @@ function Bubble({ m }: { m: TranscriptMessage }) {
 }
 
 function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
+  const { goals, sessions, setGoalStatus } = useConnection();
   const [open, setOpen] = useState(false);
-  if (!summary || (summary.goalStatus === undefined && !summary.todos && summary.plan === undefined)) {
+  const [busy, setBusy] = useState(false);
+  const current = sessions.find((s) => s.id === summary?.id) ?? summary;
+  if (!current || (current.goalStatus === undefined && !current.todos && current.plan === undefined)) {
     return null;
   }
-  const doneCount = summary.todos?.filter((t) => t.status === "completed").length ?? 0;
+  const doneCount = current.todos?.filter((t) => t.status === "completed").length ?? 0;
+  const status = current.goalStatus ?? "—";
+
+  const toggle = async (next: "paused" | "active") => {
+    if (!summary || busy) return;
+    setBusy(true);
+    try {
+      const ok = next === "paused" ? await goals.pause(summary.id) : await goals.resume(summary.id);
+      if (ok) {
+        setGoalStatus(summary.id, next); // 乐观更新；下一条投影帧为准
+        setOpen(true);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <View style={styles.goalCard}>
       <Pressable style={styles.goalHeader} onPress={() => setOpen((v) => !v)}>
-        <Text style={styles.goalTitle}>goal · {summary.goalStatus ?? "—"}</Text>
-        {summary.todos && summary.todos.length > 0 && (
+        <Text style={styles.goalTitle}>goal · {status}</Text>
+        {current.todos && current.todos.length > 0 && (
           <Text style={styles.goalMeta}>
-            {doneCount}/{summary.todos.length} ✓
+            {doneCount}/{current.todos.length} ✓
           </Text>
         )}
       </Pressable>
       {open && (
         <View style={styles.goalBody}>
-          {summary.goalObjective !== undefined && (
-            <Text style={styles.goalObjective}>{summary.goalObjective}</Text>
+          {current.goalObjective !== undefined && (
+            <Text style={styles.goalObjective}>{current.goalObjective}</Text>
           )}
-          {summary.todos?.map((t, i) => (
+          {current.todos?.map((t, i) => (
             <View key={i} style={styles.todoRow}>
               <Text style={[styles.todoMark, t.status === "completed" && styles.todoDone]}>
                 {t.status === "completed" ? "✓" : t.status === "in_progress" ? "●" : "○"}
@@ -65,11 +84,23 @@ function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
               </Text>
             </View>
           ))}
-          {summary.contextPercent !== undefined && (
+          {current.contextPercent !== undefined && (
             <View style={styles.miniBar}>
-              <View style={[styles.miniBarFill, { width: `${Math.min(100, summary.contextPercent)}%` }]} />
+              <View style={[styles.miniBarFill, { width: `${Math.min(100, current.contextPercent)}%` }]} />
             </View>
           )}
+          <View style={styles.goalActions}>
+            {status === "active" && (
+              <Pressable style={styles.goalActionGhost} onPress={() => toggle("paused")} disabled={busy}>
+                <Text style={styles.goalActionGhostText}>暂停</Text>
+              </Pressable>
+            )}
+            {status === "paused" && (
+              <Pressable style={styles.goalActionPrimary} onPress={() => toggle("active")} disabled={busy}>
+                <Text style={styles.goalActionPrimaryText}>恢复</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       )}
     </View>
@@ -171,6 +202,23 @@ const styles = StyleSheet.create({
   todoTextDone: { color: colors.textMuted, textDecorationLine: "line-through" },
   miniBar: { height: 3, borderRadius: 2, backgroundColor: colors.surface2, overflow: "hidden" },
   miniBarFill: { height: 3, backgroundColor: colors.accent, borderRadius: 2 },
+  goalActions: { flexDirection: "row", justifyContent: "flex-end", gap: space.x2, marginTop: space.x2 },
+  goalActionGhost: {
+    borderWidth: stroke.hairline,
+    borderColor: colors.border,
+    backgroundColor: colors.surface2,
+    borderRadius: radius.card,
+    paddingHorizontal: space.x3,
+    paddingVertical: space.x2,
+  },
+  goalActionGhostText: { color: colors.danger, fontSize: font.body - 3, fontWeight: "600" },
+  goalActionPrimary: {
+    backgroundColor: colors.accent,
+    borderRadius: radius.card,
+    paddingHorizontal: space.x3,
+    paddingVertical: space.x2,
+  },
+  goalActionPrimaryText: { color: "#FFFFFF", fontSize: font.body - 3, fontWeight: "600" },
   bubble: {
     borderRadius: radius.card,
     padding: space.x3,

@@ -21,6 +21,7 @@ import {
 import { notificationService } from "../notify/expoAdapter";
 import { KeepaliveScheduler } from "../notify/keepalive";
 import { backgroundTaskApi, KEEPALIVE_TASK } from "../notify/keepaliveAdapter";
+import { GoalsClient, type GoalsApi } from "../data/goals";
 import type { PendingRequest, SessionSummary, TranscriptMessage } from "../data/SessionStore";
 import type { NotificationEvent } from "../notify/classifier";
 
@@ -31,6 +32,9 @@ export interface ConnectionApi {
   pending: PendingRequest[];
   notifications: NotificationEvent[];
   transcript(sessionId: string): TranscriptMessage[];
+  goals: GoalsClient;
+  /** 乐观更新 goal 状态（暂停/恢复后立即反映）。 */
+  setGoalStatus(sessionId: string, status: string): void;
   connect(host: string, port: number): Promise<void>;
   disconnect(): void;
   sendMessage(sessionId: string, text: string): Promise<void>;
@@ -128,6 +132,19 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     return pipelineRef.current?.store.getTranscript(sessionId) ?? [];
   }, []);
 
+  // goals/* typert 调用（经活动连接的 unary，路径即 /api/goals/<method>）
+  const goalsApi: GoalsApi = {
+    call: async (ns, method, payload) => {
+      const c = pipelineRef.current?.loop.connection;
+      if (!c) return { ok: false, error: { code: "OFFLINE", message: "not connected" } };
+      return c.unary(`${ns}/${method}`, payload);
+    },
+  };
+  const goals = useMemo(() => new GoalsClient(goalsApi), []);
+  const setGoalStatus = useCallback((sessionId: string, status: string) => {
+    pipelineRef.current?.store.setGoalStatus(sessionId, status);
+  }, []);
+
   const value = useMemo<ConnectionApi>(
     () => ({
       state,
@@ -136,12 +153,14 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       pending: pipelineRef.current?.store.getPendingRequests() ?? [],
       notifications,
       transcript,
+      goals,
+      setGoalStatus,
       connect,
       disconnect,
       sendMessage,
       respond,
     }),
-    [state, describe, version, notifications, connect, disconnect, sendMessage, respond, transcript],
+    [state, describe, version, notifications, goals, setGoalStatus, connect, disconnect, sendMessage, respond, transcript],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;

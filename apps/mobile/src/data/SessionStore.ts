@@ -115,6 +115,14 @@ export class SessionStore {
     this.notify();
   }
 
+  /** 乐观更新 goal 状态（暂停/恢复后立即反映，下一条投影帧为准）。 */
+  setGoalStatus(sessionId: string, status: string): void {
+    const s = this.sessions.get(sessionId);
+    if (!s) return;
+    s.goalStatus = status;
+    this.notify();
+  }
+
   private notify(): void {
     for (const fn of this.listeners) fn();
   }
