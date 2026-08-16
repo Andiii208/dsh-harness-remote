@@ -15,8 +15,8 @@ cd apps/mobile
 pnpm start
 ```
 
-- Android 真机：手机与电脑同一 Wi-Fi，或 `adb reverse tcp:3080 tcp:3080`（USB 时连接 127.0.0.1:3080）。
-- iOS 真机：同一 Wi-Fi，连接电脑局域网 IP。
+- Android 真机 USB（推荐，免防火墙/路由器配置）：`adb reverse tcp:3080 tcp:3080` 后 App 连接 `127.0.0.1:3080`，mock-harness 保持默认 `127.0.0.1` 绑定即可。
+- Android / iOS 真机 Wi-Fi：手机与电脑同一网络，mock-harness 必须监听所有网卡——`node mock-harness/dist/cli.js --port 3080 --host 0.0.0.0`（Windows 防火墙首次会弹窗，允许专用网络访问）。
 
 ## 1. M0 清单（连接与聊天）
 
@@ -33,7 +33,15 @@ pnpm start
 - [ ] 提问：通知「提问」→ 深链 → 输入回答或「跳过」
 - [ ] 通知去重：同一 rpcId 不重复弹
 - [ ] goal 控制：进入有 goal 投影的会话 → GoalCard 显示 objective/todos → 「暂停」→ 状态变 paused（乐观）→「恢复」
+- [ ] 发消息：聊天页输入 → 发送 → 输入框清空（mock 回放 `session.prompt` 返回 `accepted:true`；若返回 NOT_FOUND，App 会把草稿还原到输入框）
 - [ ] 后台保活（尽力而为）：App 切后台 >15min 后回来，若离线会自动重连（Android 厂商省电可能限制频率）
+
+## 2.5 日志排查
+
+- Expo 终端：`npx expo start` 的输出；RN 运行时错误会以红框显示，也可在 `adb logcat` 中搜 `ReactNativeJS`。
+- Android 真机：`adb logcat -s ReactNativeJS:* ExpoModulesCore:* *:S`（只看 App 日志），或 `adb logcat | findstr /i dsh`。
+- App 内协议/通知错误以 `[conn]` / `[notify]` / `[keepalive]` / `[goal]` 前缀输出到 console。
+- 连接失败排查顺序：mock-harness 是否在跑 → 绑定地址（Wi-Fi 联调必须 `--host 0.0.0.0`）→ 端口 → Windows 防火墙 → 手机与电脑是否同一网络 / `adb reverse` 是否已建（`adb reverse --list`）。
 
 ## 3. 已知限制（如实告知用户）
 
@@ -41,6 +49,7 @@ pnpm start
 - iOS 后台任务频率由系统决定，不可保证。
 - 后台保活期间状态快照可能冻结：App 被挂起时 `stateRef` 不更新，若 WS 已被 OS 断开，恢复后下一次心跳（≥15min）才判定离线并重连——这是尽力而为的边界。
 - 通知深链：warm tap 与冷启动均经 expo-notifications 响应监听处理；若系统延迟投递初始响应，可能漏一次跳转。
+- 独立构建（EAS production，非 Expo Go）：Android 9+ 默认禁明文 HTTP——Phase C 发布前需加 `expo-build-properties` 插件并设 `android.usesCleartextTraffic: true`（需 `pnpm install` 更新锁文件）；iOS 的 ATS 本地网络豁免与 `NSLocalNetworkUsageDescription` 已在 `apps/mobile/app.json` 的 `ios.infoPlist` 配置。Expo Go / development client 不受此限制。
 
 ## 4. 回归命令
 

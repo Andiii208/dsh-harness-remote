@@ -45,7 +45,7 @@ pnpm test
 pnpm typecheck
 pnpm audit --prod   # 发布前依赖审计
 
-# 起 mock-harness（无需真实 DSH 即可联调）
+# 起 mock-harness（无需真实 DSH 即可联调；手机同 Wi-Fi 联调时加 --host 0.0.0.0）
 pnpm --filter mock-harness build
 node mock-harness/dist/cli.js --port 3080
 
@@ -82,8 +82,10 @@ npx eas-cli build --profile production    # 商店版（自动递增 build numbe
 |---|---|
 | M0 骨架与协议（monorepo + protocol + mock-harness + capture + docs + App 壳） | ✅ 已交付 |
 | M1 遥控闭环（通知/保活/审批提问/消息/goal-todo 控制） | ✅ 已交付 |
-| M2 跨端与安全（iOS EAS、配对 token 鉴权、开源发布） | 进行中 |
+| M2 跨端与安全（iOS EAS、配对 token 鉴权、开源发布） | ✅ 已交付 |
 | M3 中继（预留） | 预留 |
+
+> 状态：M0–M2 已通过评审（全仓 typecheck/test 绿），发布就绪；真机联调（Phase B）清单见 [docs/MANUAL.md](docs/MANUAL.md)。
 
 ## 贡献
 
