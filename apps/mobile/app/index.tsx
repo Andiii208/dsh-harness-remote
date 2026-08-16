@@ -18,6 +18,7 @@ import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider"
 import { tokenStore } from "../src/data/secureStoreAdapter";
 import { hostStore } from "../src/discovery/hostStoreAdapter";
 import type { RecentHost } from "../src/discovery/hostStore";
+import { draftStore } from "../src/discovery/draftStoreAdapter";
 import { onboardingStore } from "../src/discovery/onboardingStoreAdapter";
 import { registerPairDeepLink } from "../src/discovery/pairLink";
 import { discoverHosts, type DiscoveredHost } from "../src/discovery/discover";
@@ -87,6 +88,13 @@ export default function ConnectScreen() {
     void tokenStore.get().then((t) => {
       if (t) setToken(t);
     });
+    // 恢复上次手动输入的 host/port 草稿
+    void draftStore.get().then((d) => {
+      if (d) {
+        setHost(d.host);
+        setPort(String(d.port));
+      }
+    });
   }, []);
 
   const online = state === "online";
@@ -113,6 +121,7 @@ export default function ConnectScreen() {
     try {
       const t = token.trim();
       if (t) await tokenStore.set(t);
+      void draftStore.set(host.trim(), Number.parseInt(port || "3080", 10));
       await connect(host.trim(), Number.parseInt(port || "3080", 10), t || undefined);
     } finally {
       setBusy(false);

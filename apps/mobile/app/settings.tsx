@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import * as Linking from "expo-linking";
+import Constants from "expo-constants";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
 import { autoReconnectStore } from "../src/discovery/autoReconnectStoreAdapter";
 import { Button } from "../src/ui/Button";
@@ -76,8 +78,11 @@ export default function SettingsScreen() {
 
       <Group eyebrow="About">
         <Row label="应用" value="harness remote" />
-        <Row label="版本" value="v0.1.0" mono />
+        <Row label="版本" value={Constants.expoConfig?.version ? `v${Constants.expoConfig.version}` : "v0.1.0"} mono />
         <Row label="项目" value="dsh-remote · DeepSeek Harness 手机视口" />
+        <View style={styles.linkRow}>
+          <Button tone="ghost" label="GitHub · 使用手册" onPress={() => void Linking.openURL("https://github.com/Andiii208/dsh-remote")} full />
+        </View>
       </Group>
     </ScrollView>
   );
@@ -115,6 +120,7 @@ const styles = StyleSheet.create({
   },
   rowLabel: { color: colors.text, fontSize: font.body },
   disconnectRow: { paddingVertical: space.x3 },
+  linkRow: { paddingVertical: space.x3 },
   rowValue: { color: colors.textMuted, fontSize: font.caption, flexShrink: 1, textAlign: "right" },
   rowValueMono: { fontFamily: font.mono, color: colors.textMuted },
 });
