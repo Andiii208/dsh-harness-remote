@@ -142,7 +142,8 @@ describe("RpcClient pairing token", () => {
       fetchImpl: (async (_url, init) => {
         const h = (init?.headers ?? {}) as Record<string, string>;
         for (const [k, v] of Object.entries(h)) headers[k.toLowerCase()] = String(v);
-        return jsonResponse({ rpcId: "r", ok: true, result: {} });
+        const req = JSON.parse(String(init?.body)) as { rpcId: string };
+        return jsonResponse({ rpcId: req.rpcId, ok: true, result: {} });
       }) as typeof fetch,
     });
     await client.unary("host.describe", {});
@@ -156,7 +157,8 @@ describe("RpcClient pairing token", () => {
       fetchImpl: (async (_url, init) => {
         const h = (init?.headers ?? {}) as Record<string, string>;
         for (const [k, v] of Object.entries(h)) headers[k.toLowerCase()] = String(v);
-        return jsonResponse({ rpcId: "r", ok: true, result: {} });
+        const req = JSON.parse(String(init?.body)) as { rpcId: string };
+        return jsonResponse({ rpcId: req.rpcId, ok: true, result: {} });
       }) as typeof fetch,
     });
     await client.unary("host.describe", {});
