@@ -10,9 +10,12 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useConnection } from "../../src/transport/ConnectionProvider";
+import { useConnection, STATE_LABEL } from "../../src/transport/ConnectionProvider";
 import type { SessionSummary, TranscriptMessage } from "../../src/data/SessionStore";
 import { colors, font, radius, space, stroke } from "../../src/theme";
+import { SectionLabel } from "../../src/ui/SectionLabel";
+import { StatusChip } from "../../src/ui/StatusChip";
+import { Button } from "../../src/ui/Button";
 
 function Bubble({ m }: { m: TranscriptMessage }) {
   if (m.gap) {
@@ -23,13 +26,21 @@ function Bubble({ m }: { m: TranscriptMessage }) {
     );
   }
   const isUser = m.role === "user";
+  const isTool = m.role === "tool";
   return (
     <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleBot]}>
-      {m.role === "tool" && <Text style={styles.roleTag}>tool</Text>}
-      <Text style={[styles.bubbleText, m.role === "tool" && styles.toolText]}>
-        {m.content}
-        {m.interrupted ? " ⏹" : ""}
-      </Text>
+      <View style={[styles.edge, isUser ? styles.edgeUser : isTool ? styles.edgeTool : styles.edgeBot]} />
+      <View style={styles.bubbleBody}>
+        {m.role && m.role !== "user" && (
+          <SectionLabel tone={isTool ? "muted" : "accent"} style={styles.roleTag}>
+            {isTool ? "tool" : (m.role ?? "assistant")}
+          </SectionLabel>
+        )}
+        <Text style={[styles.bubbleText, isTool && styles.toolText]}>
+          {m.content}
+          {m.interrupted ? " ⏹" : ""}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -51,7 +62,7 @@ function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
     try {
       const ok = next === "paused" ? await goals.pause(summary.id) : await goals.resume(summary.id);
       if (ok) {
-        setGoalStatus(summary.id, next); // 乐观更新；下一条投影帧为准
+        setGoalStatus(summary.id, next);
         setOpen(true);
       }
     } catch (err) {
@@ -64,10 +75,12 @@ function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
   return (
     <View style={styles.goalCard}>
       <Pressable style={styles.goalHeader} onPress={() => setOpen((v) => !v)}>
-        <Text style={styles.goalTitle}>goal · {status}</Text>
+        <SectionLabel tone={status === "paused" ? "muted" : "accent"}>
+          {`Goal · ${status}`}
+        </SectionLabel>
         {current.todos && current.todos.length > 0 && (
           <Text style={styles.goalMeta}>
-            {doneCount}/{current.todos.length} ✓
+            {doneCount}/{current.todos.length} done
           </Text>
         )}
       </Pressable>
@@ -88,19 +101,21 @@ function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
           ))}
           {current.contextPercent !== undefined && (
             <View style={styles.miniBar}>
-              <View style={[styles.miniBarFill, { width: `${Math.min(100, current.contextPercent)}%` }]} />
+              <View
+                style={[
+                  styles.miniBarFill,
+                  { width: `${Math.min(100, current.contextPercent)}%` },
+                  current.contextPercent >= 80 && { backgroundColor: colors.warn },
+                ]}
+              />
             </View>
           )}
           <View style={styles.goalActions}>
             {status === "active" && (
-              <Pressable style={styles.goalActionGhost} onPress={() => toggle("paused")} disabled={busy}>
-                <Text style={styles.goalActionGhostText}>暂停</Text>
-              </Pressable>
+              <Button tone="danger" label="暂停" onPress={() => toggle("paused")} disabled={busy} />
             )}
             {status === "paused" && (
-              <Pressable style={styles.goalActionPrimary} onPress={() => toggle("active")} disabled={busy}>
-                <Text style={styles.goalActionPrimaryText}>恢复</Text>
-              </Pressable>
+              <Button label="恢复" onPress={() => toggle("active")} disabled={busy} />
             )}
           </View>
         </View>
@@ -125,7 +140,6 @@ export default function ChatScreen() {
     try {
       await sendMessage(id, text);
     } catch {
-      // 失败留在输入框，便于重试
       setDraft(text);
     }
   };
@@ -138,36 +152,55 @@ export default function ChatScreen() {
     >
       <FlatList
         style={styles.list}
-        contentContainerStyle={{ padding: space.x4, gap: space.x2 }}
+        contentContainerStyle={styles.listContent}
         data={messages}
         keyExtractor={(m, i) => `${m.id ?? "m"}-${i}`}
-        ListHeaderComponent={<GoalCard summary={summary} />}
+        ListHeaderComponent={
+          <View style={styles.listHeader}>
+            <View style={styles.sessionHeader}>
+              <Text style={styles.sessionTitle} numberOfLines={1}>
+                {summary?.title ?? id}
+              </Text>
+              <StatusChip
+                tone={online ? "success" : state === "offline" ? "danger" : "warn"}
+                label={STATE_LABEL[state] ?? state}
+              />
+            </View>
+            <GoalCard summary={summary} />
+          </View>
+        }
         renderItem={({ item }) => <Bubble m={item} />}
         ListEmptyComponent={
-          <Text style={styles.empty}>
-            {online ? "等待消息流…" : "离线——先回到连接页建立连接"}
-          </Text>
+          <View style={styles.emptyWrap}>
+            <SectionLabel>{online ? "WAITING FOR STREAM" : "OFFLINE"}</SectionLabel>
+            <Text style={styles.emptyText}>
+              {online ? "等待消息流…" : "离线——先回到连接页建立连接"}
+            </Text>
+          </View>
         }
       />
       <View style={styles.inputBar}>
-        <TextInput
-          style={styles.input}
-          placeholder={online ? "输入消息…" : "离线"}
-          placeholderTextColor={colors.textMuted}
-          value={draft}
-          onChangeText={setDraft}
-          editable={online}
-          onSubmitEditing={send}
-          returnKeyType="send"
-          multiline
-        />
-        <Pressable
-          style={[styles.send, (!draft.trim() || !online) && styles.sendDisabled]}
-          onPress={send}
-          disabled={!draft.trim() || !online}
-        >
-          <Text style={styles.sendText}>发送</Text>
-        </Pressable>
+        {!online && <SectionLabel tone="danger">Offline</SectionLabel>}
+        <View style={styles.inputRow}>
+          <TextInput
+            style={styles.input}
+            placeholder={online ? "输入消息…" : "离线"}
+            placeholderTextColor={colors.textDim}
+            value={draft}
+            onChangeText={setDraft}
+            editable={online}
+            onSubmitEditing={send}
+            returnKeyType="send"
+            multiline
+          />
+          <Pressable
+            style={[styles.send, (!draft.trim() || !online) && styles.sendDisabled]}
+            onPress={send}
+            disabled={!draft.trim() || !online}
+          >
+            <Text style={styles.sendText}>发送</Text>
+          </Pressable>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -176,95 +209,85 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   list: { flex: 1 },
-  empty: { color: colors.textMuted, fontSize: font.body - 3, textAlign: "center", marginTop: space.x6 },
+  listContent: { padding: space.x5, gap: space.x2, paddingBottom: space.x6 },
+  listHeader: { gap: space.x3, marginBottom: space.x2 },
+  sessionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.x3,
+  },
+  sessionTitle: { color: colors.text, fontSize: font.title, fontWeight: "600", flex: 1, letterSpacing: -0.2 },
+  emptyWrap: { alignItems: "center", paddingTop: space.x7 * 2, gap: space.x2 },
+  emptyText: { color: colors.textMuted, fontSize: font.caption },
   gapRow: { alignItems: "center", paddingVertical: space.x2 },
-  gapText: { color: colors.textMuted, fontSize: font.body - 3, fontStyle: "italic" },
+  gapText: { color: colors.textDim, fontSize: font.caption, fontStyle: "italic" },
+  bubble: {
+    flexDirection: "row",
+    borderRadius: radius.card,
+    maxWidth: "92%",
+    overflow: "hidden",
+  },
+  bubbleUser: { alignSelf: "flex-end", backgroundColor: colors.surface },
+  bubbleBot: { alignSelf: "flex-start", backgroundColor: colors.surface },
+  edge: { width: 3, borderRadius: 2 },
+  edgeUser: { backgroundColor: colors.accent },
+  edgeBot: { backgroundColor: colors.surface2 },
+  edgeTool: { backgroundColor: colors.textDim },
+  bubbleBody: { padding: space.x3, gap: space.x1, flexShrink: 1 },
+  roleTag: { fontSize: font.eyebrow - 1, letterSpacing: 1 },
+  bubbleText: { color: colors.text, fontSize: font.transcript, lineHeight: 21, fontFamily: font.mono },
+  toolText: { color: colors.textMuted },
   goalCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,
     borderWidth: stroke.hairline,
     borderColor: colors.border,
-    marginBottom: space.x2,
     overflow: "hidden",
   },
   goalHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: space.x3,
+    padding: space.x4,
   },
-  goalTitle: { color: colors.text, fontSize: font.body - 2, fontWeight: "600", fontFamily: font.mono },
-  goalMeta: { color: colors.textMuted, fontSize: font.body - 4, fontFamily: font.mono },
-  goalBody: { paddingHorizontal: space.x3, paddingBottom: space.x3, gap: space.x2 },
-  goalObjective: { color: colors.textMuted, fontSize: font.body - 3, lineHeight: 18 },
+  goalMeta: { color: colors.textMuted, fontSize: font.eyebrow, fontFamily: font.mono },
+  goalBody: { paddingHorizontal: space.x4, paddingBottom: space.x4, gap: space.x2 },
+  goalObjective: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
   todoRow: { flexDirection: "row", alignItems: "center", gap: space.x2 },
   todoMark: { color: colors.textMuted, fontSize: font.body - 2, width: 14 },
   todoDone: { color: colors.success },
-  todoText: { color: colors.text, fontSize: font.body - 3, flex: 1 },
+  todoText: { color: colors.text, fontSize: font.caption, flex: 1, lineHeight: 18 },
   todoTextDone: { color: colors.textMuted, textDecorationLine: "line-through" },
   miniBar: { height: 3, borderRadius: 2, backgroundColor: colors.surface2, overflow: "hidden" },
   miniBarFill: { height: 3, backgroundColor: colors.accent, borderRadius: 2 },
   goalActions: { flexDirection: "row", justifyContent: "flex-end", gap: space.x2, marginTop: space.x2 },
-  goalActionGhost: {
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-    backgroundColor: colors.surface2,
-    borderRadius: radius.card,
-    paddingHorizontal: space.x3,
-    paddingVertical: space.x2,
-  },
-  goalActionGhostText: { color: colors.danger, fontSize: font.body - 3, fontWeight: "600" },
-  goalActionPrimary: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.card,
-    paddingHorizontal: space.x3,
-    paddingVertical: space.x2,
-  },
-  goalActionPrimaryText: { color: "#FFFFFF", fontSize: font.body - 3, fontWeight: "600" },
-  bubble: {
-    borderRadius: radius.card,
-    padding: space.x3,
-    maxWidth: "88%",
-    borderWidth: stroke.hairline,
-  },
-  bubbleUser: {
-    alignSelf: "flex-end",
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accent,
-  },
-  bubbleBot: {
-    alignSelf: "flex-start",
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-  },
-  bubbleText: { color: colors.text, fontSize: font.transcript, lineHeight: 21, fontFamily: font.mono },
-  toolText: { color: colors.textMuted },
-  roleTag: { color: colors.accent, fontSize: font.body - 5, fontFamily: font.mono, marginBottom: 2 },
   inputBar: {
-    flexDirection: "row",
-    alignItems: "flex-end",
     gap: space.x2,
     padding: space.x3,
     borderTopWidth: stroke.hairline,
     borderTopColor: colors.border,
     backgroundColor: colors.surface,
   },
+  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: space.x2 },
   input: {
     flex: 1,
     backgroundColor: colors.surface2,
-    borderRadius: radius.card,
+    borderRadius: radius.control,
+    borderWidth: stroke.hairline,
+    borderColor: colors.border,
     color: colors.text,
-    paddingHorizontal: space.x3,
-    paddingVertical: space.x2 + 2,
-    fontSize: font.body - 1,
+    paddingHorizontal: (space.x3 + 2),
+    paddingVertical: 10,
+    fontSize: font.body,
     maxHeight: 120,
   },
   send: {
     backgroundColor: colors.accent,
-    borderRadius: radius.card,
-    paddingHorizontal: space.x4,
-    paddingVertical: space.x3,
+    borderRadius: radius.control,
+    paddingHorizontal: space.x5,
+    paddingVertical: (space.x3 + 2),
   },
   sendDisabled: { opacity: 0.4 },
-  sendText: { color: "#FFFFFF", fontSize: font.body - 1, fontWeight: "600" },
+  sendText: { color: "#FFFFFF", fontSize: font.body, fontWeight: "600" },
 });

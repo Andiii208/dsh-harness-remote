@@ -14,6 +14,7 @@ web-build/
 # logs & scratch
 *.log
 .superpowers/
+.agent-teams/
 
 # editors / OS
 .vscode/

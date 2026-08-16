@@ -8,7 +8,8 @@
 dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness（DSH），离开电脑后也能盯住 agent、接收通知、一键审批、回答提问、继续对话。对标 Claude Code Remote Control 的定位，但面向 DSH 开源生态，代码与数据都留在用户本机，手机只是视口。
 
 - **跨端**：React Native + Expo（TypeScript），iOS + Android 一套代码，EAS 云构建无需 Mac 即可出 iOS 包。
-- **LAN 起步、传输可插拔**：MVP 直连局域网内的 DSH（`host:3080`），传输层抽象为 `Transport` 接口，中继/公网为预留演进方向，不平滑推翻重来。
+- **LAN 起步、传输可插拔**：自动发现 + 二维码配对 + 最近主机一键重连，也可以手动直连局域网内的 DSH（`host:3080`）；传输层抽象为 `Transport` 接口，中继/公网为预留演进方向，不平滑推翻重来。
+- **低门槛连接（P2）**：首启 3 步引导 → 扫码电脑上的配对二维码即连（`dshremote://pair` 深链）；同一局域网点「自动发现」列出可用实例；冷启动自动重连最近主机。
 - **协议对齐**：纯 TS 协议包（`packages/protocol`，零 RN 依赖）与 DSH 原生类型零失真对齐；宽容解码，线上层永不因未知数据崩溃。
 
 ## 仓库结构
@@ -22,7 +23,9 @@ dsh-remote/
 │       │   ├── transport/ # ConnectionProvider + pipeline（装配 ConnectionLoop）
 │       │   ├── data/      # SessionStore：会话镜像、折叠、投影派生
 │       │   ├── notify/    # 通知分类器 → 本地通知（expo-notifications）+ 后台保活
-│       │   └── theme.ts   # DSH 设计令牌（暗色终端质感）
+│       │   ├── discovery/ # 最近主机 / 子网自动发现 / 配对深链 / 首启引导
+│       │   ├── ui/        # 设计系统 v2 组件（WhaleMark/StatusChip/Button/Field/…）
+│       │   └── theme.ts   # DSH 设计令牌（暗色终端质感 v2）
 │       └── app.json       # EAS 配置（云构建）
 ├── packages/
 │   └── protocol/          # TS 协议核心（纯 TS，零运行时依赖）
@@ -34,7 +37,7 @@ dsh-remote/
 ├── relay/                 # （预留）中继服务器
 ├── docs/
 │   ├── ARCHITECTURE.md / PROTOCOL.md / COMPATIBILITY.md / SECURITY.md
-│   └── design/            # UI-SYSTEM.md / BRAND.md
+│   └── design/            # UI-SYSTEM.md / BRAND.md / CONNECTION-UX.md
 └── package.json / pnpm-workspace.yaml / tsconfig 等
 ```
 

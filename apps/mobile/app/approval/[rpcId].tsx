@@ -1,8 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useConnection } from "../../src/transport/ConnectionProvider";
 import { colors, font, radius, space, stroke } from "../../src/theme";
+import { SectionLabel } from "../../src/ui/SectionLabel";
+import { Field } from "../../src/ui/Field";
+import { Button } from "../../src/ui/Button";
 
 export default function ApprovalScreen() {
   const { rpcId } = useLocalSearchParams<{ rpcId: string }>();
@@ -28,12 +31,10 @@ export default function ApprovalScreen() {
   if (!req) {
     return (
       <View style={styles.screen}>
-        <View style={[styles.card, styles.cardDone]}>
-          <Text style={styles.kind}>已完成</Text>
+        <View style={[styles.card, { borderLeftColor: colors.success }]}>
+          <SectionLabel tone="success">Done</SectionLabel>
           <Text style={styles.prompt}>该请求已处理或不存在</Text>
-          <Pressable style={[styles.button, styles.buttonApprove]} onPress={() => router.back()}>
-            <Text style={styles.buttonApproveText}>返回</Text>
-          </Pressable>
+          <Button label="返回" onPress={() => router.back()} full />
         </View>
       </View>
     );
@@ -41,114 +42,80 @@ export default function ApprovalScreen() {
 
   const payload = (req.payload ?? {}) as Record<string, unknown>;
   const isApproval = req.kind === "approval";
+  const rail = isApproval ? colors.warn : colors.accent;
 
   return (
-    <View style={styles.screen}>
-      <View style={[styles.card, isApproval ? styles.cardApproval : styles.cardQuestion]}>
-        <Text style={styles.kind}>{isApproval ? "权限请求" : "提问"}</Text>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={[styles.card, { borderLeftColor: rail }]}>
+          <SectionLabel tone={isApproval ? "muted" : "accent"}>
+            {isApproval ? "Permission request" : "Question"}
+          </SectionLabel>
+          <Text style={styles.prompt}>{String(payload.prompt ?? (isApproval ? "允许执行？" : "请回答"))}</Text>
 
-        {isApproval ? (
-          <>
-            <Text style={styles.prompt}>{String(payload.prompt ?? "允许执行？")}</Text>
-            {payload.command !== undefined && (
-              <View style={styles.commandBox}>
-                <Text style={styles.command}>{String(payload.command)}</Text>
+          {isApproval ? (
+            <>
+              {payload.command !== undefined && (
+                <View style={styles.commandBox}>
+                  <Text style={styles.command}>{String(payload.command)}</Text>
+                </View>
+              )}
+              <View style={styles.buttonRow}>
+                <Button tone="danger" label="拒绝" onPress={() => done({ approved: false })} disabled={busy} style={styles.flex} />
+                <Button label="批准" onPress={() => done({ approved: true })} disabled={busy} style={styles.flex} />
               </View>
-            )}
-            <View style={styles.buttonRow}>
-              <Pressable
-                style={[styles.button, styles.buttonReject]}
-                onPress={() => done({ approved: false })}
-                disabled={busy}
-              >
-                <Text style={styles.buttonRejectText}>拒绝</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.button, styles.buttonApprove]}
-                onPress={() => done({ approved: true })}
-                disabled={busy}
-              >
-                <Text style={styles.buttonApproveText}>批准</Text>
-              </Pressable>
-            </View>
-          </>
-        ) : (
-          <>
-            <Text style={styles.prompt}>{String(payload.question ?? "请回答")}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="回答…"
-              placeholderTextColor={colors.textMuted}
-              value={answer}
-              onChangeText={setAnswer}
-              multiline
-            />
-            <Pressable
-              style={[styles.button, styles.buttonApprove, !answer.trim() && styles.buttonDisabled]}
-              onPress={() => done({ answer: answer.trim() })}
-              disabled={!answer.trim() || busy}
-            >
-              <Text style={styles.buttonApproveText}>提交回答</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.button, styles.buttonReject]}
-              onPress={() => done({ skipped: true })}
-              disabled={busy}
-            >
-              <Text style={styles.buttonRejectText}>跳过</Text>
-            </Pressable>
-          </>
-        )}
-      </View>
-    </View>
+            </>
+          ) : (
+            <>
+              <Field
+                label="ANSWER"
+                mono
+                placeholder="回答…"
+                value={answer}
+                onChangeText={setAnswer}
+                multiline
+                style={styles.answerInput}
+              />
+              <Button
+                label="提交回答"
+                onPress={() => done({ answer: answer.trim() })}
+                disabled={!answer.trim() || busy}
+                full
+              />
+              <Button tone="danger" label="跳过" onPress={() => done({ skipped: true })} disabled={busy} full />
+            </>
+          )}
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg, justifyContent: "center", padding: space.x5 },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  content: { flexGrow: 1, justifyContent: "center", padding: space.x5, gap: space.x4 },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.large,
+    borderRadius: radius.card,
     borderWidth: stroke.hairline,
     borderColor: colors.border,
+    borderLeftWidth: 3,
     padding: space.x5,
     gap: space.x3,
   },
-  cardApproval: { borderLeftWidth: 4, borderLeftColor: colors.warn },
-  cardQuestion: { borderLeftWidth: 4, borderLeftColor: colors.accent },
-  cardDone: { borderLeftWidth: 4, borderLeftColor: colors.success },
-  kind: {
-    color: colors.textMuted,
-    fontSize: font.body - 4,
-    fontFamily: font.mono,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  prompt: { color: colors.text, fontSize: font.body, lineHeight: 22 },
+  flex: { flex: 1 },
+  prompt: { color: colors.text, fontSize: font.body + 1, lineHeight: 22 },
   commandBox: {
-    backgroundColor: colors.surface2,
-    borderRadius: radius.card,
+    backgroundColor: colors.surface3,
+    borderRadius: radius.control,
     padding: space.x3,
     borderWidth: stroke.hairline,
     borderColor: colors.border,
   },
   command: { color: colors.text, fontFamily: font.mono, fontSize: font.transcript },
   buttonRow: { flexDirection: "row", gap: space.x3 },
-  button: { flex: 1, borderRadius: radius.card, alignItems: "center", paddingVertical: space.x3 + 2 },
-  buttonApprove: { backgroundColor: colors.accent },
-  buttonApproveText: { color: "#FFFFFF", fontWeight: "600", fontSize: font.body },
-  buttonReject: { backgroundColor: colors.surface2, borderWidth: stroke.hairline, borderColor: colors.border },
-  buttonRejectText: { color: colors.danger, fontWeight: "600", fontSize: font.body },
-  buttonDisabled: { opacity: 0.4 },
-  input: {
-    backgroundColor: colors.surface2,
-    borderColor: colors.border,
-    borderWidth: stroke.hairline,
-    borderRadius: radius.card,
-    color: colors.text,
-    padding: space.x3,
-    minHeight: 80,
-    textAlignVertical: "top",
-  },
-  muted: { color: colors.textMuted, textAlign: "center", marginTop: space.x6 },
+  answerInput: { minHeight: 88, textAlignVertical: "top", height: undefined },
 });

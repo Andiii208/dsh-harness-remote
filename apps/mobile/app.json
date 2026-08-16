@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "dsh-remote",
+    "name": "harness remote",
     "slug": "dsh-remote",
     "scheme": "dshremote",
     "version": "0.1.0",
@@ -28,13 +28,19 @@
       "package": "dev.dshremote.mobile",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0E0E10"
+        "backgroundColor": "#FFFFFF"
       }
     },
     "plugins": [
       "expo-notifications",
       "expo-background-task",
       "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "允许 harness remote 使用相机扫描配对二维码"
+        }
+      ],
       [
         "expo-build-properties",
         {

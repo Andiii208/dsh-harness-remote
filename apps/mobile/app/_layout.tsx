@@ -9,7 +9,6 @@ import { colors } from "../src/theme";
 
 export default function RootLayout() {
   useEffect(() => {
-    // 通知：通道 + 前台 handler + 权限 + 点击深链（均幂等；被拒不打扰）
     registerNotificationDeepLink();
     void notificationService.configure();
     notificationService.setForegroundHandler();
@@ -24,15 +23,19 @@ export default function RootLayout() {
           screenOptions={{
             headerStyle: { backgroundColor: colors.bg },
             headerTintColor: colors.text,
-            headerTitleStyle: { fontWeight: "600" },
+            headerTitleStyle: { fontWeight: "600", fontSize: 15 },
             contentStyle: { backgroundColor: colors.bg },
             headerShadowVisible: false,
+            headerBackTitle: "返回",
           }}
         >
-          <Stack.Screen name="index" options={{ title: "dsh-remote" }} />
-          <Stack.Screen name="sessions" options={{ title: "Sessions" }} />
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="sessions" options={{ title: "Sessions", headerBackTitle: "连接" }} />
           <Stack.Screen name="chat/[sessionId]" options={{ title: "Session" }} />
           <Stack.Screen name="approval/[rpcId]" options={{ title: "请求" }} />
+          <Stack.Screen name="settings" options={{ title: "设置" }} />
+          <Stack.Screen name="scan" options={{ headerShown: false, presentation: "modal" }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         </Stack>
       </ConnectionProvider>
     </SafeAreaProvider>

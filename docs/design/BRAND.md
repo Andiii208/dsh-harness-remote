@@ -1,5 +1,8 @@
 # dsh-remote 品牌与 App 图标
 
+- **产品显示名**：`harness remote`（App 图标下方/桌面名；项目名/仓库名保持 `dsh-remote`）。
+- **App 图标**：白底圆角方 + 黑色鲸鱼（见下）；Android 自适应图标背景必须纯白（app.json `android.adaptiveIcon.backgroundColor` = `#FFFFFF`），否则黑色鲸鱼融入深色背景不可见。
+
 ## 图标：DeepSeek 黑色鲸鱼
 
 - 源文件：`assets/branding/deepseek-whale-icon.svg`（1024×1024 矢量，透明底）
@@ -11,7 +14,7 @@
 
 ## 视觉原则（App UI，避免 AI 味）
 
-- 深色优先：近黑背景（`#0E0E10`）+ 高对比白/浅灰文本，DSH 终端感。
+- 深色优先：近黑蓝底（`#0A0C10`，UI-SYSTEM v2）+ 高对比白/浅灰文本，DSH 终端感。
 - 单一强调色点缀（青蓝 `#4D6BFE`，与 UI-SYSTEM.md / theme.ts 一致），不用彩虹渐变、不用玻璃拟态、不用 emoji 装饰。
 - 排版克制：等宽/无衬线系统字体，信息密度高，间距统一（4pt 网格）。
 - 状态表达：连接状态用色点 + 文本，不滥用徽章。
