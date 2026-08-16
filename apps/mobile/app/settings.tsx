@@ -30,7 +30,7 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
 }
 
 export default function SettingsScreen() {
-  const { state, describe, lastEndpoint, notifications, disconnect } = useConnection();
+  const { state, describe, lastEndpoint, notifications, disconnect, notificationsEnabled, setNotificationsEnabled } = useConnection();
   const [autoReconnect, setAutoReconnect] = useState(true);
   useEffect(() => {
     void autoReconnectStore.enabled().then(setAutoReconnect);
@@ -73,7 +73,17 @@ export default function SettingsScreen() {
       </Group>
 
       <Group eyebrow="Notifications">
-        <Row label="本地通知" value={notifications.length > 0 ? `${notifications.length} 条未读` : "无"} />
+        <View style={styles.statusRow}>
+          <Text style={styles.rowLabel}>本地通知</Text>
+          <Switch
+            value={notificationsEnabled}
+            onValueChange={setNotificationsEnabled}
+            trackColor={{ false: colors.surface3, true: colors.accent }}
+            thumbColor={colors.text}
+          />
+        </View>
+        <Row label="未读事件" value={notifications.length > 0 ? `${notifications.length} 条` : "无"} mono />
+        <Text style={styles.hint}>关闭后仍会在应用内记录事件，只是不弹系统通知（Expo Go 下通知本就禁用）。</Text>
       </Group>
 
       <Group eyebrow="About">
@@ -121,6 +131,7 @@ const styles = StyleSheet.create({
   rowLabel: { color: colors.text, fontSize: font.body },
   disconnectRow: { paddingVertical: space.x3 },
   linkRow: { paddingVertical: space.x3 },
+  hint: { color: colors.textDim, fontSize: font.caption, lineHeight: 18, paddingVertical: space.x3 },
   rowValue: { color: colors.textMuted, fontSize: font.caption, flexShrink: 1, textAlign: "right" },
   rowValueMono: { fontFamily: font.mono, color: colors.textMuted },
 });

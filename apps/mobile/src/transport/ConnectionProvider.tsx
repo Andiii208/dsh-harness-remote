@@ -19,6 +19,7 @@ import {
   type ConnectionPipeline,
 } from "./pipeline";
 import { notificationService } from "../notify/expoAdapter";
+import { notificationPrefsStore } from "../notify/notificationPrefsStoreAdapter";
 import { hostStore } from "../discovery/hostStoreAdapter";
 import { autoReconnectStore } from "../discovery/autoReconnectStoreAdapter";
 import { tokenStore } from "../data/secureStoreAdapter";
@@ -36,6 +37,9 @@ export interface ConnectionApi {
   sessions: SessionSummary[];
   pending: PendingRequest[];
   notifications: NotificationEvent[];
+  /** 本地通知开关（持久化；关闭时不弹系统通知，列表仍保留）。 */
+  notificationsEnabled: boolean;
+  setNotificationsEnabled(enabled: boolean): void;
   transcript(sessionId: string): TranscriptMessage[];
   /** 当前流式消息（未 complete 前；聊天页渲染闪烁光标）。 */
   liveMessage(sessionId: string): TranscriptMessage | undefined;
@@ -61,10 +65,26 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [describe, setDescribe] = useState<unknown>(null);
   const [version, setVersion] = useState(0);
   const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
+  const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
+  const notificationsEnabledRef = useRef(true);
 
   const setStateBoth = useCallback((s: ConnectionState) => {
     stateRef.current = s;
     setState(s);
+  }, []);
+
+  // 通知开关：挂载时读持久化偏好。
+  useEffect(() => {
+    void notificationPrefsStore.enabled().then((v) => {
+      notificationsEnabledRef.current = v;
+      setNotificationsEnabledState(v);
+    });
+  }, []);
+
+  const setNotificationsEnabled = useCallback((enabled: boolean) => {
+    notificationsEnabledRef.current = enabled;
+    setNotificationsEnabledState(enabled);
+    void notificationPrefsStore.setEnabled(enabled);
   }, []);
 
   // P2：冷启动自动重连最近主机（离线且从未主动连接时）。
@@ -128,7 +148,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       },
       onNotification: (n) => {
         setNotifications((prev) => [...prev.slice(-49), n]);
-        void notificationService.present(n); // M1：分类器事件 → 本地通知
+        if (notificationsEnabledRef.current) void notificationService.present(n); // 开关门控
       },
     });
     pipeline.store.subscribe(() => setVersion((v) => v + 1));
@@ -216,6 +236,8 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       transcript,
       liveMessage,
       goals,
+      notificationsEnabled,
+      setNotificationsEnabled,
       setGoalStatus,
       refreshSessions,
       connect,
@@ -223,7 +245,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       sendMessage,
       respond,
     }),
-    [state, describe, version, notifications, goals, setGoalStatus, refreshSessions, connect, disconnect, sendMessage, respond, transcript, liveMessage],
+    [state, describe, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, connect, disconnect, sendMessage, respond, transcript, liveMessage, setNotificationsEnabled],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;
