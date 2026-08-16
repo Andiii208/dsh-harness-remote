@@ -11,22 +11,7 @@ import { colors, font, radius, space, stroke } from "../../theme";
 import { SectionLabel } from "../SectionLabel";
 import { StreamingCursor } from "../StreamingCursor";
 import { haptic } from "../haptics";
-
-/** 把内容按 ``` 围栏切成 [text, code, text, code, …]。 */
-function splitCode(content: string): Array<{ code: boolean; text: string }> {
-  const parts = content.split("```");
-  if (parts.length < 3) return [{ code: false, text: content }];
-  const out: Array<{ code: boolean; text: string }> = [];
-  parts.forEach((part, i) => {
-    if (part.length === 0) return;
-    const code = i % 2 === 1;
-    // 仅代码段剥离首行语言标签（python\n 之类）；文本段原样保留（评审 #3）。
-    const text = code ? part.replace(/^[a-zA-Z0-9_+#-]*\n/, "") : part;
-    if (text.length === 0) return; // 空代码块/空段跳过
-    out.push({ code, text });
-  });
-  return out;
-}
+import { splitCode } from "./splitCode";
 
 export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolean }) {
   const [copied, setCopied] = useState(false);

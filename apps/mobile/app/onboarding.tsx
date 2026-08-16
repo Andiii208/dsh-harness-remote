@@ -2,11 +2,15 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import Svg, { Path } from "react-native-svg";
 import { colors, font, radius, space, stroke } from "../src/theme";
 import { WhaleMark } from "../src/ui/WhaleMark";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { Button } from "../src/ui/Button";
 import { onboardingStore } from "../src/discovery/onboardingStoreAdapter";
+
+const WHALE_D = "M 320 585 C 305 545, 305 515, 330 488 C 360 455, 430 432, 520 420 C 640 405, 760 415, 850 460 C 890 480, 920 505, 940 535 C 955 505, 985 480, 1005 470 C 985 505, 965 525, 955 545 C 950 560, 950 570, 955 585 C 965 605, 985 625, 1000 640 C 975 625, 945 610, 920 605 C 870 592, 800 610, 720 630 C 620 655, 480 660, 400 640 C 360 630, 330 615, 320 585 Z M 480 598 C 452 640, 442 662, 452 684 C 474 668, 506 636, 532 608 Z";
 
 const STEPS = [
   {
@@ -37,12 +41,16 @@ export default function OnboardingScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + space.x7, paddingBottom: insets.bottom + space.x5 }]}>
+      <Svg style={styles.watermark} width="300" height="300" viewBox="0 0 1024 1024" pointerEvents="none">
+        <Path d={WHALE_D} fill={colors.accent} opacity={0.05} />
+      </Svg>
+
       <View style={styles.brand}>
         <WhaleMark size={44} />
         <SectionLabel>harness remote</SectionLabel>
       </View>
 
-      <View style={styles.stepCard}>
+      <Animated.View key={step} entering={FadeInDown.duration(220)} style={styles.stepCard}>
         <SectionLabel tone="accent">{`Step ${step + 1} / ${STEPS.length}`}</SectionLabel>
         <Text style={styles.title}>{current.title}</Text>
         <Text style={styles.body}>{current.body}</Text>
@@ -56,7 +64,7 @@ export default function OnboardingScreen() {
             <View key={i} style={[styles.dot, i === step && styles.dotActive]} />
           ))}
         </View>
-      </View>
+      </Animated.View>
 
       <View style={styles.actions}>
         {step > 0 && <Button tone="ghost" label="上一步" onPress={() => setStep((s) => s - 1)} style={styles.flex} />}
@@ -72,6 +80,7 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: space.x5, justifyContent: "space-between" },
+  watermark: { position: "absolute", top: space.x6, right: -space.x7 },
   brand: { alignItems: "center", gap: space.x2 },
   stepCard: {
     backgroundColor: colors.surface,
@@ -93,7 +102,7 @@ const styles = StyleSheet.create({
   code: { color: colors.textMuted, fontFamily: font.mono, fontSize: font.transcript - 1, lineHeight: 20 },
   dots: { flexDirection: "row", gap: space.x2, justifyContent: "center", paddingTop: space.x2 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.surface3 },
-  dotActive: { backgroundColor: colors.accent },
+  dotActive: { width: 18, backgroundColor: colors.accent },
   actions: { flexDirection: "row", gap: space.x3 },
   flex: { flex: 1 },
 });
