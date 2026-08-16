@@ -18,6 +18,7 @@ import {
   createConnectionPipeline,
   type ConnectionPipeline,
 } from "./pipeline";
+import { notificationService } from "../notify/expoAdapter";
 import type { PendingRequest, SessionSummary, TranscriptMessage } from "../data/SessionStore";
 import type { NotificationEvent } from "../notify/classifier";
 
@@ -63,7 +64,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       onError: (err) => {
         console.warn("[conn]", err);
       },
-      onNotification: (n) => setNotifications((prev) => [...prev.slice(-49), n]),
+      onNotification: (n) => {
+        setNotifications((prev) => [...prev.slice(-49), n]);
+        void notificationService.present(n); // M1：分类器事件 → 本地通知
+      },
     });
     pipeline.store.subscribe(() => setVersion((v) => v + 1));
     pipelineRef.current = pipeline;
