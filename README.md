@@ -56,8 +56,18 @@ node tools/capture/dist/cli.js record --host 127.0.0.1 --port 3080 --out ./fixtu
 - [docs/PROTOCOL.md](docs/PROTOCOL.md) — 协议参考（信封/端点/WS/连接生命周期）
 - [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) — 协议版本矩阵与 fixtures 回归流程
 - [docs/SECURITY.md](docs/SECURITY.md) — 安全模型（MVP LAN → M2 配对 → M3 中继）
+- [docs/MANUAL.md](docs/MANUAL.md) — 真机联调清单（M0/M1 手动验收）
 - [docs/design/UI-SYSTEM.md](docs/design/UI-SYSTEM.md) — App UI 设计系统（暗色终端质感）
 - [docs/design/BRAND.md](docs/design/BRAND.md) — 品牌与 App 图标（DeepSeek 黑色鲸鱼）
+
+## 里程碑状态
+
+| 里程碑 | 状态 |
+|---|---|
+| M0 骨架与协议（monorepo + protocol + mock-harness + capture + docs + App 壳） | ✅ 已交付 |
+| M1 遥控闭环（通知/保活/审批提问/消息/goal-todo 控制） | ✅ 已交付 |
+| M2 跨端与安全（iOS EAS、配对 token 鉴权、开源发布） | 进行中 |
+| M3 中继（预留） | 预留 |
 
 ## 致谢
 

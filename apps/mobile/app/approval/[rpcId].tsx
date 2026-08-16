@@ -28,7 +28,13 @@ export default function ApprovalScreen() {
   if (!req) {
     return (
       <View style={styles.screen}>
-        <Text style={styles.muted}>请求不存在或已处理</Text>
+        <View style={[styles.card, styles.cardDone]}>
+          <Text style={styles.kind}>已完成</Text>
+          <Text style={styles.prompt}>该请求已处理或不存在</Text>
+          <Pressable style={[styles.button, styles.buttonApprove]} onPress={() => router.back()}>
+            <Text style={styles.buttonApproveText}>返回</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -84,6 +90,13 @@ export default function ApprovalScreen() {
             >
               <Text style={styles.buttonApproveText}>提交回答</Text>
             </Pressable>
+            <Pressable
+              style={[styles.button, styles.buttonReject]}
+              onPress={() => done({ skipped: true })}
+              disabled={busy}
+            >
+              <Text style={styles.buttonRejectText}>跳过</Text>
+            </Pressable>
           </>
         )}
       </View>
@@ -103,6 +116,7 @@ const styles = StyleSheet.create({
   },
   cardApproval: { borderLeftWidth: 4, borderLeftColor: colors.warn },
   cardQuestion: { borderLeftWidth: 4, borderLeftColor: colors.accent },
+  cardDone: { borderLeftWidth: 4, borderLeftColor: colors.success },
   kind: {
     color: colors.textMuted,
     fontSize: font.body - 4,
