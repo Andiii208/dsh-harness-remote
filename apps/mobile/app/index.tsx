@@ -26,6 +26,7 @@ import { StatusChip, type StatusTone } from "../src/ui/StatusChip";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { Field } from "../src/ui/Field";
 import { Button } from "../src/ui/Button";
+import { ConnectingBar } from "../src/ui/ConnectingBar";
 
 const STATE_TONE: Record<string, StatusTone> = {
   online: "success",
@@ -47,6 +48,7 @@ export default function ConnectScreen() {
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState("");
   const justConnected = useRef(false);
+  const discoverAbort = useRef<AbortController | null>(null);
   const heroEntering = useEntering(10, 260);
 
   // 首启引导 + 最近主机
@@ -115,8 +117,17 @@ export default function ConnectScreen() {
     await connect(h, p, t);
   };
 
+  // 卸载/离开页面时取消扫描
+  useEffect(() => {
+    return () => {
+      discoverAbort.current?.abort();
+    };
+  }, []);
+
   const onDiscover = async () => {
     if (discovering) return;
+    discoverAbort.current?.abort();
+    discoverAbort.current = new AbortController();
     setDiscovering(true);
     setDiscoverError("");
     try {
@@ -125,7 +136,7 @@ export default function ConnectScreen() {
         setDiscoverError("无法获取本机 IP（请在真机/局域网下使用）");
         return;
       }
-      const list = await discoverHosts({ localIp: ip });
+      const list = await discoverHosts({ localIp: ip, signal: discoverAbort.current.signal });
       setFound(list);
       if (list.length === 0) setDiscoverError("没有发现 DSH 实例——请确认电脑已启动插件且与手机同一网络");
     } catch (err) {
@@ -146,7 +157,9 @@ export default function ConnectScreen() {
       ? `${(describe as { name?: string }).name ?? ""} ${(describe as { version?: string }).version ?? ""}`.trim()
       : "";
 
-  const list = found.length > 0 ? found.map((f) => ({ key: `found-${f.host}`, host: f.host, port: f.port, name: f.name })) : recent.map((r) => ({ key: `recent-${r.host}-${r.port}`, host: r.host, port: r.port, name: r.name }));
+  const list = found.length > 0
+    ? found.map((f) => ({ key: `found-${f.host}`, host: f.host, port: f.port, name: f.name, token: undefined }))
+    : recent.map((r) => ({ key: `recent-${r.host}-${r.port}`, host: r.host, port: r.port, name: r.name, token: r.token }));
 
   return (
     <KeyboardAvoidingView
@@ -166,6 +179,7 @@ export default function ConnectScreen() {
           <StatusChip tone={STATE_TONE[state] ?? "neutral"} label={STATE_LABEL[state] ?? state} />
           {describeName.length > 0 && <Text style={styles.describe} numberOfLines={1}>{describeName}</Text>}
         </View>
+        {state === "connecting" && <ConnectingBar />}
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -186,7 +200,7 @@ export default function ConnectScreen() {
               <Pressable
                 key={h.key}
                 style={({ pressed }) => [styles.hostRow, pressed && styles.hostRowPressed]}
-                onPress={() => void connectTo(h.host, h.port)}
+                onPress={() => void connectTo(h.host, h.port, h.token)}
               >
                 <View style={styles.hostRowText}>
                   <Text style={styles.hostRowTitle} numberOfLines={1}>

@@ -21,13 +21,14 @@ describe("HostStore", () => {
   it("dedupes by host:port and moves to front", async () => {
     const api = memStore();
     const store = new HostStore(api);
-    await store.add("192.168.1.5", 3080, "dsh");
-    await store.add("192.168.1.6", 3080, "dsh2");
-    await store.add("192.168.1.5", 3080); // revisit
+    await store.add("192.168.1.5", 3080, "dsh", "tok-5");
+    await store.add("192.168.1.6", 3080, "dsh2", "tok-6");
+    await store.add("192.168.1.5", 3080); // revisit：保留 name/token
     const list = await store.list();
     expect(list.map((h) => h.host)).toEqual(["192.168.1.5", "192.168.1.6"]);
     expect(list[0]?.name).toBe("dsh");
-    expect(await store.latest()).toMatchObject({ host: "192.168.1.5", port: 3080 });
+    expect(list[0]?.token).toBe("tok-5");
+    expect(await store.latest()).toMatchObject({ host: "192.168.1.5", port: 3080, token: "tok-5" });
   });
 
   it("caps the list", async () => {

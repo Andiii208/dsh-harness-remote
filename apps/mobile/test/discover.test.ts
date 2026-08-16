@@ -55,4 +55,16 @@ describe("discoverHosts", () => {
     });
     expect(found).toEqual([]);
   });
+
+  it("stops early when the signal is aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const found = await discoverHosts({
+      localIp: "10.0.0.20",
+      port: 3080,
+      signal: controller.signal,
+      fetchImpl: okFetch(new Set(["10.0.0.5"])),
+    });
+    expect(found).toEqual([]);
+  });
 });

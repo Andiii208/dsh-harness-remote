@@ -10,6 +10,8 @@ export interface RecentHost {
   host: string;
   port: number;
   name?: string;
+  /** 该主机的配对 token（扫码配对时写入；自动重连优先使用，回退全局 token）。 */
+  token?: string;
   lastConnectedAt: number;
 }
 
@@ -38,13 +40,14 @@ export class HostStore {
   }
 
   /** 插入/更新最近主机并持久化；返回新列表。失败时返回旧列表（不抛错）。 */
-  async add(host: string, port: number, name?: string): Promise<RecentHost[]> {
+  async add(host: string, port: number, name?: string, token?: string): Promise<RecentHost[]> {
     const list = await this.list();
     const prev = list.find((h) => h.host === host && h.port === port);
-    // 未提供名称时保留旧名称（自动重连不覆盖已记住的名字）。
+    // 未提供名称/token 时保留旧值（自动重连不覆盖已记住的配对）。
     const nextName = name && name.length > 0 ? name : prev?.name;
+    const nextToken = token && token.length > 0 ? token : prev?.token;
     const next = list.filter((h) => !(h.host === host && h.port === port));
-    next.unshift({ host, port, name: nextName, lastConnectedAt: Date.now() });
+    next.unshift({ host, port, name: nextName, token: nextToken, lastConnectedAt: Date.now() });
     const capped = next.slice(0, MAX_RECENT_HOSTS);
     try {
       await this.api.setItemAsync(HOSTS_KEY, JSON.stringify(capped));
@@ -70,5 +73,5 @@ export class HostStore {
 function isRecentHost(v: unknown): v is RecentHost {
   if (!v || typeof v !== "object") return false;
   const o = v as Record<string, unknown>;
-  return typeof o.host === "string" && typeof o.port === "number" && typeof o.lastConnectedAt === "number";
+  return typeof o.host === "string" && typeof o.port === "number" && typeof o.lastConnectedAt === "number" && (o.token === undefined || typeof o.token === "string");
 }

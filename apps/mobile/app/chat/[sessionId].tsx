@@ -133,6 +133,7 @@ export default function ChatScreen() {
   const id = Array.isArray(sessionId) ? sessionId[0] : sessionId;
   const { sessions, transcript, sendMessage, state } = useConnection();
   const [draft, setDraft] = useState("");
+  const [sendError, setSendError] = useState("");
   const messages = id ? transcript(id) : [];
   const summary = id ? sessions.find((s) => s.id === id) : undefined;
   const online = state === "online";
@@ -142,10 +143,12 @@ export default function ChatScreen() {
     const text = draft.trim();
     if (!text || !id || !online) return;
     setDraft("");
+    setSendError("");
     try {
       await sendMessage(id, text);
-    } catch {
+    } catch (err) {
       setDraft(text);
+      setSendError(err instanceof Error ? err.message : "发送失败");
     }
   };
 
@@ -190,6 +193,7 @@ export default function ChatScreen() {
       />
       <View style={styles.inputBar}>
         {!online && <SectionLabel tone="danger">Offline</SectionLabel>}
+        {sendError.length > 0 && <Text style={styles.sendError}>{sendError}</Text>}
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
@@ -299,4 +303,5 @@ const styles = StyleSheet.create({
   },
   sendDisabled: { opacity: 0.4 },
   sendText: { color: "#FFFFFF", fontSize: font.body, fontWeight: "600" },
+  sendError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
 });

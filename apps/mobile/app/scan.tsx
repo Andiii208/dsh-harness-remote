@@ -36,7 +36,7 @@ export default function ScanScreen() {
     }
     setScanning(false);
     if (payload.token) await tokenStore.set(payload.token);
-    await hostStore.add(payload.host, payload.port);
+    await hostStore.add(payload.host, payload.port, undefined, payload.token);
     setError("");
     await connect(payload.host, payload.port, payload.token);
     router.replace("/sessions");

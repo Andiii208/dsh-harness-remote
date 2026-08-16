@@ -20,6 +20,8 @@ export interface DiscoverOptions {
   concurrency?: number;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  /** 取消信号：页面卸载/用户离开时中断扫描（评审 #11）。 */
+  signal?: AbortSignal;
 }
 
 const DEFAULT_PORT = 3080;
@@ -48,6 +50,7 @@ export async function discoverHosts(opts: DiscoverOptions): Promise<DiscoveredHo
   let cursor = 0;
   async function worker(): Promise<void> {
     while (cursor < candidates.length) {
+      if (opts.signal?.aborted) return;
       const c = candidates[cursor]!;
       cursor += 1;
       const info = await probeHost(c.host, c.port, {

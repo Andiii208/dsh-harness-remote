@@ -68,7 +68,8 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     void (async () => {
       const [recent, token] = await Promise.all([hostStore.latest(), tokenStore.get()]);
       if (cancelled || !recent || stateRef.current !== "offline") return;
-      await connectRef.current(recent.host, recent.port, token ?? undefined);
+      // 优先使用该主机自己的配对 token，回退全局 token（评审 #10）。
+      await connectRef.current(recent.host, recent.port, recent.token ?? token ?? undefined);
     })();
     return () => {
       cancelled = true;
@@ -101,7 +102,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     pipelineRef.current?.stop();
     setNotifications([]);
     lastEndpointRef.current = { host, port };
-    void hostStore.add(host, port);
+    void hostStore.add(host, port, undefined, token);
 
     const pipeline = createConnectionPipeline({
       endpoint: { host, port },
@@ -110,7 +111,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         onDescribe: (d) => {
           setDescribe(d);
           const name = d && typeof d === "object" ? (d as { name?: string }).name : undefined;
-          if (name) void hostStore.add(host, port, name);
+          if (name) void hostStore.add(host, port, name, token);
         },
       }),
       onStateChange: (s) => setStateBoth(s),
@@ -144,7 +145,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
   const sendMessage = useCallback(async (sessionId: string, text: string) => {
     const c = pipelineRef.current?.loop.connection;
-    if (!c) return;
+    if (!c) throw new Error("OFFLINE: not connected"); // 离线反馈（评审 #15）
     await c.unary("session.prompt", { sessionId, prompt: text });
   }, []);
 
