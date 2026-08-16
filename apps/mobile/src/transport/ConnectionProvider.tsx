@@ -141,11 +141,13 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
   connectRef.current = connect;
 
-  const disconnect = useCallback(() => {
-    void pipelineRef.current?.stop().then(() => {
-      pipelineRef.current?.store.clear();
-      pipelineRef.current = null;
-    });
+  const disconnect = useCallback(async () => {
+    const prev = pipelineRef.current;
+    if (prev) {
+      await prev.stop(); // 等待真正退出，避免窗口期访问正在关闭的 pipeline
+      prev.store.clear();
+      if (pipelineRef.current === prev) pipelineRef.current = null;
+    }
     lastEndpointRef.current = null;
     setStateBoth("offline");
     void autoReconnectStore.setEnabled(false); // 用户主动断开：关掉自动重连

@@ -122,7 +122,7 @@ export function createApiHandler(
         );
         return;
       }
-      const host = req.headers.host ? req.headers.host.split(":")[0] : "127.0.0.1";
+      const host = (req.headers.host ?? "127.0.0.1").split(":")[0] ?? "127.0.0.1";
       const port = url.port ? Number(url.port) : 3080;
       sendJson(res, { rpcId: "", ok: true, result: { url: buildPairPayload({ host, port, token: opts.pairToken }) } });
       return;

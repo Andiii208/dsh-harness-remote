@@ -31,7 +31,13 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
 
   const onLongPress = async () => {
     if (m.content.length === 0) return;
-    await Clipboard.setStringAsync(m.content);
+    try {
+      await Clipboard.setStringAsync(m.content);
+    } catch (err) {
+      console.warn("[copy] failed", err);
+      void haptic("error");
+      return;
+    }
     void haptic("light");
     setCopied(true);
     if (copiedTimer.current) clearTimeout(copiedTimer.current);

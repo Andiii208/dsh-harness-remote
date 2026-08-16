@@ -100,7 +100,7 @@ export default function SessionsScreen() {
                 {s.title ?? s.id}
               </Text>
               <GoalPill status={s.goalStatus} />
-              <Text style={styles.chevron}>›</Text>
+              <Text style={styles.chevron} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">›</Text>
             </View>
             {s.lastMessage !== undefined && (
               <Text style={styles.rowPreview} numberOfLines={1}>

@@ -47,6 +47,8 @@ export class ConnectionLoop {
   private conn: Connection | null = null;
   private stopPromise: Promise<void> | null = null;
   private resolveStop: (() => void) | null = null;
+  /** run() 已退出且 stop 已结算（后续 stop() 直接返回已 resolve 的 Promise）。 */
+  private stoppedSettled = false;
   private readonly opts: Required<Pick<ConnectionLoopOptions, "baseBackoffMs" | "maxBackoffMs" | "jitter">> &
     ConnectionLoopOptions;
 
@@ -92,8 +94,9 @@ export class ConnectionLoop {
     void this.run();
   }
 
-  /** 停止并等待 run() 真正退出（幂等；返回同一 Promise）。 */
+  /** 停止并等待 run() 真正退出（幂等；已结算后再调直接 resolve，杜绝二次调用死锁）。 */
   stop(): Promise<void> {
+    if (this.stoppedSettled) return Promise.resolve();
     this.stopped = true;
     this.running = false;
     this.conn?.close();
@@ -109,6 +112,7 @@ export class ConnectionLoop {
   }
 
   private settleStop(): void {
+    this.stoppedSettled = true;
     const resolve = this.resolveStop;
     this.resolveStop = null;
     this.stopPromise = null;

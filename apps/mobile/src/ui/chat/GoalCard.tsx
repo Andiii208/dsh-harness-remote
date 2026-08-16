@@ -47,7 +47,12 @@ export function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
 
   return (
     <Animated.View entering={entering} style={styles.card}>
-      <Pressable style={styles.header} onPress={() => setOpen((v) => !v)}>
+      <Pressable
+        style={styles.header}
+        onPress={() => setOpen((v) => !v)}
+        accessibilityRole="button"
+        accessibilityLabel={open ? "收起 goal 详情" : "展开 goal 详情"}
+      >
         <SectionLabel tone={status === "paused" ? "muted" : "accent"}>
           {`Goal · ${status}`}
         </SectionLabel>
@@ -57,6 +62,7 @@ export function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
           </Text>
         )}
       </Pressable>
+      {error.length > 0 && !open && <Text style={styles.errorHeader}>{error}</Text>}
       {open && (
         <View style={styles.body}>
           {error.length > 0 && <Text style={styles.error}>{error}</Text>}
@@ -124,4 +130,5 @@ const styles = StyleSheet.create({
   barFill: { height: 3, backgroundColor: colors.accent, borderRadius: 2 },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.x2, marginTop: space.x2 },
   error: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
+  errorHeader: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, paddingHorizontal: space.x4, paddingBottom: space.x2 },
 });

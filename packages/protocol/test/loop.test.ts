@@ -291,4 +291,17 @@ describe("ConnectionLoop state accessor", () => {
     });
     expect(loop.connectionState).toBe("offline");
   });
+
+  it("a second stop() resolves without deadlock after the first settles", async () => {
+    const loop = new ConnectionLoop({
+      endpoint: { host: "h", port: 3080 },
+      transport: alwaysFailingTransport(),
+      sleep: async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      },
+    });
+    loop.start();
+    await loop.stop(); // first stop：等 run() 退出并 settle
+    await expect(loop.stop()).resolves.toBeUndefined(); // 二次 stop 不挂起
+  });
 });

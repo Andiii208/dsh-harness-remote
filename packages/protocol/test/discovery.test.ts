@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildPairPayload, parsePairPayload, probeHost } from "../src/discovery.js";
 
-function fakeFetch(ok: boolean, body: unknown) {
-  return async () => ({ ok, json: async () => body }) as unknown as typeof fetch;
+function fakeFetch(ok: boolean, body: unknown): typeof fetch {
+  return (async () => ({ ok, json: async () => body } as unknown as Response)) as unknown as typeof fetch;
 }
 
 describe("probeHost", () => {
