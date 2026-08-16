@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "baselineVersion": "0.1.0-rc.5",
+    "recordedAt": "2026-08-16T00:00:00.000Z",
+    "describe": { "name": "dsh", "version": "0.1.0-rc.5" }
+  },
+  "unaryResponses": [
+    {
+      "method": "commands/execute",
+      "response": {
+        "ok": true,
+        "result": { "accepted": true, "input": "pnpm test" }
+      }
+    }
+  ],
+  "wsFrames": [
+    {
+      "stream": "mux",
+      "frame": { "type": "session/event", "sessionId": "s1", "event": "turn/start", "turn": { "id": "t1" } }
+    },
+    {
+      "stream": "mux",
+      "frame": { "type": "session/event", "sessionId": "s1", "event": "step/start", "turn": { "id": "t1" }, "step": { "id": "st1" } }
+    },
+    {
+      "stream": "mux",
+      "frame": { "type": "session/event", "sessionId": "s1", "event": "message/delta", "message": { "id": "m1", "role": "assistant", "delta": "正在运行测试…" } }
+    },
+    {
+      "stream": "mux",
+      "frame": { "type": "session/event", "sessionId": "s1", "event": "message/delta", "message": { "id": "m1", "role": "assistant", "delta": " 14/14 通过" } }
+    },
+    {
+      "stream": "mux",
+      "frame": { "type": "session/event", "sessionId": "s1", "event": "message/complete", "message": { "id": "m1", "role": "assistant", "content": "正在运行测试… 14/14 通过", "done": true } }
+    },
+    {
+      "stream": "mux",
+      "frame": { "type": "session/event", "sessionId": "s1", "event": "turn/complete", "turn": { "id": "t1" } }
+    }
+  ]
+}

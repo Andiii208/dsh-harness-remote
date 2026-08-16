@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "baselineVersion": "0.1.0-rc.5",
+    "recordedAt": "2026-08-16T00:00:00.000Z",
+    "describe": { "name": "dsh", "version": "0.1.0-rc.5" }
+  },
+  "unaryResponses": [
+    {
+      "method": "host.describe",
+      "response": { "ok": true, "result": { "name": "dsh", "version": "0.1.0-rc.5" } }
+    }
+  ],
+  "wsFrames": [
+    {
+      "stream": "mux",
+      "frame": {
+        "type": "server/request",
+        "rpcId": "req-approve-1",
+        "kind": "approval",
+        "payload": { "prompt": "允许执行命令吗？", "command": "rm -rf ./dist", "permission": "shell" }
+      }
+    },
+    {
+      "stream": "mux",
+      "frame": {
+        "type": "server/request",
+        "rpcId": "req-q-1",
+        "kind": "question",
+        "payload": { "question": "部署到生产环境？", "options": ["yes", "no"] }
+      }
+    }
+  ]
+}

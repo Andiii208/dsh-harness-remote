@@ -1,0 +1,35 @@
+{
+  "name": "mock-harness",
+  "version": "0.1.0",
+  "description": "DSH /api + WS test stub that replays conformance fixtures (for app & protocol tests, no real harness needed).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "mock-harness": "./dist/cli.js"
+  },
+  "files": ["dist", "fixtures"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "dev": "vitest"
+  },
+  "dependencies": {
+    "@dsh-remote/protocol": "workspace:^",
+    "@dsh-remote/capture": "workspace:^",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.12"
+  }
+}

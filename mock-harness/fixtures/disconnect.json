@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "baselineVersion": "0.1.0-rc.5",
+    "recordedAt": "2026-08-16T00:00:00.000Z",
+    "describe": { "name": "dsh", "version": "0.1.0-rc.5" }
+  },
+  "unaryResponses": [],
+  "wsFrames": [
+    {
+      "stream": "mux",
+      "frame": { "type": "session/event", "sessionId": "s1", "event": "turn/start" }
+    },
+    {
+      "stream": "mux",
+      "frame": { "type": "session/event", "sessionId": "s1", "event": "message/delta", "message": { "role": "assistant", "delta": "连接即将断开…" } }
+    }
+  ],
+  "scenarios": [
+    { "id": "drop-after-2", "disconnectAfter": 2 }
+  ]
+}
