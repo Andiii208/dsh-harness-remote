@@ -62,7 +62,7 @@ export function createApiHandler(fixtures: FixtureSet[], state: ApiServerState) 
 
     if (req.method === "GET" && path === "/api/host.describe") {
       const describe = fixtures[0]?.meta.describe ?? { name: "mock-harness", version: "0.1.0-rc.5" };
-      sendJson(res, { rpcId: "get", ok: true, result: describe });
+      sendJson(res, { rpcId: "", ok: true, result: describe });
       return;
     }
 
