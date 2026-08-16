@@ -42,6 +42,8 @@ export interface ConnectionApi {
   goals: GoalsClient;
   /** 乐观更新 goal 状态（暂停/恢复后立即反映）。 */
   setGoalStatus(sessionId: string, status: string): void;
+  /** 下拉刷新：重新拉取 session.list 并全量替换会话列表。 */
+  refreshSessions(): Promise<void>;
   connect(host: string, port: number, token?: string): Promise<void>;
   disconnect(): void;
   sendMessage(sessionId: string, text: string): Promise<void>;
@@ -185,6 +187,20 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     },
   };
   const goals = useMemo(() => new GoalsClient(goalsApi), []);
+
+  const refreshSessions = useCallback(async () => {
+    const c = pipelineRef.current?.loop.connection;
+    const store = pipelineRef.current?.store;
+    if (!c || !store) return;
+    try {
+      const r = await c.unary("session.list", {});
+      if (r.ok && r.result && Array.isArray((r.result as { sessions?: unknown }).sessions)) {
+        store.applySessionList((r.result as { sessions: Array<{ id?: unknown; title?: unknown; workspace?: unknown }> }).sessions);
+      }
+    } catch (err) {
+      console.warn("[sessions] refresh failed", err);
+    }
+  }, []);
   const setGoalStatus = useCallback((sessionId: string, status: string) => {
     pipelineRef.current?.store.setGoalStatus(sessionId, status);
   }, []);
@@ -201,12 +217,13 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       liveMessage,
       goals,
       setGoalStatus,
+      refreshSessions,
       connect,
       disconnect,
       sendMessage,
       respond,
     }),
-    [state, describe, version, notifications, goals, setGoalStatus, connect, disconnect, sendMessage, respond, transcript, liveMessage],
+    [state, describe, version, notifications, goals, setGoalStatus, refreshSessions, connect, disconnect, sendMessage, respond, transcript, liveMessage],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;

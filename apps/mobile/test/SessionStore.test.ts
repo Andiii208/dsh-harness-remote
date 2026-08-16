@@ -106,4 +106,23 @@ describe("SessionStore", () => {
     expect(sum?.lastActiveAt).toBeGreaterThanOrEqual(before);
     expect(sum?.lastActiveAt).toBeLessThanOrEqual(Date.now());
   });
+
+  it("applySessionList replaces the list while keeping derived fields", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("session/projection", { sessionId: "s1", goal: { status: "active" }, tokenUsage: { total: 100 } }) as never);
+    s.applySessionList([
+      { id: "s1", title: "deploy", workspace: "D:\app" },
+      { id: "s2", title: "debug", workspace: "D:\app" },
+    ] as never);
+    const list = s.getSessions();
+    expect(list.map((x) => x.id)).toEqual(["s2", "s1"]); // 按 updatedAt 倒序
+    expect(list.find((x) => x.id === "s1")).toMatchObject({ title: "deploy", goalStatus: "active", tokenUsageTotal: 100 });
+  });
+
+  it("applySessionList drops sessions missing from the list", () => {
+    const s = new SessionStore();
+    s.applySessionList([{ id: "s1", title: "t" }] as never);
+    s.applySessionList([{ id: "s2", title: "t2" }] as never);
+    expect(s.getSessions().map((x) => x.id)).toEqual(["s2"]);
+  });
 });

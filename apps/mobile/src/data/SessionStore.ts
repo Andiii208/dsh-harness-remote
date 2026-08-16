@@ -122,6 +122,27 @@ export class SessionStore {
     this.notify();
   }
 
+  /** 用 session.list 的结果全量替换会话列表（保留已存在会话的派生字段）。 */
+  applySessionList(list: Array<{ id?: unknown; title?: unknown; workspace?: unknown }>): void {
+    if (!Array.isArray(list)) return;
+    const seen = new Set<string>();
+    for (const item of list) {
+      if (!item || typeof item !== "object") continue;
+      const id = str((item as Record<string, unknown>).id);
+      if (!id) continue;
+      const s = this.touchSession(id);
+      const title = str((item as Record<string, unknown>).title);
+      const workspace = str((item as Record<string, unknown>).workspace);
+      if (title !== undefined) s.title = title;
+      if (workspace !== undefined) s.workspace = workspace;
+      seen.add(id);
+    }
+    for (const id of [...this.sessions.keys()]) {
+      if (!seen.has(id)) this.sessions.delete(id);
+    }
+    this.notify();
+  }
+
   /** 乐观更新 goal 状态（暂停/恢复后立即反映，下一条投影帧为准）。 */
   setGoalStatus(sessionId: string, status: string): void {
     const s = this.sessions.get(sessionId);

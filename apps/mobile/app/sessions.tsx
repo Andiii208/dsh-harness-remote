@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { FlashList } from "@shopify/flash-list";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
@@ -29,9 +29,11 @@ function GoalPill({ status }: { status?: string }) {
 }
 
 export default function SessionsScreen() {
-  const { sessions, pending, state } = useConnection();
+  const { sessions, pending, state, refreshSessions } = useConnection();
   const router = useRouter();
   const entering = useEntering();
+  const [refreshing, setRefreshing] = useState(false);
+  const autoRefreshed = useRef(false);
   // 每分钟刷新相对时间显示（"刚刚/×分钟前"）。
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -39,12 +41,32 @@ export default function SessionsScreen() {
     return () => clearInterval(t);
   }, []);
 
+  // 上线后自动刷新一次会话列表（投影帧之外的全量校准）。
+  useEffect(() => {
+    if (state === "online" && !autoRefreshed.current) {
+      autoRefreshed.current = true;
+      void refreshSessions();
+    }
+  }, [state, refreshSessions]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshSessions();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <FlashList
       style={styles.screen}
       contentContainerStyle={styles.content}
       data={sessions}
       keyExtractor={(s) => s.id}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.textMuted} colors={[colors.accent]} />
+      }
       ListHeaderComponent={
         <View style={styles.header}>
           <View style={styles.headerRow}>
