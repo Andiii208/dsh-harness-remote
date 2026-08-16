@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "baselineVersion": "0.1.0-rc.5",
+    "recordedAt": "2026-08-16T00:00:00.000Z",
+    "describe": { "name": "dsh", "version": "0.1.0-rc.5" }
+  },
+  "unaryResponses": [
+    {
+      "method": "goals/list",
+      "response": {
+        "ok": true,
+        "result": {
+          "goals": [
+            {
+              "id": "g1",
+              "objective": "部署上线",
+              "status": "active",
+              "todos": [
+                { "content": "跑测试", "status": "completed" },
+                { "content": "发布", "status": "pending" }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "method": "goals/pause",
+      "requestPayload": { "id": "g1" },
+      "response": { "ok": true, "result": { "id": "g1", "status": "paused" } }
+    },
+    {
+      "method": "goals/resume",
+      "requestPayload": { "id": "g1" },
+      "response": { "ok": true, "result": { "id": "g1", "status": "active" } }
+    }
+  ],
+  "wsFrames": []
+}
