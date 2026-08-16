@@ -76,8 +76,8 @@ describe("LanTransport.connect", () => {
     const transport = new LanTransport({ fetchImpl: describeOk(), wsImpl: AutoOpenWs });
     const conn = await transport.connect({ host: "192.168.1.5", port: 3080 }, {});
     expect(FakeWs.instances.map((w) => w.url)).toEqual([
-      "http://192.168.1.5:3080/api/events.mux",
-      "http://192.168.1.5:3080/api/events.host",
+      "ws://192.168.1.5:3080/api/events.mux",
+      "ws://192.168.1.5:3080/api/events.host",
     ]);
     expect(conn).toBeDefined();
     expect(typeof conn.unary).toBe("function");

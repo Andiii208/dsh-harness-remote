@@ -61,6 +61,8 @@ export class LanTransport implements Transport {
    */
   async connect(endpoint: Endpoint, auth: Auth): Promise<Connection> {
     const baseUrl = `http://${endpoint.host}:${endpoint.port}`;
+    // WebSocket 只接受 ws/wss scheme（RN/浏览器对 http:// 抛 SyntaxError）
+    const wsBase = baseUrl.replace(/^http/, "ws");
     const rpc = new RpcClient({
       baseUrl,
       timeoutMs: this.opts.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT,
@@ -68,8 +70,8 @@ export class LanTransport implements Transport {
     });
 
     const ws = new WsDownlink(
-      `${baseUrl}/api/events.mux`,
-      `${baseUrl}/api/events.host`,
+      `${wsBase}/api/events.mux`,
+      `${wsBase}/api/events.host`,
       this.opts.wsImpl,
     );
 
