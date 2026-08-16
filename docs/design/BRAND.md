@@ -9,8 +9,8 @@
 - 设计语言：**极简几何黑色鲸鱼**——细长流线型身体、分叉尾鳍、单片鳍、白色圆眼。致敬 DeepSeek 品牌鲸鱼，原创绘制（非官方 logo 复制品）。
 - 使用方式：
   - 全图标（iOS/Android 主图标）：白底圆角方 + 黑色鲸鱼（Expo `icon.png` 1024×1024；圆角由系统遮罩，给全出血白底）。
-  - Android 自适应图标：`foregroundImage` 用透明底 SVG 转 PNG（缩放 ~66% 安全区），`backgroundImage` 纯白。
-  - 生成 PNG：playwright 打开 SVG 截图 1024×1024（或 `npx sharp-cli`），存 `apps/mobile/assets/icon.png` 与 `adaptive-icon.png`。
+  - Android 自适应图标：`foregroundImage` 用透明底 SVG 转 PNG（缩放 ~66% 安全区），`backgroundImage` 纯白。当前 `adaptive-icon.png` 为白底鲸鱼 PNG，配合 `backgroundColor: "#FFFFFF"` 显示一致。
+  - 生成 PNG：用 `npx sharp-cli`（或浏览器打开 SVG 截图）输出 1024×1024，存 `apps/mobile/assets/icon.png` 与 `adaptive-icon.png`。⚠️ 重生成后务必肉眼/工具检查非空白（playwright 直开 SVG 截图在此环境会产出空白，需 `sharp` 或带背景合成）。
 
 ## 视觉原则（App UI，避免 AI 味）
 
