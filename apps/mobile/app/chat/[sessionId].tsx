@@ -19,6 +19,7 @@ import { StatusChip } from "../../src/ui/StatusChip";
 import { useEntering } from "../../src/ui/anim";
 import { GoalCard } from "../../src/ui/chat/GoalCard";
 import { MessageBubble } from "../../src/ui/chat/MessageBubble";
+import { haptic } from "../../src/ui/haptics";
 
 export default function ChatScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -46,6 +47,7 @@ export default function ChatScreen() {
     if (!text || !id || !online) return;
     setDraft("");
     setSendError("");
+    void haptic("light");
     try {
       await sendMessage(id, text);
     } catch (err) {

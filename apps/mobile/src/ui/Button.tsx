@@ -19,6 +19,7 @@ export function Button({ label, onPress, tone = "primary", disabled, full, style
     <Pressable
       style={({ pressed }) => [
         ...base,
+        pressed && styles.pressed,
         pressed && !disabled && (tone === "primary" ? styles.pressedPrimary : styles.pressedGhost),
       ]}
       onPress={onPress}
@@ -51,6 +52,7 @@ const styles = StyleSheet.create({
   },
   disabled: { opacity: 0.4 },
   full: { width: "100%" },
+  pressed: { transform: [{ scale: 0.98 }] },
   pressedPrimary: { backgroundColor: colors.accentHover },
   pressedGhost: { backgroundColor: colors.surface3 },
   text: { color: "#FFFFFF", fontSize: font.body + 1, fontWeight: "600" },
