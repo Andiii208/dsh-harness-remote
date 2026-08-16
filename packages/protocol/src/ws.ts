@@ -67,7 +67,7 @@ export class WsDownlink {
       const data = ev.data;
       if (typeof data === "string") {
         this.queue.push(decodeFrame(parseJson(data)));
-      } else if (data instanceof Blob) {
+      } else if (typeof Blob !== "undefined" && data instanceof Blob) {
         void data.text().then((t) => this.queue.push(decodeFrame(parseJson(t))));
       } else {
         this.queue.push(decodeFrame(data));

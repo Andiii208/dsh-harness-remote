@@ -97,4 +97,22 @@ describe("WsDownlink", () => {
     const got = await frames;
     expect(got[0]).toMatchObject({ type: "task/event" });
   });
+
+  it("still delivers string frames when the Blob global is absent", async () => {
+    const orig = (globalThis as { Blob?: unknown }).Blob;
+    try {
+      (globalThis as { Blob?: unknown }).Blob = undefined;
+      const ws = new WsDownlink("ws://h/mux", "ws://h/host", fakeCtor());
+      const frames = collect(ws.events, 2);
+      // 字符串帧：主路径
+      FakeWs.instances[0]?.onmessage?.({ data: JSON.stringify({ type: "session/event", sessionId: "s1" }) });
+      // 非字符串帧：Blob 缺失时旧代码会在 instanceof Blob 处抛 ReferenceError
+      FakeWs.instances[1]?.onmessage?.({ data: new Uint8Array([123, 125]).buffer });
+      const got = await frames;
+      expect(got[0]).toMatchObject({ type: "session/event", sessionId: "s1" });
+      expect(got[1]).toMatchObject({ type: "unknown" });
+    } finally {
+      (globalThis as { Blob?: unknown }).Blob = orig;
+    }
+  });
 });
