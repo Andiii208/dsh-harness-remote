@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "dsh-remote",
+    "slug": "dsh-remote",
+    "scheme": "dshremote",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0E0E10",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0E0E10",
+      "resizeMode": "contain",
+      "image": "./assets/icon.png"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.dshremote.mobile"
+    },
+    "android": {
+      "package": "dev.dshremote.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0E0E10"
+      }
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": null
+      }
+    }
+  }
+}
