@@ -53,6 +53,29 @@ pnpm start
   2. expo-notifications / expo-background-task / expo-task-manager 在 Expo Go（SDK 53+）require 即触发致命错误且绕过 try/catch → 新增 `src/notify/expoEnv.ts`（`isExpoGo()` 检测）+ 三处适配器前置跳过，dev build 下功能不受影响。
 - 待验证（需 development build / EAS）：通知权限与去重、深链、后台保活、锁屏推送。
 
+## 2.7 P2 连接体验（新）
+
+### 首启引导
+- 首次启动进入 3 步引导（这是什么 → 电脑装插件 → 扫码/自动发现）；「开始使用」后不再出现。
+
+### 自动发现（同一局域网）
+- mock-harness 绑定所有网卡：`node mock-harness/dist/cli.js --port 3080 --host 0.0.0.0`。
+- 连接页点「自动发现」→ App 取本机 IP、推断 /24 候选并发探活 `GET /api/host.describe` → 列出可用主机，点选即连。
+- 限制：Expo Go / Web 预览下 `expo-network` 不可用或拿不到 IP 时自动发现不可用（真机 Wi-Fi 可用）。
+
+### 扫码配对
+- 起带配对 token 的 mock-harness：
+  `node mock-harness/dist/cli.js --port 3080 --host 0.0.0.0 --pair-token demo-token`
+- 取配对载荷：`curl http://<电脑IP>:3080/api/pairing/qr` → 返回 `{ ok:true, result:{ url:"dshremote://pair?host=…&port=…&token=demo-token" } }`。
+- 用任意二维码生成器把该 URL 转成 QR；App 连接页「扫码配对」→ 对准扫码 → 自动保存 token、连接并进入 Sessions。
+- 深链等效：在手机上用浏览器/邮件打开 `dshremote://pair?…` 也会触发同一连接流程。
+- 限制：Web 预览不支持相机（扫码页会提示）；配对 token 一次性、15 分钟 TTL。
+
+### 最近主机与自动重连
+- 连接成功（或扫码）后写入最近主机（最多 5 条，SecureStore）；连接页点击即可一键重连。
+- 冷启动自动连接最近主机；失败静默回到离线态（连接页手动重试）。
+- 设置页（Sessions 右上「设置」）可查看当前目标主机与远端实例信息。
+
 ## 3. 已知限制（如实告知用户）
 
 - 锁屏推送依赖系统调度；厂商省电策略（小米/华为/OPPO）可能延迟或阻止后台任务。

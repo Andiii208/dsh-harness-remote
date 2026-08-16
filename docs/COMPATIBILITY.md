@@ -17,6 +17,13 @@
 - `harness-plugin` 提供真实宿主侧实现（token 签发/校验/过期/回环豁免），插件接缝待真机校准。
 - 协议层：`LanTransport` 在 `auth.token` 存在时自动携带（HTTP 头 + WS query）。
 
+## 发现与二维码配对（P2）
+
+- **自动发现**：`GET /api/host.describe` 作探活端点（只读、无凭据）；App 用本机 IP 推断 /24 候选并发探活。mDNS/Bonjour 为 dev build 增强（react-native-zeroconf），Expo Go 下用子网探测。
+- **配对二维码**：`harness-plugin` 的 `pairingUrl(host, port)` 签发一次性 token（15 分钟 TTL）并返回 `dshremote://pair?host&port&token` 深链；宿主将其渲染为 QR。
+- **mock-harness**：`GET /api/pairing/qr`（配置 `pairToken` 时启用）模拟宿主侧 QR 载荷；未配置返回 404 `NOT_CONFIGURED`。
+- **状态**：协议层与 App 已实现（probeHost / build+parsePairPayload / 扫码 / 深链 / 最近主机 / 自动重连 / 首启引导）；**真实 DSH 的 QR 渲染与插件接缝待真机校准**（属于 P3 剩余项），届时重录 fixtures 并更新本矩阵。
+
 ## fixtures 工作流
 
 1. **录制**：`tools/capture`（`dsh-capture record --host … --port 3080 --out ./fixtures --duration 30`）连真实 DSH，采集 unary 响应 + 双流 WS 帧。

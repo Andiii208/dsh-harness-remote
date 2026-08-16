@@ -75,3 +75,32 @@ online → (流结束/断线) → offline → backoff → …
 // 应答
 { "rpcId": "req-1", "result": { "approved": true } }
 ```
+
+## 8. 发现与二维码配对（P2）
+
+### 8.1 探活契约（自动发现）
+
+- `GET /api/host.describe` 同时作为局域网探活端点：无需携带凭据，只读实例信息。
+- `packages/protocol` 提供 `probeHost(host, port, opts?)`：超时（默认 1200ms）/非 2xx/信封无效一律返回 `null`，不抛错。
+- App 端基于本机 IP 推断 /24 候选并发探活（`apps/mobile/src/discovery/discover.ts`）；
+  mDNS/Bonjour（react-native-zeroconf）为 dev build 增强，接口不变。
+
+### 8.2 配对二维码契约
+
+- 配对深链格式（App 扫码 / 深链统一解析）：
+
+  ```text
+  dshremote://pair?host=<host>&port=<port>&token=<token>
+  ```
+
+- 解析/构造在 `packages/protocol/src/discovery.ts`：
+  `buildPairPayload({host, port, token}) -> url`、`parsePairPayload(url) -> PairPayload | null`。
+- `harness-plugin`：`plugin.pairingUrl(host, port)` 签发一次性 token（15 分钟 TTL）并返回配对深链；宿主把该 URL 渲染为 QR 展示在终端。
+- mock-harness：`GET /api/pairing/qr`（仅配置 `pairToken` 时启用）返回
+  `{ ok:true, result:{ url } }`；未配置 → 404 `NOT_CONFIGURED`。真实 DSH 接缝待校准（见 COMPATIBILITY.md）。
+
+### 8.3 客户端行为
+
+- 扫码/深链命中配对 URL：保存 token（SecureStore）→ 记入最近主机 → 一键连接。
+- 冷启动自动重连最近主机（离线且未主动断开时）。
+- 连接成功后写入最近主机列表（上限 5 条）。
