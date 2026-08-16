@@ -28,3 +28,4 @@ Thumbs.db
 
 # visual QA scratch
 .shots/
+dist-web/
