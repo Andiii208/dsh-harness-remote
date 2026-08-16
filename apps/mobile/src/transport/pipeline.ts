@@ -29,7 +29,8 @@ export interface ConnectionPipeline {
   store: SessionStore;
   classifier: NotificationClassifier;
   start(): void;
-  stop(): void;
+  /** 停止并等待 loop 退出（新连接前 await，避免新旧 WS 重叠）。 */
+  stop(): Promise<void>;
 }
 
 export function createConnectionPipeline(opts: ConnectionPipelineOptions): ConnectionPipeline {
@@ -60,7 +61,7 @@ export function createConnectionPipeline(opts: ConnectionPipelineOptions): Conne
       loop.start();
     },
     stop() {
-      loop.stop();
+      return loop.stop();
     },
   };
 }

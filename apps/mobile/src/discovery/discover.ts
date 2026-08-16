@@ -56,6 +56,7 @@ export async function discoverHosts(opts: DiscoverOptions): Promise<DiscoveredHo
       const info = await probeHost(c.host, c.port, {
         timeoutMs: opts.timeoutMs,
         fetchImpl: opts.fetchImpl,
+        signal: opts.signal,
       });
       if (info) {
         results.push({ host: c.host, port: c.port, name: info.name, version: info.version });

@@ -28,6 +28,21 @@ describe("probeHost", () => {
     };
     expect(await probeHost("h", 1, { fetchImpl: boom as unknown as typeof fetch })).toBeNull();
   });
+
+  it("aborts in-flight probe when the external signal fires", async () => {
+    const controller = new AbortController();
+    const signalAware = (async (_input: string | URL | Request, init?: { signal?: AbortSignal }) => {
+      await new Promise<void>((_resolve, reject) => {
+        const s = init?.signal;
+        if (!s) return reject(new Error("no signal"));
+        if (s.aborted) return reject(new Error("aborted"));
+        s.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      });
+    }) as unknown as typeof fetch;
+    const pending = probeHost("h", 1, { fetchImpl: signalAware, signal: controller.signal, timeoutMs: 5000 });
+    controller.abort();
+    expect(await pending).toBeNull();
+  });
 });
 
 describe("pair payload", () => {

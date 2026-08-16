@@ -45,6 +45,8 @@ export class ConnectionLoop {
   private running = false;
   private attempt = 0;
   private conn: Connection | null = null;
+  private stopPromise: Promise<void> | null = null;
+  private resolveStop: (() => void) | null = null;
   private readonly opts: Required<Pick<ConnectionLoopOptions, "baseBackoffMs" | "maxBackoffMs" | "jitter">> &
     ConnectionLoopOptions;
 
@@ -90,13 +92,27 @@ export class ConnectionLoop {
     void this.run();
   }
 
-  stop(): void {
+  /** 停止并等待 run() 真正退出（幂等；返回同一 Promise）。 */
+  stop(): Promise<void> {
     this.stopped = true;
     this.running = false;
     this.conn?.close();
     this.conn = null;
     this.out.end();
     this.setState("offline");
+    if (!this.stopPromise) {
+      this.stopPromise = new Promise<void>((resolve) => {
+        this.resolveStop = resolve;
+      });
+    }
+    return this.stopPromise;
+  }
+
+  private settleStop(): void {
+    const resolve = this.resolveStop;
+    this.resolveStop = null;
+    this.stopPromise = null;
+    resolve?.();
   }
 
   private setState(s: ConnectionState): void {
@@ -113,6 +129,7 @@ export class ConnectionLoop {
         const conn = await this.opts.transport.connect(this.opts.endpoint, this.opts.auth ?? {});
         if (this.stopped) {
           conn.close();
+          this.settleStop();
           return;
         }
         this.conn = conn;
@@ -137,6 +154,7 @@ export class ConnectionLoop {
 
       if (this.stopped) {
         this.running = false;
+        this.settleStop();
         return;
       }
 
@@ -146,6 +164,7 @@ export class ConnectionLoop {
       await sleep(delay);
     }
     this.running = false;
+    this.settleStop();
   }
 
   /** 500ms × 2ⁿ, capped at maxBackoffMs, with jitter. */

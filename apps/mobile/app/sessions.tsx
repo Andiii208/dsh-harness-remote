@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { FlashList } from "@shopify/flash-list";
@@ -31,6 +32,12 @@ export default function SessionsScreen() {
   const { sessions, pending, state } = useConnection();
   const router = useRouter();
   const entering = useEntering();
+  // 每分钟刷新相对时间显示（"刚刚/×分钟前"）。
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   return (
     <FlashList
@@ -58,6 +65,8 @@ export default function SessionsScreen() {
               onPress={() =>
                 pending[0] && router.push(`/approval/${encodeURIComponent(pending[0].rpcId)}`)
               }
+              accessibilityRole="button"
+              accessibilityLabel={`${pending.length} 个待处理请求`}
             >
               <View style={[styles.pendingRail, { backgroundColor: colors.warn }]} />
               <Text style={styles.pendingText}>
@@ -83,12 +92,15 @@ export default function SessionsScreen() {
           <Pressable
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             onPress={() => router.push(`/chat/${encodeURIComponent(s.id)}`)}
+            accessibilityRole="button"
+            accessibilityLabel={s.title ?? s.id}
           >
             <View style={styles.rowHeader}>
               <Text style={styles.rowTitle} numberOfLines={1}>
                 {s.title ?? s.id}
               </Text>
               <GoalPill status={s.goalStatus} />
+              <Text style={styles.chevron}>›</Text>
             </View>
             {s.lastMessage !== undefined && (
               <Text style={styles.rowPreview} numberOfLines={1}>
@@ -173,6 +185,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   goalPillDone: { backgroundColor: colors.success },
+  chevron: { color: colors.textDim, fontSize: font.body, fontFamily: font.mono },
   rowPreview: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
   rowMeta: { flexDirection: "row", alignItems: "center", gap: space.x3 },
   metaText: { color: colors.textDim, fontSize: font.eyebrow, fontFamily: font.mono, flexShrink: 1 },

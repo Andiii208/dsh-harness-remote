@@ -19,6 +19,8 @@ export interface PairPayload {
 export interface ProbeOptions {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  /** 外部取消信号：与内部超时合并，取消时立即中断在途请求。 */
+  signal?: AbortSignal;
 }
 
 const DEFAULT_PROBE_TIMEOUT = 1200;
@@ -32,6 +34,8 @@ export async function probeHost(host: string, port: number, opts: ProbeOptions =
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const onExternalAbort = () => controller.abort();
+  opts.signal?.addEventListener("abort", onExternalAbort, { once: true });
   try {
     const res = await fetchImpl(`http://${host}:${port}/api/host.describe`, {
       method: "GET",
@@ -47,6 +51,7 @@ export async function probeHost(host: string, port: number, opts: ProbeOptions =
     return null;
   } finally {
     clearTimeout(timer);
+    opts.signal?.removeEventListener("abort", onExternalAbort);
   }
 }
 

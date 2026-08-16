@@ -102,7 +102,9 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const connectRef = useRef<(host: string, port: number, token?: string) => Promise<void>>(async () => {});
 
   const connect = useCallback(async (host: string, port: number, token?: string) => {
-    pipelineRef.current?.stop();
+    // 先等旧 pipeline 完全退出再建新连接，避免 WS/定时器重叠（评审 #14）。
+    await pipelineRef.current?.stop();
+    pipelineRef.current = null;
     setNotifications([]);
     lastEndpointRef.current = { host, port };
     void hostStore.add(host, port, undefined, token);
@@ -140,9 +142,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   connectRef.current = connect;
 
   const disconnect = useCallback(() => {
-    pipelineRef.current?.stop();
-    pipelineRef.current?.store.clear();
-    pipelineRef.current = null;
+    void pipelineRef.current?.stop().then(() => {
+      pipelineRef.current?.store.clear();
+      pipelineRef.current = null;
+    });
     lastEndpointRef.current = null;
     setStateBoth("offline");
     void autoReconnectStore.setEnabled(false); // 用户主动断开：关掉自动重连

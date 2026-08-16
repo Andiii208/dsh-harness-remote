@@ -48,6 +48,7 @@ export default function ConnectScreen() {
   const [found, setFound] = useState<DiscoveredHost[]>([]);
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState("");
+  const [connectError, setConnectError] = useState("");
   const justConnected = useRef(false);
   const discoverAbort = useRef<AbortController | null>(null);
   const heroEntering = useEntering(10, 260);
@@ -92,15 +93,20 @@ export default function ConnectScreen() {
   useEffect(() => {
     if (online && justConnected.current) {
       justConnected.current = false;
+      setConnectError("");
       router.push("/sessions");
     }
-    // 连接尝试落回离线（失败）：清掉标记，避免残留导致下次误跳转（评审 #15）。
-    if (state === "offline") justConnected.current = false;
+    // 连接尝试落回离线（失败）：提示并清掉标记，避免残留导致下次误跳转。
+    if (state === "offline") {
+      if (justConnected.current) setConnectError("连接失败：请检查主机地址与网络");
+      justConnected.current = false;
+    }
   }, [online, state, router]);
 
   const onConnect = async () => {
     if (!host.trim() || busy) return;
     setBusy(true);
+    setConnectError("");
     justConnected.current = true;
     void haptic("light");
     try {
@@ -116,6 +122,7 @@ export default function ConnectScreen() {
     setHost(h);
     setPort(String(p));
     if (t) setToken(t);
+    setConnectError("");
     // 等待连接真正在线后再跳转（justConnected + online effect）
     justConnected.current = true;
     await connect(h, p, t);
@@ -188,7 +195,7 @@ export default function ConnectScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <SectionLabel>{found.length > 0 ? "Discovered hosts" : "Recent hosts"}</SectionLabel>
-            <Pressable onPress={() => router.push("/scan" as never)} hitSlop={8}>
+            <Pressable onPress={() => router.push("/scan" as never)} hitSlop={8} accessibilityRole="button" accessibilityLabel="扫码配对">
               <Text style={styles.scanLink}>扫码配对 →</Text>
             </Pressable>
           </View>
@@ -205,6 +212,8 @@ export default function ConnectScreen() {
                 key={h.key}
                 style={({ pressed }) => [styles.hostRow, pressed && styles.hostRowPressed]}
                 onPress={() => void connectTo(h.host, h.port, h.token)}
+                accessibilityRole="button"
+                accessibilityLabel={`连接 ${h.host}:${h.port}`}
               >
                 <View style={styles.hostRowText}>
                   <Text style={styles.hostRowTitle} numberOfLines={1}>
@@ -277,9 +286,10 @@ export default function ConnectScreen() {
             full
           />
         )}
+        {connectError.length > 0 && <Text style={styles.connectError}>{connectError}</Text>}
 
         {online && (
-          <Pressable style={styles.linkRow} onPress={() => router.push("/sessions")}>
+          <Pressable style={styles.linkRow} onPress={() => router.push("/sessions")} accessibilityRole="link" accessibilityLabel="进入 Sessions">
             <Text style={styles.link}>进入 Sessions →</Text>
           </Pressable>
         )}
@@ -346,6 +356,7 @@ const styles = StyleSheet.create({
   },
   clearToken: { alignItems: "flex-start" },
   clearTokenText: { color: colors.danger, fontSize: font.caption },
+  connectError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
   linkRow: { alignItems: "center", paddingVertical: space.x2 },
   link: { color: colors.accent, fontSize: font.body },
   warning: {
