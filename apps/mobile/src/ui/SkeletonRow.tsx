@@ -1,11 +1,20 @@
-import { useEffect, useRef } from "react";
-import { Animated, Easing, StyleSheet, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from "react-native";
 import { colors, radius, space } from "../theme";
 
-/** 列表首载骨架：2 行条 + 140ms 透明度脉动（减弱动态时静止）。 */
+/** 列表首载骨架：2 行条 + 140ms 透明度脉动；尊重系统「减弱动态」时静止。 */
 export function SkeletonRow() {
-  const pulse = useRef(new Animated.Value(0.45)).current;
+  const pulse = useRef(new Animated.Value(0.6)).current;
+  const [reduced, setReduced] = useState(false);
   useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduced);
+  }, []);
+  useEffect(() => {
+    if (reduced) {
+      pulse.setValue(0.6);
+      return;
+    }
+    pulse.setValue(0.45);
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 0.85, duration: 140, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
@@ -14,7 +23,7 @@ export function SkeletonRow() {
     );
     loop.start();
     return () => loop.stop();
-  }, [pulse]);
+  }, [pulse, reduced]);
   return (
     <View style={styles.row}>
       <Animated.View style={[styles.bar, { width: "55%", opacity: pulse }]} />

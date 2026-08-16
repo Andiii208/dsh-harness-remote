@@ -19,7 +19,11 @@ function splitCode(content: string): Array<{ code: boolean; text: string }> {
   const out: Array<{ code: boolean; text: string }> = [];
   parts.forEach((part, i) => {
     if (part.length === 0) return;
-    out.push({ code: i % 2 === 1, text: part.replace(/^[a-zA-Z0-9_+#-]*\n/, "") });
+    const code = i % 2 === 1;
+    // 仅代码段剥离首行语言标签（python\n 之类）；文本段原样保留（评审 #3）。
+    const text = code ? part.replace(/^[a-zA-Z0-9_+#-]*\n/, "") : part;
+    if (text.length === 0) return; // 空代码块/空段跳过
+    out.push({ code, text });
   });
   return out;
 }
@@ -82,10 +86,11 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
           ) : (
             <Text key={i} style={[styles.text, isTool && styles.toolText]} selectable>
               {seg.text}
-              {i === segments.length - 1 && m.interrupted ? " ⏹" : ""}
-              {i === segments.length - 1 && live && <StreamingCursor />}
             </Text>
           ),
+        )}
+        {(live || m.interrupted) && (
+          <Text style={styles.tail}>{m.interrupted ? " ⏹" : ""}{live ? <StreamingCursor /> : null}</Text>
         )}
         {copied && <Text style={styles.copied}>已复制</Text>}
       </View>
@@ -123,4 +128,5 @@ const styles = StyleSheet.create({
   },
   codeText: { color: "#D7E3FF", fontSize: font.transcript, lineHeight: 20, fontFamily: font.mono },
   copied: { color: colors.accent, fontSize: font.eyebrow, fontFamily: font.mono, alignSelf: "flex-end" },
+  tail: { color: colors.text, fontSize: font.transcript, fontFamily: font.mono },
 });
