@@ -136,7 +136,9 @@ export default function ConnectScreen() {
 
         <View style={styles.warning}>
           <Text style={styles.warningText}>
-            ⚠ LAN 直连，无鉴权——请仅在可信网络使用
+            {token.trim()
+              ? "已启用配对 token——仍请仅在可信网络使用"
+              : "LAN 直连，未配对时无鉴权——请仅在可信网络使用"}
           </Text>
         </View>
 

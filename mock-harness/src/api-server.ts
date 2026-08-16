@@ -55,7 +55,32 @@ export interface ApiRequest {
   [k: string]: unknown;
 }
 
-export function createApiHandler(fixtures: FixtureSet[], state: ApiServerState) {
+export interface ApiServerOptions {
+  /** 配置后启用配对围栏：所有 /api POST 必须携带匹配的配对 token。 */
+  pairToken?: string;
+}
+
+/** 从请求头提取配对 token（Authorization: Bearer 或 x-dsh-pair-token）。 */
+export function extractPairToken(headers: Record<string, string | string[] | undefined>): string | undefined {
+  let raw: string | undefined;
+  for (const [key, value] of Object.entries(headers)) {
+    const lk = key.toLowerCase();
+    if (lk === "authorization" || lk === "x-dsh-pair-token") {
+      raw = Array.isArray(value) ? value[0] : value;
+      break;
+    }
+  }
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.toLowerCase().startsWith("bearer ")) return trimmed.slice("bearer ".length).trim();
+  return trimmed;
+}
+
+export function createApiHandler(
+  fixtures: FixtureSet[],
+  state: ApiServerState,
+  opts: ApiServerOptions = {},
+) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname;
@@ -74,6 +99,19 @@ export function createApiHandler(fixtures: FixtureSet[], state: ApiServerState) 
 
     const body = (await readBody(req)) as ApiRequest;
     const rpcId = typeof body.rpcId === "string" ? body.rpcId : "unknown";
+
+    // 配对围栏（M2 模拟）：配置了 pairToken 时，非回环语义下所有调用必须带 token
+    if (opts.pairToken) {
+      const provided = extractPairToken(req.headers);
+      if (provided !== opts.pairToken) {
+        sendJson(res, {
+          rpcId,
+          ok: false,
+          error: { code: "UNAUTHORIZED", message: "invalid or missing pairing token" },
+        });
+        return;
+      }
+    }
 
     // /api/respond — client-response to a server-request.
     if (path === "/api/respond") {

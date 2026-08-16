@@ -42,11 +42,17 @@ function playStream(
   })();
 }
 
+export interface WsServerOptions {
+  /** 配置后启用配对围栏：WS 握手必须携带 ?pairToken= 匹配值。 */
+  pairToken?: string;
+}
+
 export function attachWs(
   server: Server,
   fixtures: FixtureSet[],
   state: ApiServerState,
   wsClients: WebSocket[],
+  opts: WsServerOptions = {},
 ): void {
   const wss = new WebSocketServer({ noServer: true });
 
@@ -54,6 +60,10 @@ export function attachWs(
     const url = new URL(req.url ?? "/", "http://localhost");
     if (url.pathname !== "/api/events.mux" && url.pathname !== "/api/events.host") {
       socket.destroy();
+      return;
+    }
+    if (opts.pairToken && url.searchParams.get("pairToken") !== opts.pairToken) {
+      socket.destroy(); // 配对失败：不升级
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {

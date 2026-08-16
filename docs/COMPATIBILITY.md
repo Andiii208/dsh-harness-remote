@@ -8,8 +8,14 @@
 
 | DSH 版本 | 适配状态 | fixtures 回归 | 备注 |
 |---|---|---|---|
-| `0.1.0-rc.5` | ✅ 基线 | ✅（mock-harness 内置 4 组样例 + capture 录制路径） | 当前锁定 |
+| `0.1.0-rc.5` | ✅ 基线 | ✅（mock-harness 内置 5 组样例 + capture 录制路径） | 当前锁定 |
 | 后续版本 | ⏳ 待录制 | — | 见下方流程 |
+
+## 配对围栏（M2）
+
+- `mock-harness` 支持 `pairToken` 配置模拟配对围栏：HTTP 要求 `Authorization: Bearer <token>`（或 `X-DSH-Pair-Token`），WS 要求 `?pairToken=` query；未匹配 → `ok:false UNAUTHORIZED` / 拒绝升级。
+- `harness-plugin` 提供真实宿主侧实现（token 签发/校验/过期/回环豁免），插件接缝待真机校准。
+- 协议层：`LanTransport` 在 `auth.token` 存在时自动携带（HTTP 头 + WS query）。
 
 ## fixtures 工作流
 
