@@ -22,10 +22,13 @@ export default function ApprovalScreen() {
     if (!id || busy) return;
     setBusy(true);
     const approved = (result as { approved?: boolean })?.approved === true;
-    void haptic(approved ? "success" : "warning");
     try {
       await respond(id, result);
+      void haptic(approved ? "success" : "warning"); // 成功后才给触觉反馈（评审 #5）
       router.back();
+    } catch (err) {
+      console.warn("[approval] respond failed", err);
+      void haptic("error");
     } finally {
       setBusy(false);
     }

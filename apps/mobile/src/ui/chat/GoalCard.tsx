@@ -16,6 +16,7 @@ export function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
   const { goals, sessions, setGoalStatus } = useConnection();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const entering = useEntering(8, 220);
   const current = sessions.find((s) => s.id === summary?.id) ?? summary;
   if (!current || (current.goalStatus === undefined && !current.todos && current.plan === undefined)) {
@@ -27,14 +28,18 @@ export function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
   const toggle = async (next: "paused" | "active") => {
     if (!summary || busy) return;
     setBusy(true);
+    setError("");
     try {
       const ok = next === "paused" ? await goals.pause(summary.id) : await goals.resume(summary.id);
       if (ok) {
         setGoalStatus(summary.id, next);
         setOpen(true);
+      } else {
+        setError("操作未被主机确认——请检查连接后重试");
       }
     } catch (err) {
       console.warn("[goal] toggle failed", err);
+      setError("操作失败：连接异常");
     } finally {
       setBusy(false);
     }
@@ -54,6 +59,7 @@ export function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
       </Pressable>
       {open && (
         <View style={styles.body}>
+          {error.length > 0 && <Text style={styles.error}>{error}</Text>}
           {current.goalObjective !== undefined && (
             <Text style={styles.objective}>{current.goalObjective}</Text>
           )}
@@ -117,4 +123,5 @@ const styles = StyleSheet.create({
   bar: { height: 3, borderRadius: 2, backgroundColor: colors.surface2, overflow: "hidden" },
   barFill: { height: 3, backgroundColor: colors.accent, borderRadius: 2 },
   actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.x2, marginTop: space.x2 },
+  error: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
 });

@@ -94,7 +94,9 @@ export default function ConnectScreen() {
       justConnected.current = false;
       router.push("/sessions");
     }
-  }, [online, router]);
+    // 连接尝试落回离线（失败）：清掉标记，避免残留导致下次误跳转（评审 #15）。
+    if (state === "offline") justConnected.current = false;
+  }, [online, state, router]);
 
   const onConnect = async () => {
     if (!host.trim() || busy) return;
@@ -266,7 +268,7 @@ export default function ConnectScreen() {
         </View>
 
         {online ? (
-          <Button tone="danger" label="断开连接" onPress={() => { void haptic("warning"); disconnect(); }} full />
+          <Button tone="danger" label="断开连接" onPress={() => { justConnected.current = false; void haptic("warning"); disconnect(); }} full />
         ) : (
           <Button
             label={busy ? "连接中…" : "连接"}

@@ -65,6 +65,7 @@
 - Ghost：底 `surface2`、描边 `border`、文字 14/600 `text`。
 - Danger-ghost：同 ghost，文字 `danger`。
 - 禁用：opacity 0.4，不换色。
+- 按压反馈：140ms 颜色过渡 + scale 0.98（140ms，克制）。
 - 全宽按钮行距 12；两个按钮并排时 1:1，主操作在右。
 
 ### 3.5 输入
