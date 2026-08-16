@@ -22,7 +22,9 @@ export const colors = {
 } as const;
 
 export const font = {
-  mono: "ui-monospace, 'SF Mono', Menlo, monospace",
+  /** 等宽数据字体（JetBrains Mono，App 内加载；未加载完成时回退系统等宽）。 */
+  mono: "JetBrainsMono_400Regular",
+  monoBold: "JetBrainsMono_700Bold",
   display: 26,
   title: 20,
   section: 15,

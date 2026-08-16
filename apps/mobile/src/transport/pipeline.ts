@@ -56,7 +56,7 @@ export function createConnectionPipeline(opts: ConnectionPipelineOptions): Conne
     store,
     classifier,
     start() {
-      void pump();
+      void pump().catch((err) => opts.onError?.(err));
       loop.start();
     },
     stop() {

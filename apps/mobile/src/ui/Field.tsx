@@ -54,5 +54,6 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
     borderWidth: 1,
     backgroundColor: colors.surface2,
+    boxShadow: `0 0 0 3px ${colors.accentSoft}`,
   },
 });

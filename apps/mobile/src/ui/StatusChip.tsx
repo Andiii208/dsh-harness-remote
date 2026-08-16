@@ -33,5 +33,5 @@ const styles = StyleSheet.create({
     paddingVertical: space.x1 + 2,
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  label: { color: colors.textMuted, fontFamily: font.mono, fontSize: font.eyebrow, fontWeight: "700" },
+  label: { color: colors.textMuted, fontFamily: font.monoBold, fontSize: font.eyebrow, fontWeight: "700" },
 });

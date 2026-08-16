@@ -13,11 +13,13 @@ export function registerPairDeepLink(handler: PairDeepLinkHandler): () => void {
     const p = parsePairPayload(url);
     if (p) handler(p);
   });
-  void Linking.getInitialURL().then((url) => {
-    if (url) {
-      const p = parsePairPayload(url);
-      if (p) handler(p);
-    }
-  });
+  void Linking.getInitialURL()
+    .then((url) => {
+      if (url) {
+        const p = parsePairPayload(url);
+        if (p) handler(p);
+      }
+    })
+    .catch(() => {});
   return () => sub.remove();
 }

@@ -1,10 +1,13 @@
 import { useRouter } from "expo-router";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
+import { FlashList } from "@shopify/flash-list";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
 import { colors, font, radius, space, stroke } from "../src/theme";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { StatusChip } from "../src/ui/StatusChip";
 import { EmptyState } from "../src/ui/EmptyState";
+import { useEntering } from "../src/ui/anim";
 
 function GoalPill({ status }: { status?: string }) {
   if (!status) return null;
@@ -19,9 +22,10 @@ function GoalPill({ status }: { status?: string }) {
 export default function SessionsScreen() {
   const { sessions, pending, state } = useConnection();
   const router = useRouter();
+  const entering = useEntering();
 
   return (
-    <FlatList
+    <FlashList
       style={styles.screen}
       contentContainerStyle={styles.content}
       data={sessions}
@@ -59,43 +63,45 @@ export default function SessionsScreen() {
         <EmptyState eyebrow="NO SESSIONS" text="等待注册表 / 投影帧推送（可先连接 mock-harness）" />
       }
       renderItem={({ item: s }) => (
-        <Pressable
-          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-          onPress={() => router.push(`/chat/${encodeURIComponent(s.id)}`)}
-        >
-          <View style={styles.rowHeader}>
-            <Text style={styles.rowTitle} numberOfLines={1}>
-              {s.title ?? s.id}
-            </Text>
-            <GoalPill status={s.goalStatus} />
-          </View>
-          {s.lastMessage !== undefined && (
-            <Text style={styles.rowPreview} numberOfLines={1}>
-              {s.lastMessage}
-            </Text>
-          )}
-          <View style={styles.rowMeta}>
-            {s.workspace !== undefined && (
-              <Text style={styles.metaText} numberOfLines={1}>
-                {s.workspace}
+        <Animated.View entering={entering}>
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => router.push(`/chat/${encodeURIComponent(s.id)}`)}
+          >
+            <View style={styles.rowHeader}>
+              <Text style={styles.rowTitle} numberOfLines={1}>
+                {s.title ?? s.id}
+              </Text>
+              <GoalPill status={s.goalStatus} />
+            </View>
+            {s.lastMessage !== undefined && (
+              <Text style={styles.rowPreview} numberOfLines={1}>
+                {s.lastMessage}
               </Text>
             )}
-            {s.tokenUsageTotal !== undefined && (
-              <Text style={styles.metaText}>{s.tokenUsageTotal.toLocaleString()} tok</Text>
-            )}
-            {s.contextPercent !== undefined && (
-              <View style={styles.miniBar}>
-                <View
-                  style={[
-                    styles.miniBarFill,
-                    { width: `${Math.min(100, s.contextPercent)}%` },
-                    s.contextPercent >= 80 && { backgroundColor: colors.warn },
-                  ]}
-                />
-              </View>
-            )}
-          </View>
-        </Pressable>
+            <View style={styles.rowMeta}>
+              {s.workspace !== undefined && (
+                <Text style={styles.metaText} numberOfLines={1}>
+                  {s.workspace}
+                </Text>
+              )}
+              {s.tokenUsageTotal !== undefined && (
+                <Text style={styles.metaText}>{s.tokenUsageTotal.toLocaleString()} tok</Text>
+              )}
+              {s.contextPercent !== undefined && (
+                <View style={styles.miniBar}>
+                  <View
+                    style={[
+                      styles.miniBarFill,
+                      { width: `${Math.min(100, s.contextPercent)}%` },
+                      s.contextPercent >= 80 && { backgroundColor: colors.warn },
+                    ]}
+                  />
+                </View>
+              )}
+            </View>
+          </Pressable>
+        </Animated.View>
       )}
     />
   );
@@ -107,9 +113,9 @@ const styles = StyleSheet.create({
   header: { gap: space.x3, marginBottom: space.x2 },
   headerRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: space.x3 },
   headerText: { gap: space.x1 },
+  title: { color: colors.text, fontSize: font.title, fontWeight: "600", letterSpacing: -0.2 },
   headerActions: { flexDirection: "row", alignItems: "center", gap: space.x3 },
   settingsLink: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono },
-  title: { color: colors.text, fontSize: font.title, fontWeight: "600", letterSpacing: -0.2 },
   pendingBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -123,7 +129,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   pendingRail: { width: 3, alignSelf: "stretch", borderRadius: 2 },
-  pendingText: { color: "#FCD34D", fontSize: font.body - 1, fontWeight: "600", flex: 1 },
+  pendingText: { color: colors.warn, fontSize: font.body - 1, fontWeight: "600", flex: 1 },
   row: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,
@@ -138,7 +144,7 @@ const styles = StyleSheet.create({
   goalPill: {
     color: "#0A0C10",
     fontSize: font.eyebrow - 1,
-    fontFamily: font.mono,
+    fontFamily: font.monoBold,
     fontWeight: "700",
     backgroundColor: colors.warn,
     borderRadius: radius.pill,

@@ -53,4 +53,15 @@ describe("HostStore", () => {
     await api.setItemAsync("dsh-recent-hosts", "{oops");
     expect(await new HostStore(api).list()).toEqual([]);
   });
+
+  it("returns the old list when persistence fails (memory/disk consistency)", async () => {
+    const api = memStore();
+    const store = new HostStore(api);
+    await store.add("192.168.1.5", 3080);
+    api.setItemAsync = async () => {
+      throw new Error("disk full");
+    };
+    const list = await store.add("192.168.1.6", 3080);
+    expect(list.map((h) => h.host)).toEqual(["192.168.1.5"]);
+  });
 });

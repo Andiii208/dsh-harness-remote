@@ -1,7 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
-  FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,12 +9,15 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Animated from "react-native-reanimated";
+import { FlashList } from "@shopify/flash-list";
 import { useConnection, STATE_LABEL } from "../../src/transport/ConnectionProvider";
 import type { SessionSummary, TranscriptMessage } from "../../src/data/SessionStore";
 import { colors, font, radius, space, stroke } from "../../src/theme";
 import { SectionLabel } from "../../src/ui/SectionLabel";
 import { StatusChip } from "../../src/ui/StatusChip";
 import { Button } from "../../src/ui/Button";
+import { useEntering } from "../../src/ui/anim";
 
 function Bubble({ m }: { m: TranscriptMessage }) {
   if (m.gap) {
@@ -56,6 +58,8 @@ function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
   const doneCount = current.todos?.filter((t) => t.status === "completed").length ?? 0;
   const status = current.goalStatus ?? "—";
 
+  const entering = useEntering(8, 220);
+
   const toggle = async (next: "paused" | "active") => {
     if (!summary || busy) return;
     setBusy(true);
@@ -73,7 +77,7 @@ function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
   };
 
   return (
-    <View style={styles.goalCard}>
+    <Animated.View entering={entering} style={styles.goalCard}>
       <Pressable style={styles.goalHeader} onPress={() => setOpen((v) => !v)}>
         <SectionLabel tone={status === "paused" ? "muted" : "accent"}>
           {`Goal · ${status}`}
@@ -120,7 +124,7 @@ function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
           </View>
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -132,6 +136,7 @@ export default function ChatScreen() {
   const messages = id ? transcript(id) : [];
   const summary = id ? sessions.find((s) => s.id === id) : undefined;
   const online = state === "online";
+  const entering = useEntering(6, 200);
 
   const send = async () => {
     const text = draft.trim();
@@ -150,7 +155,7 @@ export default function ChatScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={90}
     >
-      <FlatList
+      <FlashList
         style={styles.list}
         contentContainerStyle={styles.listContent}
         data={messages}
@@ -169,7 +174,11 @@ export default function ChatScreen() {
             <GoalCard summary={summary} />
           </View>
         }
-        renderItem={({ item }) => <Bubble m={item} />}
+        renderItem={({ item }) => (
+          <Animated.View entering={entering}>
+            <Bubble m={item} />
+          </Animated.View>
+        )}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <SectionLabel>{online ? "WAITING FOR STREAM" : "OFFLINE"}</SectionLabel>

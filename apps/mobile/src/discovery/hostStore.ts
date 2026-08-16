@@ -50,6 +50,7 @@ export class HostStore {
       await this.api.setItemAsync(HOSTS_KEY, JSON.stringify(capped));
     } catch (err) {
       console.warn("[hosts] write failed", err);
+      return list; // 持久化失败：返回旧列表，避免内存/磁盘不一致
     }
     return capped;
   }

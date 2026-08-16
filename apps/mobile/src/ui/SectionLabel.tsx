@@ -21,7 +21,7 @@ export function SectionLabel({
 const styles = StyleSheet.create({
   label: {
     color: colors.textMuted,
-    fontFamily: font.mono,
+    fontFamily: font.monoBold,
     fontSize: font.eyebrow,
     fontWeight: "700",
     letterSpacing: tracking.eyebrow,

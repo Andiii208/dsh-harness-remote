@@ -15,6 +15,7 @@ web-build/
 *.log
 .superpowers/
 .agent-teams/
+.playwright-cli/
 
 # editors / OS
 .vscode/

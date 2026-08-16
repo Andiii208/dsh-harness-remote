@@ -59,7 +59,8 @@ export async function discoverHosts(opts: DiscoverOptions): Promise<DiscoveredHo
       }
     }
   }
-  await Promise.all(Array.from({ length: Math.min(concurrency, candidates.length || 1) }, () => worker()));
+  const workers = Math.min(concurrency, candidates.length);
+  await Promise.all(Array.from({ length: workers }, () => worker()));
   results.sort((a, b) => (a.name ?? a.host).localeCompare(b.name ?? b.host));
   return results;
 }

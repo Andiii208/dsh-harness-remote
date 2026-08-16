@@ -10,7 +10,9 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated from "react-native-reanimated";
 import * as Network from "expo-network";
+import { useEntering } from "../src/ui/anim";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
 import { tokenStore } from "../src/data/secureStoreAdapter";
 import { hostStore } from "../src/discovery/hostStoreAdapter";
@@ -45,6 +47,7 @@ export default function ConnectScreen() {
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState("");
   const justConnected = useRef(false);
+  const heroEntering = useEntering(10, 260);
 
   // 首启引导 + 最近主机
   useEffect(() => {
@@ -69,9 +72,9 @@ export default function ConnectScreen() {
       setHost(p.host);
       setPort(String(p.port));
       if (p.token) setToken(p.token);
+      // 等待连接真正在线后再跳转（justConnected + online effect）
       justConnected.current = true;
       void connect(p.host, p.port, p.token);
-      router.replace("/sessions");
     });
   }, [connect, router]);
 
@@ -107,9 +110,9 @@ export default function ConnectScreen() {
     setHost(h);
     setPort(String(p));
     if (t) setToken(t);
+    // 等待连接真正在线后再跳转（justConnected + online effect）
     justConnected.current = true;
     await connect(h, p, t);
-    router.push("/sessions");
   };
 
   const onDiscover = async () => {
@@ -151,13 +154,13 @@ export default function ConnectScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.hero}>
+        <Animated.View entering={heroEntering} style={styles.hero}>
           <WhaleMark size={44} />
           <View style={styles.heroText}>
             <Text style={styles.display}>harness remote</Text>
             <SectionLabel>DeepSeek Harness · LAN remote</SectionLabel>
           </View>
-        </View>
+        </Animated.View>
 
         <View style={styles.statusRow}>
           <StatusChip tone={STATE_TONE[state] ?? "neutral"} label={STATE_LABEL[state] ?? state} />

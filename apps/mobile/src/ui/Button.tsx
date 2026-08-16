@@ -25,7 +25,7 @@ export function Button({ label, onPress, tone = "primary", disabled, full, style
       disabled={disabled}
       accessibilityRole="button"
     >
-      <Text style={[styles.text, tone !== "primary" && styles.textGhost]}>{label}</Text>
+      <Text style={[styles.text, tone !== "primary" && styles.textGhost, tone === "danger" && styles.textDanger]}>{label}</Text>
     </Pressable>
   );
 }
@@ -55,4 +55,5 @@ const styles = StyleSheet.create({
   pressedGhost: { backgroundColor: colors.surface3 },
   text: { color: "#FFFFFF", fontSize: font.body + 1, fontWeight: "600" },
   textGhost: { color: colors.text, fontWeight: "600" },
+  textDanger: { color: colors.danger },
 });
