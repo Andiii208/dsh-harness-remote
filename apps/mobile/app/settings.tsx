@@ -1,5 +1,7 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
+import { autoReconnectStore } from "../src/discovery/autoReconnectStoreAdapter";
 import { Button } from "../src/ui/Button";
 import { colors, font, radius, space, stroke } from "../src/theme";
 import { SectionLabel } from "../src/ui/SectionLabel";
@@ -27,6 +29,14 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
 
 export default function SettingsScreen() {
   const { state, describe, lastEndpoint, notifications, disconnect } = useConnection();
+  const [autoReconnect, setAutoReconnect] = useState(true);
+  useEffect(() => {
+    void autoReconnectStore.enabled().then(setAutoReconnect);
+  }, []);
+  const toggleAutoReconnect = async (v: boolean) => {
+    setAutoReconnect(v);
+    await autoReconnectStore.setEnabled(v);
+  };
   const describeName =
     describe && typeof describe === "object"
       ? `${(describe as { name?: string }).name ?? ""} ${(describe as { version?: string }).version ?? ""}`.trim()
@@ -44,6 +54,15 @@ export default function SettingsScreen() {
         </View>
         <Row label="目标主机" value={lastEndpoint ? `${lastEndpoint.host}:${lastEndpoint.port}` : "未连接"} mono />
         <Row label="远端实例" value={describeName} mono />
+        <View style={styles.statusRow}>
+          <Text style={styles.rowLabel}>自动重连</Text>
+          <Switch
+            value={autoReconnect}
+            onValueChange={(v) => void toggleAutoReconnect(v)}
+            trackColor={{ false: colors.surface3, true: colors.accent }}
+            thumbColor={colors.text}
+          />
+        </View>
         {state === "online" && (
           <View style={styles.disconnectRow}>
             <Button tone="danger" label="断开连接" onPress={disconnect} full />

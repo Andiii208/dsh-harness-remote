@@ -216,6 +216,9 @@ export default function ConnectScreen() {
               </Pressable>
             ))}
             {discoverError.length > 0 && <Text style={styles.discoverError}>{discoverError}</Text>}
+            {found.length > 0 && (
+              <Text style={styles.discoverHint}>发现的实例首次连接可能需要配对 token——请用「扫码配对」获取</Text>
+            )}
           </View>
           <View style={styles.discoverRow}>
             <Button tone="ghost" label={discovering ? "扫描中…" : "自动发现"} onPress={() => void onDiscover()} disabled={discovering} style={styles.flex} />
@@ -328,6 +331,7 @@ const styles = StyleSheet.create({
   hostRowMeta: { color: colors.textDim, fontSize: font.eyebrow, fontFamily: font.mono },
   hostRowArrow: { color: colors.textDim, fontSize: font.body, fontFamily: font.mono },
   discoverError: { color: colors.warn, fontSize: font.caption, padding: space.x3 },
+  discoverHint: { color: colors.textDim, fontSize: font.caption, paddingHorizontal: space.x3, paddingBottom: space.x3, lineHeight: 18 },
   discoverRow: { flexDirection: "row", gap: space.x3 },
   flex: { flex: 1 },
   card: {

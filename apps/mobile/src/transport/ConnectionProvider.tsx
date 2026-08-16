@@ -20,6 +20,7 @@ import {
 } from "./pipeline";
 import { notificationService } from "../notify/expoAdapter";
 import { hostStore } from "../discovery/hostStoreAdapter";
+import { autoReconnectStore } from "../discovery/autoReconnectStoreAdapter";
 import { tokenStore } from "../data/secureStoreAdapter";
 import { KeepaliveScheduler } from "../notify/keepalive";
 import { backgroundTaskApi, KEEPALIVE_TASK } from "../notify/keepaliveAdapter";
@@ -68,8 +69,8 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [recent, token] = await Promise.all([hostStore.latest(), tokenStore.get()]);
-      if (cancelled || !recent || stateRef.current !== "offline") return;
+      const [recent, token, autoReconnect] = await Promise.all([hostStore.latest(), tokenStore.get(), autoReconnectStore.enabled()]);
+      if (cancelled || !recent || !autoReconnect || stateRef.current !== "offline") return;
       // 优先使用该主机自己的配对 token，回退全局 token（评审 #10）。
       await connectRef.current(recent.host, recent.port, recent.token ?? token ?? undefined);
     })();
@@ -105,6 +106,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     setNotifications([]);
     lastEndpointRef.current = { host, port };
     void hostStore.add(host, port, undefined, token);
+    void autoReconnectStore.setEnabled(true); // 手动连接即恢复自动重连
 
     const pipeline = createConnectionPipeline({
       endpoint: { host, port },
@@ -143,6 +145,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     pipelineRef.current = null;
     lastEndpointRef.current = null;
     setStateBoth("offline");
+    void autoReconnectStore.setEnabled(false); // 用户主动断开：关掉自动重连
   }, [setStateBoth]);
 
   const sendMessage = useCallback(async (sessionId: string, text: string) => {
