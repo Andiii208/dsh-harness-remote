@@ -19,6 +19,8 @@ import {
   type ConnectionPipeline,
 } from "./pipeline";
 import { notificationService } from "../notify/expoAdapter";
+import { KeepaliveScheduler } from "../notify/keepalive";
+import { backgroundTaskApi, KEEPALIVE_TASK } from "../notify/keepaliveAdapter";
 import type { PendingRequest, SessionSummary, TranscriptMessage } from "../data/SessionStore";
 import type { NotificationEvent } from "../notify/classifier";
 
@@ -39,28 +41,49 @@ const ConnectionContext = createContext<ConnectionApi | null>(null);
 
 export function ConnectionProvider({ children }: { children: ReactNode }) {
   const pipelineRef = useRef<ConnectionPipeline | null>(null);
+  const keepaliveRef = useRef<KeepaliveScheduler | null>(null);
+  const stateRef = useRef<ConnectionState>("offline");
+  const lastEndpointRef = useRef<{ host: string; port: number } | null>(null);
   const [state, setState] = useState<ConnectionState>("offline");
   const [describe, setDescribe] = useState<unknown>(null);
   const [version, setVersion] = useState(0);
   const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
 
+  const setStateBoth = useCallback((s: ConnectionState) => {
+    stateRef.current = s;
+    setState(s);
+  }, []);
+
+  // 后台保活：注册一次；tick 时若离线超阈值则重连最近端点
   useEffect(() => {
+    const keepalive = new KeepaliveScheduler(
+      backgroundTaskApi,
+      () => stateRef.current,
+      () => {
+        const ep = lastEndpointRef.current;
+        if (ep) return connectRef.current(ep.host, ep.port);
+      },
+    );
+    keepaliveRef.current = keepalive;
+    void keepalive.register(15 * 60_000);
     return () => {
-      pipelineRef.current?.stop();
-      pipelineRef.current = null;
+      void keepalive.unregister();
     };
   }, []);
+
+  const connectRef = useRef<(host: string, port: number) => Promise<void>>(async () => {});
 
   const connect = useCallback(async (host: string, port: number) => {
     pipelineRef.current?.stop();
     setNotifications([]);
+    lastEndpointRef.current = { host, port };
 
     const pipeline = createConnectionPipeline({
       endpoint: { host, port },
       transport: new LanTransport({
         onDescribe: (d) => setDescribe(d),
       }),
-      onStateChange: (s) => setState(s),
+      onStateChange: (s) => setStateBoth(s),
       onError: (err) => {
         console.warn("[conn]", err);
       },
@@ -71,14 +94,19 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     });
     pipeline.store.subscribe(() => setVersion((v) => v + 1));
     pipelineRef.current = pipeline;
+    keepaliveRef.current?.markPing();
     pipeline.start();
-  }, []);
+  }, [setStateBoth]);
+
+  connectRef.current = connect;
 
   const disconnect = useCallback(() => {
     pipelineRef.current?.stop();
+    pipelineRef.current?.store.clear();
     pipelineRef.current = null;
-    setState("offline");
-  }, []);
+    lastEndpointRef.current = null;
+    setStateBoth("offline");
+  }, [setStateBoth]);
 
   const sendMessage = useCallback(async (sessionId: string, text: string) => {
     const c = pipelineRef.current?.loop.connection;

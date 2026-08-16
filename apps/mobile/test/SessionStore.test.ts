@@ -37,6 +37,22 @@ describe("SessionStore", () => {
     expect(s.getTranscript("s1")[0]).toMatchObject({ content: "写到一半", interrupted: true });
   });
 
+  it("inserts a gap marker when a turn starts over an unfinished message", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("session/event", { sessionId: "s1", event: "message/delta", message: { id: "m1", delta: "未完成" } }) as never);
+    s.applyFrame(frame("session/event", { sessionId: "s1", event: "turn/start", turn: { id: "t2" } }) as never);
+    const t = s.getTranscript("s1");
+    expect(t).toHaveLength(1);
+    expect(t[0]).toMatchObject({ gap: true, role: "assistant" });
+    expect(t[0]?.content).toContain("间隙");
+  });
+
+  it("inserts a gap marker on an explicit gap event", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("session/event", { sessionId: "s1", event: "gap" }) as never);
+    expect(s.getTranscript("s1")[0]).toMatchObject({ gap: true });
+  });
+
   it("derives projection fields into the summary", () => {
     const s = new SessionStore();
     s.applyFrame(frame("session/projection", {
