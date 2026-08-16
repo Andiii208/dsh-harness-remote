@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# builds
+dist/
+build/
+
+# expo
+.expo/
+expo-env.d.ts
+*.orig.*
+web-build/
+
+# logs & scratch
+*.log
+.superpowers/
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# env
+.env
+.env.*
+!.env.example
