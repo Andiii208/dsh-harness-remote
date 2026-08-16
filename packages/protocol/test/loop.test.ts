@@ -1,0 +1,208 @@
+import { describe, expect, it, vi } from "vitest";
+import { ConnectionLoop } from "../src/loop.js";
+import type { Connection, ConnectionState, Transport } from "../src/transport.js";
+import type { DownlinkFrame } from "../src/codec.js";
+
+function makeFrames(count: number): AsyncIterable<DownlinkFrame> {
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (let i = 0; i < count; i++) {
+        yield { type: "session/event" as const, sessionId: `s${i}` };
+      }
+    },
+  };
+}
+
+function makeConnection(): Connection & { closed: boolean } {
+  const c = {
+    closed: false,
+    async unary() {
+      return { rpcId: "r", ok: true, result: {} };
+    },
+    async respond() {},
+    events: makeFrames(1),
+    close() {
+      this.closed = true;
+    },
+  };
+  return c;
+}
+
+function alwaysFailingTransport(): Transport {
+  return {
+    async connect() {
+      throw new Error("connection refused");
+    },
+  };
+}
+
+function flakyTransport(failures: number): Transport & { connects: number } {
+  const t = {
+    connects: 0,
+    async connect() {
+      t.connects += 1;
+      if (t.connects <= failures) throw new Error("refused");
+      return makeConnection();
+    },
+  };
+  return t;
+}
+
+describe("ConnectionLoop backoff", () => {
+  it("grows backoff 500→1000→… capped at 10000ms, with jitter", async () => {
+    const delays: number[] = [];
+    const loop = new ConnectionLoop({
+      endpoint: { host: "h", port: 3080 },
+      transport: alwaysFailingTransport(),
+      random: () => 0.5, // jitter factor 0 → delay = raw
+      sleep: async (ms) => {
+        delays.push(ms);
+        await new Promise((r) => setTimeout(r, 0));
+        if (delays.length >= 7) loop.stop();
+      },
+    });
+    loop.start();
+    await vi.waitFor(() => expect(delays.length).toBeGreaterThanOrEqual(7), { timeout: 3000 });
+    expect(delays).toEqual([500, 1000, 2000, 4000, 8000, 10000, 10000]);
+  });
+
+  it("resets backoff after a successful reconnect", async () => {
+    const delays: number[] = [];
+    const transport = flakyTransport(1);
+    const loop = new ConnectionLoop({
+      endpoint: { host: "h", port: 3080 },
+      transport,
+      random: () => 0.5,
+      sleep: async (ms) => {
+        delays.push(ms);
+        await new Promise((r) => setTimeout(r, 0));
+        if (delays.length >= 3) loop.stop();
+      },
+    });
+    loop.start();
+    await vi.waitFor(() => expect(delays.length).toBeGreaterThanOrEqual(3), { timeout: 3000 });
+    // 1st failure → 500; success; disconnect → backoff resets to 500 again
+    expect(delays.slice(0, 2)).toEqual([500, 500]);
+    expect(transport.connects).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("ConnectionLoop states & resync", () => {
+  it("emits connecting → online and calls onResync", async () => {
+    const states: ConnectionState[] = [];
+    let resyncs = 0;
+    const transport = flakyTransport(0);
+    const loop = new ConnectionLoop({
+      endpoint: { host: "h", port: 3080 },
+      transport,
+      onStateChange: (s) => states.push(s),
+      onResync: () => {
+        resyncs += 1;
+      },
+      sleep: async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      },
+    });
+    loop.start();
+    await vi.waitFor(() => expect(states).toContain("online"), { timeout: 3000 });
+    expect(resyncs).toBeGreaterThanOrEqual(1);
+    expect(states).toEqual(expect.arrayContaining(["connecting", "online"]));
+    loop.stop();
+  });
+
+  it("reconnects after the event stream ends (disconnect) and resyncs", async () => {
+    const states: ConnectionState[] = [];
+    const transport = flakyTransport(0);
+    const loop = new ConnectionLoop({
+      endpoint: { host: "h", port: 3080 },
+      transport,
+      onStateChange: (s) => states.push(s),
+      sleep: async () => {
+        await new Promise((r) => setTimeout(r, 0));
+        if (transport.connects >= 2) loop.stop();
+      },
+    });
+    loop.start();
+    await vi.waitFor(() => expect(transport.connects).toBeGreaterThanOrEqual(2), { timeout: 3000 });
+    expect(states).toEqual(expect.arrayContaining(["online", "offline", "backoff", "connecting"]));
+  });
+
+  it("releases the connection when the event stream ends", async () => {
+    let closed = false;
+    const transport: Transport = {
+      async connect() {
+        return {
+          async unary() {
+            return { rpcId: "r", ok: true, result: {} };
+          },
+          async respond() {},
+          events: makeFrames(0), // stream ends immediately → connection released
+          close() {
+            closed = true;
+          },
+        };
+      },
+    };
+    const loop = new ConnectionLoop({
+      endpoint: { host: "h", port: 3080 },
+      transport,
+      sleep: async () => {
+        await new Promise((r) => setTimeout(r, 0));
+        loop.stop();
+      },
+    });
+    loop.start();
+    await vi.waitFor(() => expect(closed).toBe(true), { timeout: 3000 });
+    expect(loop.connectionState).toBe("offline");
+  });
+
+  it("stop() closes the live connection while online", async () => {
+    let closed = false;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const transport: Transport = {
+      async connect() {
+        return {
+          async unary() {
+            return { rpcId: "r", ok: true, result: {} };
+          },
+          async respond() {},
+          events: {
+            async *[Symbol.asyncIterator]() {
+              yield { type: "session/event" as const };
+              await gate; // stream stays open until released
+            },
+          },
+          close() {
+            closed = true;
+          },
+        };
+      },
+    };
+    const loop = new ConnectionLoop({
+      endpoint: { host: "h", port: 3080 },
+      transport,
+      sleep: async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      },
+    });
+    loop.start();
+    await vi.waitFor(() => expect(loop.connectionState).toBe("online"), { timeout: 3000 });
+    loop.stop();
+    release();
+    expect(closed).toBe(true);
+    expect(loop.connectionState).toBe("offline");
+  });
+});
+
+describe("ConnectionLoop state accessor", () => {
+  it("exposes connectionState", () => {
+    const loop = new ConnectionLoop({
+      endpoint: { host: "h", port: 3080 },
+      transport: alwaysFailingTransport(),
+    });
+    expect(loop.connectionState).toBe("offline");
+  });
+});

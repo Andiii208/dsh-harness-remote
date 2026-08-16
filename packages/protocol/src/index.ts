@@ -1,3 +1,7 @@
 export * from "./envelopes.js";
 export * from "./codec.js";
 export * from "./dto/index.js";
+export * from "./rpc.js";
+export * from "./ws.js";
+export * from "./transport.js";
+export * from "./loop.js";
