@@ -31,7 +31,19 @@
         "backgroundColor": "#0E0E10"
       }
     },
-    "plugins": ["expo-notifications", "expo-background-task", "expo-router"],
+    "plugins": [
+      "expo-notifications",
+      "expo-background-task",
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     }

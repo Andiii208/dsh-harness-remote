@@ -45,10 +45,10 @@ pnpm start
 
 ## 2.6 真机验证记录（2026-08-16）
 
-- 设备：Xiaomi/Honor（MXW_AN00，Android，USB + `adb reverse tcp:3080 tcp:3080` + `tcp:8081`），Expo Go 57.0.3。
+- 设备：Android 真机（MXW-AN00，USB + `adb reverse tcp:3080 tcp:3080` + `tcp:8081`），Expo Go 57.0.3。
 - 连接：USB reverse 通道（此机型 Wi-Fi 直连不稳、adb reverse 经实测可用；Expo Go 加载 exp://127.0.0.1:8081）。
-- 已验证（见上方勾选项）：连接/会话列表/流式聊天/发消息/审批/提问/goal 暂停/前台断线自动重连。
-- 真机发现并已修复的 bug（提交 be951c5 / 5213b64 / d2b0689）：
+- 已验证（见上方勾选项）：连接/会话列表/流式聊天/发消息/审批/提问/goal 暂停/前台断线自动重连/安全警告横幅。
+- 真机发现并已修复的 bug（2 个 bug、3 个提交：be951c5 / 5213b64 / d2b0689）：
   1. `app.json` 的 `extra.eas.projectId: null` 会被 Expo 归一化为 `{}`，@expo/cli 57.0.15 codesigning 路径崩溃 → Expo Go manifest 请求超时（"Failed to download remote update"）→ 已移除该字段。
   2. expo-notifications / expo-background-task / expo-task-manager 在 Expo Go（SDK 53+）require 即触发致命错误且绕过 try/catch → 新增 `src/notify/expoEnv.ts`（`isExpoGo()` 检测）+ 三处适配器前置跳过，dev build 下功能不受影响。
 - 待验证（需 development build / EAS）：通知权限与去重、深链、后台保活、锁屏推送。
