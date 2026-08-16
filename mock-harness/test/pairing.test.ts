@@ -95,4 +95,16 @@ describe("mock-harness pairing fence", () => {
     const res = await post(h.url, "/api/host.describe", { rpcId: "a", method: "host.describe", payload: {} });
     expect(((await res.json()) as Record<string, unknown>).ok).toBe(true);
   });
+
+  it("answers CORS preflight and adds CORS headers", async () => {
+    const all = await loadFixtureDir(fixturesDir);
+    const h = await createMockHarness(all, { port: 0 });
+    await h.start();
+    harnesses.push(h);
+    const pre = await fetch(h.url, { method: "OPTIONS" });
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get("access-control-allow-origin")).toBe("*");
+    const res = await post(h.url, "/api/host.describe", { rpcId: "a", method: "host.describe", payload: {} });
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+  });
 });

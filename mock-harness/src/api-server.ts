@@ -83,12 +83,25 @@ function isLoopbackAddr(address: string | undefined): boolean {
   return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
 }
 
+/** CORS：允许浏览器端 App（expo web 联调）跨域访问 /api。 */
+export function applyCors(res: ServerResponse): void {
+  res.setHeader("access-control-allow-origin", "*");
+  res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
+  res.setHeader("access-control-allow-headers", "content-type, authorization, x-dsh-pair-token");
+}
+
 export function createApiHandler(
   fixtures: FixtureSet[],
   state: ApiServerState,
   opts: ApiServerOptions = {},
 ) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    applyCors(res);
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname;
 
