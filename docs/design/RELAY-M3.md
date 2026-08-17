@@ -261,3 +261,11 @@ export class RelayTransport implements Transport {
 - **联调**：`.shots/relay-pair-integration.mjs`（relay + mock-harness + harness-plugin RelayClient 控制台桥）打印 6 位配对码；Playwright 在连接页输入 `ws://127.0.0.1:4090` + 配对码完成配对，Sessions 出现 2 个 mock session；截图 `.shots/relay-pair-connect.png` / `.shots/relay-pair-sessions.png`；find 证据 `.shots/relay-pair-find.txt` / `.shots/relay-pair-sessions-find.txt`；加密 route 证据 `.shots/relay-pair-route-payload.txt`（payload 仅 `{to, ciphertext, nonce}`）。
 - 全仓回归：protocol 100 / mobile 109 / harness-plugin 23 / relay 26 / mock-harness 29 / capture 24，build/typecheck/test 全绿。
 - 真机 APNs/FCM 仍留待设备/账号窗口。
+
+### M3.7 发布闸门前置（无真机部分，2026-08-17 已实现）
+
+- CI 升级 Node 24（`.github/workflows/ci.yml`）。
+- `pnpm audit --prod`：3 个 Expo 工具链传递漏洞（image-size ×2 high、uuid ×1 moderate），非运行时，已记录在 SECURITY.md 发布检查清单。
+- `relay/src/sqlite-store.ts`：可选 SQLite 持久化 store（`node:sqlite`，`createSqliteRelayStore(path)`；`createRelayServer` 增加 `store` 选项，CLI 增加 `--store <path>`）；重开保留注册/配对/在线状态。
+- `relay/test/relay-multi.test.ts`：多 console/device 隔离验证（在线路由只投配对 peer、离线队列按 peer 隔离）。
+- TLS 部署实测（Caddy/Docker）因 Docker Desktop daemon 未启动暂阻塞，已写 BLOCKED.md。

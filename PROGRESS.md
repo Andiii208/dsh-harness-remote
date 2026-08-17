@@ -1,5 +1,12 @@
 # PROGRESS
 
+## Phase 7：M3.7 发布闸门前置（无真机部分完成）
+- CI 升级 Node 24（`.github/workflows/ci.yml`）。
+- `pnpm audit --prod`：仍为 3 个 Expo 工具链传递漏洞（image-size ≤2.0.2 ×2 high、uuid <11.1.1 ×1 moderate），均非运行时；记录在 SECURITY.md 发布检查清单，等待 Expo SDK 上游升级。
+- `relay/src/sqlite-store.ts`：可选 SQLite 持久化 store（`node:sqlite`，`createSqliteRelayStore(path)`；`RelayServerOptions.store` + CLI `--store <path>`）。测试 3 个（重开保留 client/pair、online 持久化、配对码一次性/TTL）。relay 测试 29（原 26）。
+- `relay/test/relay-multi.test.ts`：多 console/device 隔离测试 2 个（在线路由只投配对 peer、离线队列按 peer 隔离）。relay 测试 31（原 29）。
+- TLS 部署实测：Docker Desktop daemon 未启动，已写 BLOCKED.md；启动后需按 MANUAL 2.8 用 Caddy 容器验证 WSS。
+
 ## Phase 6：M3.5 中继配对闭环 + 密钥持久化（完成）
 - T1 protocol：`RelayTransportOptions` 新增 `pairCode`/`onPairAck`；未注入私钥时自动生成 ECDH P-256 keypair，register 携带 publicKey；配对码握手后发 `relay.pair` 并等 `relay.pair.ack`，派生会话密钥后启用加密数据面；未配置 pairCode 时明文路径不变。protocol 测试 100（原 97，+3）。
 - T2 relay：`relay.pair` 成功后复用 `relay.pair.ack` 向被配对 console 推送 `{deviceId, peerPublicKey?}`；console 离线则入离线队列，重连 drain 投递；新增 `pair_notify` audit。relay 测试 26（原 24，+2）。
