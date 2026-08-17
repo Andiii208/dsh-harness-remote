@@ -12,7 +12,9 @@
 - 验证：mobile test 89 全绿；typecheck 0；浅深截图已存 .shots/approval-light.png、approval-dark.png。
 - 待办：提交 feat commit。
 
-## A 会话列表（未开始）
+## A 会话列表（完成）
+- 已完成：sessionViews 纯函数（filterSessions/groupByWorkspace/pressureTier）+ 5 单测；sessions.tsx 搜索框（v7 Field）、SectionLabel 组头、miniBar 分档（<70 success / 70–85 warn / ≥85 danger）+ 文案。
+- 验证：mobile test 94 全绿；typecheck 0；浅深截图 .shots/sessions-light.png、sessions-dark.png。
 ## B 聊天体验（未开始）
 ## M3 中继（未开始）
 ## 质量工程（未开始）

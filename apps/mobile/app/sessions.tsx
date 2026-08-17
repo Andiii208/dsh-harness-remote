@@ -10,7 +10,10 @@ import { SectionLabel } from "../src/ui/SectionLabel";
 import { StatusChip } from "../src/ui/StatusChip";
 import { EmptyState } from "../src/ui/EmptyState";
 import { SkeletonRow } from "../src/ui/SkeletonRow";
+import { Field } from "../src/ui/Field";
 import { useEntering } from "../src/ui/anim";
+import type { SessionSummary } from "../src/data/SessionStore";
+import { filterSessions, groupByWorkspace, pressureTier } from "../src/data/sessionViews";
 
 function formatRelative(ms: number): string {
   const diff = Date.now() - ms;
@@ -32,16 +35,36 @@ function GoalPill({ status, colors }: { status?: string; colors: ReturnType<type
   );
 }
 
+type SessionRow =
+  | { kind: "header"; key: string; workspace: string; count: number }
+  | { kind: "session"; key: string; session: SessionSummary };
+
+function pressureText(percent: number): string {
+  const tier = pressureTier(percent);
+  if (tier === "danger") return `${percent}% · 告警`;
+  if (tier === "warn") return `${percent}% · 偏高`;
+  return `${percent}%`;
+}
+
 export default function SessionsScreen() {
   const { sessions, pending, state, refreshSessions } = useConnection();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const entering = useEntering();
+  const [query, setQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
   const autoRefreshed = useRef(false);
   const [, setTick] = useState(0);
+
+  const rows = useMemo<SessionRow[]>(() => {
+    const filtered = filterSessions(sessions, query);
+    return groupByWorkspace(filtered).flatMap<SessionRow>((g) => [
+      { kind: "header", key: `header:${g.workspace}`, workspace: g.workspace, count: g.sessions.length },
+      ...g.sessions.map((session) => ({ kind: "session" as const, key: session.id, session })),
+    ]);
+  }, [sessions, query]);
   useEffect(() => {
     const t = setInterval(() => setTick(Date.now()), 60_000);
     return () => clearInterval(t);
@@ -72,8 +95,8 @@ export default function SessionsScreen() {
     <FlashList
       style={styles.screen}
       contentContainerStyle={styles.content}
-      data={sessions}
-      keyExtractor={(s) => s.id}
+      data={rows}
+      keyExtractor={(row) => row.key}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.textMuted} colors={[colors.accent]} />
       }
@@ -91,6 +114,12 @@ export default function SessionsScreen() {
               <StatusChip tone={state === "online" ? "success" : state === "offline" ? "danger" : "warn"} label={STATE_LABEL[state] ?? state} />
             </View>
           </View>
+          <Field
+            label="SEARCH"
+            placeholder="搜索标题 / workspace / 最近消息"
+            value={query}
+            onChangeText={setQuery}
+          />
           {refreshError.length > 0 && <Text style={styles.refreshError}>{refreshError}</Text>}
           {pending.length > 0 && (
             <Pressable
@@ -114,56 +143,72 @@ export default function SessionsScreen() {
             <SkeletonRow />
           </View>
         ) : (
-          <EmptyState eyebrow="NO SESSIONS" text="等待注册表 / 投影帧推送（可先连接 mock-harness）" />
+          <EmptyState eyebrow={query.trim() ? "NO MATCH" : "NO SESSIONS"} text={query.trim() ? "没有匹配的会话——换个关键词试试" : "等待注册表 / 投影帧推送（可先连接 mock-harness）"} />
         )
       }
-      renderItem={({ item: s }) => (
-        <Animated.View entering={entering}>
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => router.push(`/chat/${encodeURIComponent(s.id)}`)}
-            accessibilityRole="button"
-            accessibilityLabel={s.title ?? s.id}
-          >
-            <View style={styles.rowHeader}>
-              <Text style={styles.rowTitle} numberOfLines={1}>
-                {s.title ?? s.id}
-              </Text>
-              <GoalPill status={s.goalStatus} colors={colors} />
-              <Text style={styles.chevron} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">›</Text>
-            </View>
-            {s.lastMessage !== undefined && (
-              <Text style={styles.rowPreview} numberOfLines={1}>
-                {s.lastMessage}
-              </Text>
-            )}
-            <View style={styles.rowMeta}>
-              {s.workspace !== undefined && (
-                <Text style={styles.metaText} numberOfLines={1}>
-                  {s.workspace}
+      renderItem={({ item }) =>
+        item.kind === "header" ? (
+          <SectionLabel>{`${item.workspace} · ${item.count}`}</SectionLabel>
+        ) : (
+          <Animated.View entering={entering}>
+            <Pressable
+              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+              onPress={() => router.push(`/chat/${encodeURIComponent(item.session.id)}`)}
+              accessibilityRole="button"
+              accessibilityLabel={item.session.title ?? item.session.id}
+            >
+              <View style={styles.rowHeader}>
+                <Text style={styles.rowTitle} numberOfLines={1}>
+                  {item.session.title ?? item.session.id}
+                </Text>
+                <GoalPill status={item.session.goalStatus} colors={colors} />
+                <Text style={styles.chevron} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">›</Text>
+              </View>
+              {item.session.lastMessage !== undefined && (
+                <Text style={styles.rowPreview} numberOfLines={1}>
+                  {item.session.lastMessage}
                 </Text>
               )}
-              {s.tokenUsageTotal !== undefined && (
-                <Text style={styles.metaText}>{s.tokenUsageTotal.toLocaleString()} tok</Text>
-              )}
-              {s.lastActiveAt !== undefined && (
-                <Text style={[styles.metaText, styles.metaTime]}>{formatRelative(s.lastActiveAt)}</Text>
-              )}
-              {s.contextPercent !== undefined && (
-                <View style={styles.miniBar}>
-                  <View
-                    style={[
-                      styles.miniBarFill,
-                      { width: `${Math.min(100, s.contextPercent)}%` },
-                      s.contextPercent >= 80 && { backgroundColor: colors.warn },
-                    ]}
-                  />
-                </View>
-              )}
-            </View>
-          </Pressable>
-        </Animated.View>
-      )}
+              <View style={styles.rowMeta}>
+                {item.session.workspace !== undefined && (
+                  <Text style={styles.metaText} numberOfLines={1}>
+                    {item.session.workspace}
+                  </Text>
+                )}
+                {item.session.tokenUsageTotal !== undefined && (
+                  <Text style={styles.metaText}>{item.session.tokenUsageTotal.toLocaleString()} tok</Text>
+                )}
+                {item.session.lastActiveAt !== undefined && (
+                  <Text style={[styles.metaText, styles.metaTime]}>{formatRelative(item.session.lastActiveAt)}</Text>
+                )}
+                {item.session.contextPercent !== undefined && (
+                  <View style={styles.pressureWrap}>
+                    <View style={styles.miniBar}>
+                      <View
+                        style={[
+                          styles.miniBarFill,
+                          { width: `${Math.min(100, item.session.contextPercent)}%` },
+                          pressureTier(item.session.contextPercent) === "warn" && { backgroundColor: colors.warn },
+                          pressureTier(item.session.contextPercent) === "danger" && { backgroundColor: colors.danger },
+                        ]}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.pressureText,
+                        pressureTier(item.session.contextPercent) === "warn" && { color: colors.warn },
+                        pressureTier(item.session.contextPercent) === "danger" && { color: colors.danger },
+                      ]}
+                    >
+                      {pressureText(item.session.contextPercent)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </Pressable>
+          </Animated.View>
+        )
+      }
     />
   );
 }
@@ -216,7 +261,9 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       overflow: "hidden",
       maxWidth: 80,
     },
-    miniBarFill: { height: 3, backgroundColor: colors.accent, borderRadius: 2 },
+    miniBarFill: { height: 3, backgroundColor: colors.success, borderRadius: 2 },
+    pressureWrap: { flexDirection: "row", alignItems: "center", gap: 5, flex: 1, maxWidth: 150 },
+    pressureText: { color: colors.success, fontSize: 10, fontFamily: font.mono, letterSpacing: 0.2 },
     metaTime: { marginLeft: "auto" },
   });
 }
