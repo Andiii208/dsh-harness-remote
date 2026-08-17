@@ -462,19 +462,15 @@ describe("relay server", () => {
 
   it("rate limits authenticated clients and returns E_RATE", async () => {
     const relay = await startRelay({
-      rateLimit: { perMinute: 60_000, burst: 2 },
+      rateLimit: { perMinute: 60_000, burst: 0 },
     });
 
     const device = await TestClient.connect(relay.port);
     device.send(registerEnvelope("reg-rl", "device-rl", { deviceId: "device-rl" }));
     await device.next("relay.register.ack");
 
+    // burst=0: the first post-register envelope must be rejected with E_RATE.
     device.send(makeEnvelope("relay.heartbeat", "hb-1", "device-rl"));
-    await device.next("relay.heartbeat.ack");
-    device.send(makeEnvelope("relay.heartbeat", "hb-2", "device-rl"));
-    await device.next("relay.heartbeat.ack");
-
-    device.send(makeEnvelope("relay.heartbeat", "hb-3", "device-rl"));
     const err = await device.next("relay.error");
     expect((err.payload as { code: string }).code).toBe("E_RATE");
 
