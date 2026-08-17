@@ -1,5 +1,16 @@
 # PROGRESS
 
+## Phase 8：UI 精简美化（DeepSeek 手机版风格，完成）
+- 连接页：首屏只保留品牌、状态、主机/端口/可选配对码与主连接按钮；「高级」折叠 token；历史主机默认折叠；自动发现/扫码为次级文字入口。
+- 引导页：3 步改为 1 屏（鲸鱼 + harness remote + 一句话 + 开始使用）。
+- 会话页：标题「会话」+ 状态；搜索默认收起；pending 改轻量文字行；行只留标题/最近消息/时间，workspace 仅在分组头；上下文仅 ≥70 显示。
+- 聊天页：移除 GoalCard 大卡与状态眉标，顶部小字会话标题 + goal 小 pill；输入区只保留输入框 + 圆形发送；暂停/恢复仅流式时显示为小文字按钮。
+- 审批页：中文标签，去粗色条，底部只保留批准/拒绝主按钮，跳过提问弱化。
+- 设置页：合并为一张主设置卡 + 关于分组，去掉英文 mono 眉标。
+- 导航标题：会话/对话/请求/设置，系统字体、无阴影。
+- Android 真机（Expo Go，MXW-AN00 Android 10）实测：连接页加载、连接到 mock-harness、会话列表显示 2 个 mock session（截图 `.shots/android-main.png` / `.shots/android-sessions.png`）。
+- 文档截图：docs/screenshots/connect.png、sessions.png、chat.png 已同步为新 UI。
+
 ## Phase 7：M3.7 发布闸门前置（无真机部分完成）
 - CI 升级 Node 24（`.github/workflows/ci.yml`）。
 - `pnpm audit --prod`：仍为 3 个 Expo 工具链传递漏洞（image-size ≤2.0.2 ×2 high、uuid <11.1.1 ×1 moderate），均非运行时；记录在 SECURITY.md 发布检查清单，等待 Expo SDK 上游升级。
