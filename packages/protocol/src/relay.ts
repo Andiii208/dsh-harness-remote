@@ -12,6 +12,7 @@ import { decodeFrame, type DownlinkFrame } from "./codec.js";
 import { makeRpcId } from "./envelopes.js";
 import {
   deriveRelaySessionKeys,
+  generateRelayKeyPair,
   openRelayPayload,
   sealRelayPayload,
 } from "./relay-crypto.js";
@@ -112,6 +113,11 @@ export interface RelayTransportOptions {
   peerPublicKeyJwk?: JsonWebKey;
   /** M3.2: WebCrypto injection point; defaults to globalThis.crypto. */
   crypto?: Crypto;
+  /** M3.5: 6-digit pairing code. When set, connect() sends relay.pair after
+   * the hello/register handshake and waits for relay.pair.ack before resolving. */
+  pairCode?: string;
+  /** M3.5: called after relay.pair.ack (pairing succeeded). */
+  onPairAck?: (ack: { consoleId: string; peerPublicKey: unknown }) => void;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -124,6 +130,13 @@ function str(v: unknown): string | undefined {
 
 function num(v: unknown): number | undefined {
   return typeof v === "number" ? v : undefined;
+}
+
+/** Public JWK view of an EC private JWK (P-256 JWKs carry x/y as well). */
+function publicJwkFromPrivate(privateKeyJwk: JsonWebKey): JsonWebKey | undefined {
+  const { kty, crv, x, y } = privateKeyJwk;
+  if (kty && crv && x && y) return { kty, crv, x, y };
+  return undefined;
 }
 
 /** Build a control-plane hello envelope. */
@@ -331,8 +344,8 @@ class RelayConnection implements Connection {
     private readonly ws: RelaySocket,
     private readonly from: string,
     private readonly crypto: Crypto | undefined,
-    private readonly encKey: CryptoKey | undefined,
-    private readonly peerId?: string,
+    private encKey: CryptoKey | undefined,
+    private peerId?: string,
   ) {
     this.events = this.queue;
     ws.onmessage = (ev) => {
@@ -437,6 +450,12 @@ class RelayConnection implements Connection {
     } catch {
       /* never throw from close() */
     }
+  }
+
+  /** M3.5: set the paired peer and (optionally) enable the E2E session key. */
+  setPeer(peerId: string, encKey?: CryptoKey): void {
+    this.peerId = peerId;
+    if (encKey) this.encKey = encKey;
   }
 
   sendEnvelope(env: RelayEnvelope): void {
@@ -556,8 +575,24 @@ export class RelayTransport implements Transport {
     const crypto = this.opts.crypto
       ?? (globalThis as { crypto?: Crypto }).crypto;
 
+    // M3.5: a device without an injected private key auto-generates an ECDH
+    // P-256 keypair before register, so the relay always has a publicKey to
+    // hand to the console during pairing.
+    let privateKeyJwk = this.opts.privateKeyJwk;
+    let publicKeyJwk = privateKeyJwk ? publicJwkFromPrivate(privateKeyJwk) : undefined;
+    if (!privateKeyJwk && crypto) {
+      try {
+        const generated = await generateRelayKeyPair(crypto);
+        privateKeyJwk = generated.privateKeyJwk;
+        publicKeyJwk = generated.publicKeyJwk;
+      } catch (err) {
+        ws.close();
+        throw err;
+      }
+    }
+
     let encKey: CryptoKey | undefined;
-    if (this.opts.privateKeyJwk && this.opts.peerPublicKeyJwk) {
+    if (privateKeyJwk && this.opts.peerPublicKeyJwk) {
       if (!crypto) {
         ws.close();
         throw new Error("RelayTransport: no WebCrypto implementation available");
@@ -565,7 +600,7 @@ export class RelayTransport implements Transport {
       try {
         ({ encKey } = await deriveRelaySessionKeys(
           crypto,
-          this.opts.privateKeyJwk,
+          privateKeyJwk,
           this.opts.peerPublicKeyJwk,
         ));
       } catch (err) {
@@ -581,6 +616,11 @@ export class RelayTransport implements Transport {
       let settled = false;
       let helloAck = false;
       let registerAck = false;
+      // Without a pairCode the control plane is ready after hello+register.
+      // With a pairCode we additionally wait for relay.pair.ack so the caller
+      // (mobile) never starts the data plane before the E2E key is installed.
+      let pairAck = !this.opts.pairCode;
+      let pairSent = false;
 
       const timer = setTimeout(() => {
         if (settled) return;
@@ -599,9 +639,19 @@ export class RelayTransport implements Transport {
         reject(err);
       };
 
+      const sendPair = (): void => {
+        if (settled || pairSent || !this.opts.pairCode) return;
+        pairSent = true;
+        try {
+          conn.sendEnvelope(makePair(from, this.opts.pairCode, from));
+        } catch (err) {
+          fail(err instanceof Error ? err : new Error(String(err)));
+        }
+      };
+
       const maybeReady = (): void => {
         if (settled) return;
-        if (!helloAck || !registerAck) return;
+        if (!helloAck || !registerAck || !pairAck) return;
         settled = true;
         clearTimeout(timer);
         conn.onRelayError = null;
@@ -611,10 +661,44 @@ export class RelayTransport implements Transport {
       conn.onControl = (env) => {
         if (env.type === "relay.hello.ack") {
           helloAck = true;
+          if (helloAck && registerAck) sendPair();
           maybeReady();
         } else if (env.type === "relay.register.ack") {
           registerAck = true;
+          if (helloAck && registerAck) sendPair();
           maybeReady();
+        } else if (env.type === "relay.pair.ack") {
+          void (async () => {
+            if (settled) return;
+            try {
+              const payload = isRecord(env.payload) ? env.payload : {};
+              const consoleId = str(payload.consoleId);
+              if (!consoleId) {
+                fail(new Error("RelayTransport: relay.pair.ack missing consoleId"));
+                return;
+              }
+              const peerPublicKey = payload.peerPublicKey;
+              if (privateKeyJwk && isRecord(peerPublicKey)) {
+                if (!crypto) {
+                  fail(new Error("RelayTransport: no WebCrypto implementation available"));
+                  return;
+                }
+                const keys = await deriveRelaySessionKeys(
+                  crypto,
+                  privateKeyJwk,
+                  peerPublicKey as unknown as JsonWebKey,
+                );
+                conn.setPeer(consoleId, keys.encKey);
+              } else {
+                conn.setPeer(consoleId);
+              }
+              this.opts.onPairAck?.({ consoleId, peerPublicKey });
+              pairAck = true;
+              maybeReady();
+            } catch (err) {
+              fail(err instanceof Error ? err : new Error(String(err)));
+            }
+          })();
         }
       };
       conn.onRelayError = (err) => {
@@ -630,7 +714,7 @@ export class RelayTransport implements Transport {
           conn.sendEnvelope(
             makeRegister(from, {
               deviceId: from,
-              publicKey: null,
+              publicKey: publicKeyJwk ?? null,
               protocolVersion: RELAY_ENVELOPE_VERSION,
               ...(this.opts.pushToken ? { pushToken: this.opts.pushToken } : {}),
             }),

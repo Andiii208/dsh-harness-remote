@@ -50,6 +50,18 @@ class FakeWs implements WsLike {
   }
 }
 
+function relayPairAck(id: string, to: string, payload: unknown): string {
+  return JSON.stringify({
+    v: RELAY_ENVELOPE_VERSION,
+    type: "relay.pair.ack",
+    id,
+    from: "relay",
+    to,
+    ts: Date.now(),
+    payload,
+  });
+}
+
 function relayAck(
   type: "relay.hello.ack" | "relay.register.ack",
   id: string,
@@ -89,6 +101,7 @@ async function connectedPair(): Promise<{ conn: Awaited<ReturnType<RelayTranspor
   const p = transport.connect({ host: "relay.example", port: 4090 }, {});
   const ws = FakeWs.instances[0]!;
   ws.open();
+  await vi.waitFor(() => expect(ws.sent.length).toBe(2));
 
   const hello = JSON.parse(ws.sent[0]!) as { id: string };
   const register = JSON.parse(ws.sent[1]!) as { id: string };
@@ -217,7 +230,7 @@ describe("RelayTransport.connect", () => {
     expect(ws.url).toBe("ws://relay.example:4090");
 
     ws.open();
-    expect(ws.sent).toHaveLength(2);
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
     const hello = JSON.parse(ws.sent[0]!) as {
       type: string;
       from: string;
@@ -279,6 +292,149 @@ describe("RelayTransport.connect", () => {
     });
   });
 
+  it("auto-generates a keypair and sends a non-null publicKey in relay.register", async () => {
+    const transport = new RelayTransport({
+      wsImpl: FakeWs.fresh(),
+      deviceId: "device-a",
+      crypto,
+    });
+    const p = transport.connect({ host: "relay.example", port: 4090 }, {});
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
+
+    const register = JSON.parse(ws.sent[1]!) as {
+      id: string;
+      payload: { deviceId: string; publicKey: JsonWebKey };
+    };
+    expect(register.payload.deviceId).toBe("device-a");
+    expect(register.payload.publicKey).not.toBeNull();
+    expect(register.payload.publicKey).toMatchObject({
+      kty: "EC",
+      crv: "P-256",
+    });
+    expect(typeof register.payload.publicKey.x).toBe("string");
+    expect(typeof register.payload.publicKey.y).toBe("string");
+
+    const hello = JSON.parse(ws.sent[0]!) as { id: string };
+    ws.recv(relayAck("relay.hello.ack", hello.id, "device-a"));
+    ws.recv(relayAck("relay.register.ack", register.id, "device-a"));
+    await p;
+  });
+
+  it("sends relay.pair with code+deviceId after the handshake when pairCode is configured", async () => {
+    const transport = new RelayTransport({
+      wsImpl: FakeWs.fresh(),
+      deviceId: "device-a",
+      pairCode: "123456",
+      crypto,
+    });
+    const p = transport.connect({ host: "relay.example", port: 4090 }, {});
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
+
+    const hello = JSON.parse(ws.sent[0]!) as { id: string };
+    const register = JSON.parse(ws.sent[1]!) as { id: string };
+    ws.recv(relayAck("relay.hello.ack", hello.id, "device-a"));
+    ws.recv(relayAck("relay.register.ack", register.id, "device-a"));
+
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(3));
+    const pair = JSON.parse(ws.sent[2]!) as {
+      v: number;
+      type: string;
+      from: string;
+      to: string;
+      id: string;
+      payload: { code: string; deviceId: string };
+    };
+    expect(pair).toMatchObject({
+      v: 1,
+      type: "relay.pair",
+      from: "device-a",
+      to: "relay",
+      payload: { code: "123456", deviceId: "device-a" },
+    });
+
+    ws.recv(
+      relayPairAck(pair.id, "device-a", {
+        code: "123456",
+        deviceId: "device-a",
+        consoleId: "console-c",
+      }),
+    );
+    await p;
+  });
+
+  it("derives the session key from relay.pair.ack and seals unary routes", async () => {
+    const device = await generateRelayKeyPair(crypto);
+    const console_ = await generateRelayKeyPair(crypto);
+    const expectedKeys = await deriveRelaySessionKeys(
+      crypto,
+      device.privateKeyJwk,
+      console_.publicKeyJwk,
+    );
+
+    let onPairAck: { consoleId: string; peerPublicKey: unknown } | undefined;
+    const transport = new RelayTransport({
+      wsImpl: FakeWs.fresh(),
+      deviceId: "device-a",
+      privateKeyJwk: device.privateKeyJwk,
+      pairCode: "654321",
+      crypto,
+      onPairAck: (ack) => {
+        onPairAck = ack;
+      },
+    });
+    const p = transport.connect({ host: "relay.example", port: 4090 }, {});
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
+
+    const hello = JSON.parse(ws.sent[0]!) as { id: string };
+    const register = JSON.parse(ws.sent[1]!) as { id: string };
+    ws.recv(relayAck("relay.hello.ack", hello.id, "device-a"));
+    ws.recv(relayAck("relay.register.ack", register.id, "device-a"));
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(3));
+    const pair = JSON.parse(ws.sent[2]!) as { id: string };
+
+    ws.recv(
+      relayPairAck(pair.id, "device-a", {
+        code: "654321",
+        deviceId: "device-a",
+        consoleId: "console-c",
+        peerPublicKey: console_.publicKeyJwk,
+      }),
+    );
+
+    const conn = await p;
+    expect(onPairAck).toEqual({
+      consoleId: "console-c",
+      peerPublicKey: console_.publicKeyJwk,
+    });
+
+    const unaryP = conn.unary("host.describe", { want: "list" });
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(4));
+    const route = JSON.parse(ws.sent[3]!) as {
+      type: string;
+      payload: { to?: string; ciphertext?: string; nonce?: string; rpcId?: string; method?: string; payload?: unknown };
+    };
+    expect(route.type).toBe("relay.route");
+    expect(route.payload.to).toBe("console-c");
+    expect(typeof route.payload.ciphertext).toBe("string");
+    expect(typeof route.payload.nonce).toBe("string");
+    expect(route.payload.rpcId).toBeUndefined();
+    expect(route.payload.method).toBeUndefined();
+    expect(route.payload.payload).toBeUndefined();
+    expect(Object.keys(route.payload).sort()).toEqual(["ciphertext", "nonce", "to"]);
+
+    const inner = await openRelayPayload(crypto, expectedKeys.encKey, {
+      ciphertext: route.payload.ciphertext!,
+      nonce: route.payload.nonce!,
+    });
+    expect(inner).toMatchObject({ method: "host.describe", payload: { want: "list" } });
+  });
+
   it("includes pushToken in relay.register payload when configured", async () => {
     const transport = new RelayTransport({
       wsImpl: FakeWs.fresh(),
@@ -288,8 +444,8 @@ describe("RelayTransport.connect", () => {
     const p = transport.connect({ host: "relay.example", port: 4090 }, {});
     const ws = FakeWs.instances[0]!;
     ws.open();
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
 
-    expect(ws.sent).toHaveLength(2);
     const hello = JSON.parse(ws.sent[0]!) as { id: string };
     const register = JSON.parse(ws.sent[1]!) as {
       id: string;
@@ -321,6 +477,7 @@ describe("RelayTransport.connect", () => {
     expect(ws.url).toBe("wss://relay.example?credential=tok-9");
     // keep the pending handshake from leaking a timeout
     ws.open();
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
     const hello = JSON.parse(ws.sent[0]!) as { id: string };
     const register = JSON.parse(ws.sent[1]!) as { id: string };
     ws.recv(relayAck("relay.hello.ack", hello.id, "device-a"));
@@ -336,6 +493,7 @@ describe("RelayTransport.connect", () => {
     const p = transport.connect({ host: "relay.example", port: 4090 }, {});
     const ws = FakeWs.instances[0]!;
     ws.open();
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
     ws.recv(
       JSON.stringify({
         v: 1,
