@@ -1,5 +1,13 @@
 # PROGRESS
 
+## Phase 6：M3.5 中继配对闭环 + 密钥持久化（完成）
+- T1 protocol：`RelayTransportOptions` 新增 `pairCode`/`onPairAck`；未注入私钥时自动生成 ECDH P-256 keypair，register 携带 publicKey；配对码握手后发 `relay.pair` 并等 `relay.pair.ack`，派生会话密钥后启用加密数据面；未配置 pairCode 时明文路径不变。protocol 测试 100（原 97，+3）。
+- T2 relay：`relay.pair` 成功后复用 `relay.pair.ack` 向被配对 console 推送 `{deviceId, peerPublicKey?}`；console 离线则入离线队列，重连 drain 投递；新增 `pair_notify` audit。relay 测试 26（原 24，+2）。
+- T3 mobile：新增 `src/relay/relayDeviceStore.ts`（SecureStore → localStorage → 内存降级）持久化 deviceId/privateKeyJwk/publicKeyJwk；`ConnectionProvider` 使用持久化身份并支持可选 `pairCode`、`onPairAck`、`relayPeerId`；连接页 relay 模式显示 6 位配对码输入框，配对成功显示 `consoleId · paired`。mobile 测试 109（原 106，+3）。
+- T4 harness-plugin：`RelayClient` 未注入私钥时自动生成 keypair，register 携带公钥；收到 `relay.pair.ack` 通知后派生会话密钥并回调 `onPaired`；M3.2 注入路径保持。harness-plugin 测试 23（原 21，+2）。
+- 联调：`.shots/relay-pair-integration.mjs` 启动 relay + mock-harness + console（harness-plugin RelayClient）并打印 6 位配对码；Playwright 在连接页输入 `ws://127.0.0.1:4090` + 配对码完成配对，Sessions 出现 2 个 mock session；截图 `.shots/relay-pair-connect.png`/`.shots/relay-pair-sessions.png`，证据 `.shots/relay-pair-find.txt`/`.shots/relay-pair-sessions-find.txt`/`.shots/relay-pair-route-payload.txt`（route payload 仅 `{to, ciphertext, nonce}`）。
+- 全仓 `pnpm -r build && pnpm -r typecheck && pnpm -r test` 全绿；测试数：protocol 100 / mobile 109 / harness-plugin 23 / relay 26 / mock-harness 29 / capture 24。真机 APNs/FCM 留待设备/账号窗口。
+
 ## Phase 5：M3.4 硬化与自部署（完成）
 - `relay/src/rate-limit.ts`：令牌桶（默认 120/分钟、突发 240），超限 E_RATE；`relay-server.test.ts` 15 测试 + `rate-limit.test.ts` 3 测试。
 - 审计日志：`audit` 回调（默认 JSON 行，仅 event/from/to/ts/ok，无 payload）。

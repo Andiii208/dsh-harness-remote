@@ -251,3 +251,13 @@ export class RelayTransport implements Transport {
 - `docs/MANUAL.md` 增补 relay 部署章节（TLS 终止/Caddy/Docker/配置项/版本协商）；README 更新 M3 状态。
 - 全仓回归：protocol 97 / mobile 106 / harness-plugin 21 / relay 24 / mock-harness 29 / capture 24，build/typecheck/test 全绿。
 - 真机推送与 relay 真机回归留待设备/账号窗口（见 MANUAL 已知限制）。
+
+### M3.5 中继配对闭环 + 密钥持久化（2026-08-17 已实现）
+
+- **协议层（T1）**：`RelayTransportOptions` 新增 `pairCode` / `onPairAck`；`connect()` 在未注入 `privateKeyJwk` 时自动生成 ECDH P-256 keypair，`relay.register` 携带 `publicKey`（不再 `publicKey: null`）；配置 `pairCode` 时 hello/register 握手完成后发送 `relay.pair` 并等待 `relay.pair.ack`，从 ack 取 `consoleId + peerPublicKey` 派生会话密钥、启用加密数据面、回调 `onPairAck`。未配置 `pairCode` 且未注入 `peerPublicKeyJwk` 时保持 M3.1 明文路径不变。
+- **relay 服务器（T2）**：`relay.pair` 成功后除给发起方回 ack 外，复用 `relay.pair.ack` 信封向被配对 console 推送通知（`from=relay`，payload `{ deviceId, peerPublicKey? }`）；console 离线则入离线队列，重连注册后由既有 drain 投递；日志仅元数据，新增 `pair_notify` 审计事件。
+- **mobile（T3）**：新增 `apps/mobile/src/relay/relayDeviceStore.ts`（expo-secure-store → localStorage → 内存降级）持久化 `{ deviceId, privateKeyJwk, publicKeyJwk }`；`ConnectionProvider` 移除旧的模块级随机 deviceId，relay 连接前从 store 读取/生成身份并传入 `privateKeyJwk`/`pairCode`/`onPairAck`，`ConnectionApi.connect` 增加可选 `pairCode`，新增 `relayPeerId` 展示 consoleId；连接页 relay 模式显示可选 6 位配对码输入框（数字键盘），配对成功后显示 `consoleId · paired`。
+- **harness-plugin（T4）**：`RelayClientOptions` 新增 `onPaired`；未注入私钥时 connect 前自动生成 keypair（失败/无 WebCrypto 降级 `publicKey: null`），`registerPayload()` 携带公钥；收到 `relay.pair.ack` 通知后取 `deviceId + peerPublicKey` 派生会话密钥、启用加密数据面并回调 `onPaired`；M3.2 注入路径保持可用。
+- **联调**：`.shots/relay-pair-integration.mjs`（relay + mock-harness + harness-plugin RelayClient 控制台桥）打印 6 位配对码；Playwright 在连接页输入 `ws://127.0.0.1:4090` + 配对码完成配对，Sessions 出现 2 个 mock session；截图 `.shots/relay-pair-connect.png` / `.shots/relay-pair-sessions.png`；find 证据 `.shots/relay-pair-find.txt` / `.shots/relay-pair-sessions-find.txt`；加密 route 证据 `.shots/relay-pair-route-payload.txt`（payload 仅 `{to, ciphertext, nonce}`）。
+- 全仓回归：protocol 100 / mobile 109 / harness-plugin 23 / relay 26 / mock-harness 29 / capture 24，build/typecheck/test 全绿。
+- 真机 APNs/FCM 仍留待设备/账号窗口。
