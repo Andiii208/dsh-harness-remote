@@ -1,18 +1,21 @@
 /**
- * GoalCard — 会话页 goal 摘要卡（UI-SYSTEM v2：mono 眉标 + 进度条 + 暂停/恢复）。
+ * GoalCard — 会话页 goal 摘要卡（UI-SYSTEM v7：极简表面色卡 + 进度条 + 暂停/恢复）。
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useConnection } from "../../transport/ConnectionProvider";
 import type { SessionSummary } from "../../data/SessionStore";
-import { colors, font, radius, space, stroke } from "../../theme";
+import { font, radius, space } from "../../theme";
+import { useTheme } from "../../theme-context";
 import { SectionLabel } from "../SectionLabel";
 import { Button } from "../Button";
 import { useEntering } from "../anim";
 
 export function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { goals, sessions, setGoalStatus } = useConnection();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -104,31 +107,31 @@ export function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-    overflow: "hidden",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: space.x4,
-  },
-  meta: { color: colors.textMuted, fontSize: font.eyebrow, fontFamily: font.mono },
-  body: { paddingHorizontal: space.x4, paddingBottom: space.x4, gap: space.x2 },
-  objective: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
-  todoRow: { flexDirection: "row", alignItems: "center", gap: space.x2 },
-  todoMark: { color: colors.textMuted, fontSize: font.body - 2, width: 14 },
-  todoDone: { color: colors.success },
-  todoText: { color: colors.text, fontSize: font.caption, flex: 1, lineHeight: 18 },
-  todoTextDone: { color: colors.textMuted, textDecorationLine: "line-through" },
-  bar: { height: 3, borderRadius: 2, backgroundColor: colors.surface2, overflow: "hidden" },
-  barFill: { height: 3, backgroundColor: colors.accent, borderRadius: 2 },
-  actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.x2, marginTop: space.x2 },
-  error: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
-  errorHeader: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, paddingHorizontal: space.x4, paddingBottom: space.x2 },
-});
+function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.card,
+      overflow: "hidden",
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: space.x4,
+    },
+    meta: { color: colors.textMuted, fontSize: font.eyebrow, fontFamily: font.mono },
+    body: { paddingHorizontal: space.x4, paddingBottom: space.x4, gap: space.x2 },
+    objective: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
+    todoRow: { flexDirection: "row", alignItems: "center", gap: space.x2 },
+    todoMark: { color: colors.textMuted, fontSize: font.body - 2, width: 14 },
+    todoDone: { color: colors.success },
+    todoText: { color: colors.text, fontSize: font.caption, flex: 1, lineHeight: 18 },
+    todoTextDone: { color: colors.textMuted, textDecorationLine: "line-through" },
+    bar: { height: 3, borderRadius: 2, backgroundColor: colors.surface2, overflow: "hidden" },
+    barFill: { height: 3, backgroundColor: colors.accent, borderRadius: 2 },
+    actions: { flexDirection: "row", justifyContent: "flex-end", gap: space.x2, marginTop: space.x2 },
+    error: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
+    errorHeader: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, paddingHorizontal: space.x4, paddingBottom: space.x2 },
+  });
+}

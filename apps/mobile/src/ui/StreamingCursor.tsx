@@ -1,10 +1,10 @@
 /**
- * StreamingCursor — 流式输出闪烁光标（UI-SYSTEM §2：转录等宽、▍ 光标）。
+ * StreamingCursor — 流式输出闪烁光标（v7：方块光标）。
  * 尊重系统「减弱动态」：开启时静止显示；关闭动画时立即取消。
  */
 
-import { useEffect, useState } from "react";
-import { AccessibilityInfo, StyleSheet, Text } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { AccessibilityInfo, StyleSheet } from "react-native";
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
@@ -12,9 +12,12 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { colors, font } from "../theme";
+import { font } from "../theme";
+import { useTheme } from "../theme-context";
 
 export function StreamingCursor() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [reduced, setReduced] = useState(false);
   const opacity = useSharedValue(1);
   useEffect(() => {
@@ -33,6 +36,8 @@ export function StreamingCursor() {
   return <Animated.Text style={[styles.cursor, style]}>▍</Animated.Text>;
 }
 
-const styles = StyleSheet.create({
-  cursor: { color: colors.accent, fontFamily: font.mono, fontSize: font.transcript },
-});
+function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+  return StyleSheet.create({
+    cursor: { color: colors.accent, fontFamily: font.mono, fontSize: font.transcript },
+  });
+}

@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -13,18 +13,21 @@ import Animated from "react-native-reanimated";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { useConnection, STATE_LABEL } from "../../src/transport/ConnectionProvider";
 import type { TranscriptMessage } from "../../src/data/SessionStore";
-import { colors, font, radius, space, stroke } from "../../src/theme";
+import { font, radius, space } from "../../src/theme";
 import { SectionLabel } from "../../src/ui/SectionLabel";
 import { StatusChip } from "../../src/ui/StatusChip";
 import { useEntering } from "../../src/ui/anim";
 import { GoalCard } from "../../src/ui/chat/GoalCard";
 import { MessageBubble } from "../../src/ui/chat/MessageBubble";
 import { SkeletonRow } from "../../src/ui/SkeletonRow";
+import { useTheme } from "../../src/theme-context";
 import { haptic } from "../../src/ui/haptics";
 
 export default function ChatScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const id = Array.isArray(sessionId) ? sessionId[0] : sessionId;
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { sessions, transcript, liveMessage, sendMessage, state } = useConnection();
   const [draft, setDraft] = useState("");
   const [sendError, setSendError] = useState("");
@@ -54,7 +57,6 @@ export default function ChatScreen() {
   const onScroll = (e: { nativeEvent: { contentOffset: { y: number }; layoutMeasurement: { height: number }; contentSize: { height: number } } }) => {
     const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
     const distance = contentSize.height - (contentOffset.y + layoutMeasurement.height);
-    // 迟滞窗口：显示后用 280 关闭，隐藏后用 360 打开，避免临界抖动（评审 #2）。
     const shouldShow = showJumpRef.current ? distance > 280 : distance > 360;
     if (shouldShow !== showJumpRef.current) {
       showJumpRef.current = shouldShow;
@@ -152,7 +154,7 @@ export default function ChatScreen() {
             onPress={send}
             disabled={!draft.trim() || !online}
           >
-            <Text style={styles.sendText}>发送</Text>
+            <Text style={styles.sendText}>➤</Text>
           </Pressable>
         </View>
       </View>
@@ -160,66 +162,75 @@ export default function ChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  list: { flex: 1 },
-  listContent: { padding: space.x5, gap: space.x2, paddingBottom: space.x6 },
-  listHeader: { gap: space.x3, marginBottom: space.x2 },
-  sessionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: space.x3,
-  },
-  sessionTitle: { color: colors.text, fontSize: font.title, fontWeight: "600", flex: 1, letterSpacing: -0.2 },
-  emptyWrap: { alignItems: "center", paddingTop: space.x7 * 2, gap: space.x2 },
-  skeletonStack: { gap: space.x3, paddingTop: space.x3 },
-  emptyText: { color: colors.textMuted, fontSize: font.caption },
-  inputBar: {
-    gap: space.x2,
-    padding: space.x3,
-    borderTopWidth: stroke.hairline,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  inputRow: { flexDirection: "row", alignItems: "flex-end", gap: space.x2 },
-  input: {
-    flex: 1,
-    backgroundColor: colors.surface2,
-    borderRadius: radius.control,
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-    color: colors.text,
-    paddingHorizontal: (space.x3 + 2),
-    paddingVertical: 10,
-    fontSize: font.body,
-    maxHeight: 120,
-  },
-  send: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.control,
-    paddingHorizontal: space.x5,
-    paddingVertical: (space.x3 + 2),
-  },
-  sendDisabled: { opacity: 0.4 },
-  sendText: { color: "#FFFFFF", fontSize: font.body, fontWeight: "600" },
-  sendError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
-  jumpFabWrap: {
-    position: "absolute",
-    right: space.x5,
-    bottom: 96,
-  },
-  jumpFab: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    ...Platform.select({
-      ios: { shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
-      android: { elevation: 5 },
-    }),
-  },
-  jumpFabText: { color: "#FFFFFF", fontSize: 18, fontWeight: "700" },
-});
+function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg },
+    list: { flex: 1 },
+    listContent: { padding: space.x5, gap: space.x3, paddingBottom: space.x6 },
+    listHeader: { gap: space.x3, marginBottom: space.x2 },
+    sessionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: space.x3,
+    },
+    sessionTitle: {
+      color: colors.text,
+      fontFamily: font.display,
+      fontSize: 17,
+      fontWeight: "600",
+      flex: 1,
+      letterSpacing: -0.3,
+    },
+    emptyWrap: { alignItems: "center", paddingTop: space.x7 * 2, gap: space.x2 },
+    skeletonStack: { gap: space.x3, paddingTop: space.x3 },
+    emptyText: { color: colors.textMuted, fontSize: font.caption },
+    inputBar: {
+      gap: space.x2,
+      padding: space.x3,
+      borderTopWidth: 1,
+      borderTopColor: colors.separator,
+      backgroundColor: colors.bg,
+    },
+    inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 9 },
+    input: {
+      flex: 1,
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      color: colors.text,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      fontSize: font.body,
+      maxHeight: 120,
+    },
+    send: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      backgroundColor: colors.accent,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sendDisabled: { opacity: 0.4 },
+    sendText: { color: "#FFFFFF", fontSize: 15, fontWeight: "600" },
+    sendError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
+    jumpFabWrap: {
+      position: "absolute",
+      right: space.x5,
+      bottom: 96,
+    },
+    jumpFab: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      ...Platform.select({
+        ios: { shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+        android: { elevation: 5 },
+      }),
+    },
+    jumpFabText: { color: "#FFFFFF", fontSize: 18, fontWeight: "700" },
+  });
+}

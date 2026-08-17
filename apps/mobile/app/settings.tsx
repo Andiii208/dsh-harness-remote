@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import * as Linking from "expo-linking";
 import Constants from "expo-constants";
@@ -6,11 +6,14 @@ import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider"
 import { autoReconnectStore } from "../src/discovery/autoReconnectStoreAdapter";
 import { isExpoGo } from "../src/notify/expoEnv";
 import { Button } from "../src/ui/Button";
-import { colors, font, radius, space, stroke } from "../src/theme";
+import { font, radius, space, type ThemeColors } from "../src/theme";
+import { useTheme } from "../src/theme-context";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { StatusChip } from "../src/ui/StatusChip";
 
 function Group({ eyebrow, children }: { eyebrow: string; children: React.ReactNode }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.group}>
       <SectionLabel>{eyebrow}</SectionLabel>
@@ -20,6 +23,8 @@ function Group({ eyebrow, children }: { eyebrow: string; children: React.ReactNo
 }
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -31,6 +36,8 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
 }
 
 export default function SettingsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { state, describe, lastEndpoint, notifications, disconnect, notificationsEnabled, setNotificationsEnabled } = useConnection();
   const [autoReconnect, setAutoReconnect] = useState(true);
   useEffect(() => {
@@ -62,7 +69,7 @@ export default function SettingsScreen() {
           <Switch
             value={autoReconnect}
             onValueChange={(v) => void toggleAutoReconnect(v)}
-            trackColor={{ false: colors.surface3, true: colors.accent }}
+            trackColor={{ false: colors.surface2, true: colors.accent }}
             thumbColor={colors.text}
           />
         </View>
@@ -80,7 +87,7 @@ export default function SettingsScreen() {
             value={notificationsEnabled}
             onValueChange={setNotificationsEnabled}
             disabled={isExpoGo()}
-            trackColor={{ false: colors.surface3, true: colors.accent }}
+            trackColor={{ false: colors.surface2, true: colors.accent }}
             thumbColor={colors.text}
           />
         </View>
@@ -102,40 +109,40 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: space.x5, gap: space.x5, paddingBottom: space.x7 },
-  group: { gap: space.x2 },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-    paddingHorizontal: space.x4,
-    paddingVertical: space.x2,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: space.x3,
-    paddingVertical: space.x3,
-    borderBottomWidth: stroke.hairline,
-    borderBottomColor: colors.border,
-  },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: space.x3,
-    paddingVertical: space.x3,
-    borderBottomWidth: stroke.hairline,
-    borderBottomColor: colors.border,
-  },
-  rowLabel: { color: colors.text, fontSize: font.body },
-  disconnectRow: { paddingVertical: space.x3 },
-  linkRow: { paddingVertical: space.x3 },
-  hint: { color: colors.textDim, fontSize: font.caption, lineHeight: 18, paddingVertical: space.x3 },
-  rowValue: { color: colors.textMuted, fontSize: font.caption, flexShrink: 1, textAlign: "right" },
-  rowValueMono: { fontFamily: font.mono, color: colors.textMuted },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg },
+    content: { padding: space.x5, gap: space.x5, paddingBottom: space.x7 },
+    group: { gap: space.x2 },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.card,
+      paddingHorizontal: space.x4,
+      paddingVertical: space.x2,
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: space.x3,
+      paddingVertical: space.x3,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.separator,
+    },
+    statusRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: space.x3,
+      paddingVertical: space.x3,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.separator,
+    },
+    rowLabel: { color: colors.text, fontSize: font.body },
+    disconnectRow: { paddingVertical: space.x3 },
+    linkRow: { paddingVertical: space.x3 },
+    hint: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18, paddingVertical: space.x3 },
+    rowValue: { color: colors.textMuted, fontSize: font.caption, flexShrink: 1, textAlign: "right" },
+    rowValueMono: { fontFamily: font.mono, color: colors.textMuted },
+  });
+}

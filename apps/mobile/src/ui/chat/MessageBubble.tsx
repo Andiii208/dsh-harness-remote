@@ -1,19 +1,22 @@
 /**
- * MessageBubble — 转录消息（UI-SYSTEM v2：3px 角色边条 + mono 内容 + 流式光标）。
- * 支持 ``` 围栏代码块渲染（surface3 + mono）；长按复制（clipboard + haptic）。
+ * MessageBubble — 转录消息（UI-SYSTEM v7：iMessage 式气泡）。
+ * user = DeepSeek 蓝气泡白字；assistant = 表面色气泡；tool = 表面色 + 代码块。
+ * 支持 ``` 围栏代码块渲染（codeBg + mono）；长按复制（clipboard + haptic）。
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import type { TranscriptMessage } from "../../data/SessionStore";
-import { colors, font, radius, space, stroke } from "../../theme";
-import { SectionLabel } from "../SectionLabel";
+import { font, radius } from "../../theme";
+import { useTheme } from "../../theme-context";
 import { StreamingCursor } from "../StreamingCursor";
 import { haptic } from "../haptics";
 import { splitCode } from "./splitCode";
 
 export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolean }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
@@ -48,28 +51,31 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.bubble, isUser ? styles.bubbleUser : styles.bubbleBot, pressed && styles.bubblePressed]}
+      style={({ pressed }) => [
+        styles.bubble,
+        isUser ? styles.bubbleUser : styles.bubbleBot,
+        pressed && styles.bubblePressed,
+      ]}
       onLongPress={() => void onLongPress()}
       delayLongPress={350}
       accessibilityRole="text"
       accessibilityHint="长按复制消息内容"
     >
-      <View style={[styles.edge, isUser ? styles.edgeUser : isTool ? styles.edgeTool : styles.edgeBot]} />
       <View style={styles.body}>
         {m.role && m.role !== "user" && (
-          <SectionLabel tone={isTool ? "muted" : "accent"} style={styles.roleTag}>
-            {isTool ? "tool" : (m.role ?? "assistant")}
-          </SectionLabel>
+          <Text style={[styles.roleTag, isTool && styles.roleTagTool]}>
+            {isTool ? "tool · log" : (m.role ?? "assistant")}
+          </Text>
         )}
         {segments.map((seg, i) =>
           seg.code ? (
-            <View key={i} style={styles.codeBlock}>
+            <View key={i} style={[styles.codeBlock, isTool && styles.codeBlockTool]}>
               <Text style={styles.codeText} selectable>
                 {seg.text}
               </Text>
             </View>
           ) : (
-            <Text key={i} style={[styles.text, isTool && styles.toolText]} selectable>
+            <Text key={i} style={[styles.text, isUser && styles.textUser, isTool && styles.toolText]} selectable>
               {seg.text}
             </Text>
           ),
@@ -82,35 +88,33 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
   );
 }
 
-const styles = StyleSheet.create({
-  gapRow: { alignItems: "center", paddingVertical: space.x2 },
-  gapText: { color: colors.textDim, fontSize: font.caption, fontStyle: "italic" },
-  bubble: {
-    flexDirection: "row",
-    borderRadius: radius.card,
-    maxWidth: "94%",
-    overflow: "hidden",
-  },
-  bubbleUser: { alignSelf: "flex-end", backgroundColor: colors.surface },
-  bubbleBot: { alignSelf: "flex-start", backgroundColor: colors.surface },
-  bubblePressed: { opacity: 0.85 },
-  edge: { width: 3, borderRadius: 2 },
-  edgeUser: { backgroundColor: colors.accent },
-  edgeBot: { backgroundColor: colors.surface2 },
-  edgeTool: { backgroundColor: colors.textDim },
-  body: { padding: space.x3, gap: space.x1, flexShrink: 1 },
-  roleTag: { fontSize: font.eyebrow - 1, letterSpacing: 1 },
-  text: { color: colors.text, fontSize: font.transcript, lineHeight: 21, fontFamily: font.mono },
-  toolText: { color: colors.textMuted },
-  codeBlock: {
-    backgroundColor: colors.surface3,
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-    borderRadius: radius.control,
-    padding: space.x3,
-    marginVertical: space.x1,
-  },
-  codeText: { color: "#D7E3FF", fontSize: font.transcript, lineHeight: 20, fontFamily: font.mono },
-  copied: { color: colors.accent, fontSize: font.eyebrow, fontFamily: font.mono, alignSelf: "flex-end" },
-  tail: { color: colors.warn, fontSize: font.caption, fontFamily: font.mono },
-});
+function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+  return StyleSheet.create({
+    gapRow: { alignItems: "center", paddingVertical: 8 },
+    gapText: { color: colors.textDim, fontSize: 11, fontStyle: "italic" },
+    bubble: {
+      maxWidth: "82%",
+      borderRadius: 18,
+      overflow: "hidden",
+    },
+    bubbleUser: { alignSelf: "flex-end", backgroundColor: colors.msgSelf, borderBottomRightRadius: 6 },
+    bubbleBot: { alignSelf: "flex-start", backgroundColor: colors.surface, borderBottomLeftRadius: 6 },
+    bubblePressed: { opacity: 0.85 },
+    body: { paddingVertical: 11, paddingHorizontal: 15, gap: 5, flexShrink: 1 },
+    roleTag: { color: colors.textMuted, fontFamily: font.monoBold, fontSize: 9, fontWeight: "500", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 2 },
+    roleTagTool: { color: colors.warn },
+    text: { color: colors.text, fontSize: font.transcript, lineHeight: 20, fontFamily: font.mono },
+    textUser: { color: colors.msgSelfText },
+    toolText: { color: colors.textMuted },
+    codeBlock: {
+      backgroundColor: colors.codeBg,
+      borderRadius: 9,
+      padding: 11,
+      marginVertical: 4,
+    },
+    codeBlockTool: { borderLeftWidth: 2, borderLeftColor: colors.warn },
+    codeText: { color: colors.codeText, fontSize: 12, lineHeight: 19, fontFamily: font.mono },
+    copied: { color: colors.accent, fontSize: font.eyebrow, fontFamily: font.mono, alignSelf: "flex-end" },
+    tail: { color: colors.warn, fontSize: 11, fontFamily: font.mono },
+  });
+}

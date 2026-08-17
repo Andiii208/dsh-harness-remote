@@ -1,10 +1,11 @@
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { FlashList } from "@shopify/flash-list";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
-import { colors, font, radius, space, stroke } from "../src/theme";
+import { font, radius, space } from "../src/theme";
+import { useTheme } from "../src/theme-context";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { StatusChip } from "../src/ui/StatusChip";
 import { EmptyState } from "../src/ui/EmptyState";
@@ -18,11 +19,14 @@ function formatRelative(ms: number): string {
   return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function GoalPill({ status }: { status?: string }) {
+function GoalPill({ status, colors }: { status?: string; colors: ReturnType<typeof useTheme>["colors"] }) {
   if (!status) return null;
   const done = status === "complete";
   return (
-    <Text style={[styles.goalPill, done && styles.goalPillDone]}>
+    <Text style={[
+      { color: colors.warn, backgroundColor: "rgba(217,130,11,0.08)", fontFamily: font.monoBold, fontSize: 9, fontWeight: "500", letterSpacing: 0.5, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, overflow: "hidden" },
+      done && { color: colors.success, backgroundColor: "rgba(46,158,91,0.08)" },
+    ]}>
       {status.toUpperCase()}
     </Text>
   );
@@ -30,19 +34,19 @@ function GoalPill({ status }: { status?: string }) {
 
 export default function SessionsScreen() {
   const { sessions, pending, state, refreshSessions } = useConnection();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const entering = useEntering();
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
   const autoRefreshed = useRef(false);
-  // 每分钟刷新相对时间显示（"刚刚/×分钟前"）。
   const [, setTick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setTick(Date.now()), 60_000);
     return () => clearInterval(t);
   }, []);
 
-  // 上线后自动刷新一次会话列表（投影帧之外的全量校准）；离线时重置标记，重连后再次刷新。
   useEffect(() => {
     if (state === "offline") autoRefreshed.current = false;
     if (state === "online" && !autoRefreshed.current) {
@@ -97,9 +101,8 @@ export default function SessionsScreen() {
               accessibilityRole="button"
               accessibilityLabel={`${pending.length} 个待处理请求`}
             >
-              <View style={[styles.pendingRail, { backgroundColor: colors.warn }]} />
               <Text style={styles.pendingText}>
-                {pending.length} 个待处理请求（审批 / 提问）→
+                {pending.length} 个待处理请求（审批 / 提问）›
               </Text>
             </Pressable>
           )}
@@ -128,7 +131,7 @@ export default function SessionsScreen() {
               <Text style={styles.rowTitle} numberOfLines={1}>
                 {s.title ?? s.id}
               </Text>
-              <GoalPill status={s.goalStatus} />
+              <GoalPill status={s.goalStatus} colors={colors} />
               <Text style={styles.chevron} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">›</Text>
             </View>
             {s.lastMessage !== undefined && (
@@ -167,65 +170,55 @@ export default function SessionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: space.x5, gap: space.x3, paddingBottom: space.x7 },
-  header: { gap: space.x3, marginBottom: space.x2 },
-  headerRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: space.x3 },
-  headerText: { gap: space.x1 },
-  title: { color: colors.text, fontSize: font.title, fontWeight: "600", letterSpacing: -0.2 },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: space.x3 },
-  settingsLink: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono },
-  pendingBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.x3,
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-    paddingVertical: space.x3,
-    paddingRight: space.x4,
-    overflow: "hidden",
-  },
-  pendingRail: { width: 3, alignSelf: "stretch", borderRadius: 2 },
-  pendingText: { color: colors.warn, fontSize: font.body - 1, fontWeight: "600", flex: 1 },
-  refreshError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
-  row: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-    padding: space.x4,
-    gap: space.x2,
-  },
-  rowPressed: { backgroundColor: colors.surface2 },
-  skeletonStack: { gap: space.x3 },
-  rowHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x2 },
-  rowTitle: { color: colors.text, fontSize: font.section, fontWeight: "600", flex: 1 },
-  goalPill: {
-    color: "#0A0C10",
-    fontSize: font.eyebrow - 1,
-    fontFamily: font.monoBold,
-    fontWeight: "700",
-    backgroundColor: colors.warn,
-    borderRadius: radius.pill,
-    paddingHorizontal: space.x2,
-    paddingVertical: 2,
-    overflow: "hidden",
-  },
-  goalPillDone: { backgroundColor: colors.success },
-  chevron: { color: colors.textDim, fontSize: font.body, fontFamily: font.mono },
-  rowPreview: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
-  rowMeta: { flexDirection: "row", alignItems: "center", gap: space.x3 },
-  metaText: { color: colors.textDim, fontSize: font.eyebrow, fontFamily: font.mono, flexShrink: 1 },
-  miniBar: {
-    flex: 1,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: colors.surface2,
-    overflow: "hidden",
-  },
-  miniBarFill: { height: 3, backgroundColor: colors.accent, borderRadius: 2 },
-  metaTime: { marginLeft: "auto" },
-});
+function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg },
+    content: { padding: space.x5, gap: space.x3, paddingBottom: space.x7 },
+    header: { gap: space.x3, marginBottom: space.x2 },
+    headerRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: space.x3 },
+    headerText: { gap: space.x1 },
+    title: {
+      color: colors.text,
+      fontFamily: font.display,
+      fontSize: 34,
+      fontWeight: "600",
+      letterSpacing: -1,
+    },
+    headerActions: { flexDirection: "row", alignItems: "center", gap: space.x3 },
+    settingsLink: { color: colors.accent, fontSize: 13, fontWeight: "500" },
+    pendingBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.accentSoft,
+      borderRadius: radius.card,
+      paddingVertical: 13,
+      paddingHorizontal: space.x5,
+    },
+    pendingText: { color: colors.accent, fontSize: 14, fontWeight: "500", letterSpacing: -0.1, flex: 1 },
+    refreshError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
+    row: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.card,
+      padding: space.x5,
+      gap: 9,
+    },
+    rowPressed: { backgroundColor: colors.surface2 },
+    skeletonStack: { gap: space.x3 },
+    rowHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x2 },
+    rowTitle: { color: colors.text, fontSize: font.section + 1, fontWeight: "500", letterSpacing: -0.2, flex: 1 },
+    chevron: { color: colors.textDim, fontSize: 18, fontWeight: "300", fontFamily: font.mono },
+    rowPreview: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18, letterSpacing: 0.1 },
+    rowMeta: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 7 },
+    metaText: { color: colors.textMuted, fontSize: 10, fontFamily: font.mono, letterSpacing: 0.2, flexShrink: 1 },
+    miniBar: {
+      flex: 1,
+      height: 3,
+      borderRadius: 2,
+      backgroundColor: colors.surface2,
+      overflow: "hidden",
+      maxWidth: 80,
+    },
+    miniBarFill: { height: 3, backgroundColor: colors.accent, borderRadius: 2 },
+    metaTime: { marginLeft: "auto" },
+  });
+}

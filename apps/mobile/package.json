@@ -16,6 +16,7 @@
   "dependencies": {
     "@dsh-remote/protocol": "workspace:^",
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
+    "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@shopify/flash-list": "2.0.2",
     "expo": "~57.0.13",
     "expo-background-task": "~57.0.10",

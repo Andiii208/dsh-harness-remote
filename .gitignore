@@ -31,3 +31,4 @@ Thumbs.db
 # visual QA scratch
 .shots/
 dist-web/
+dist-web-v7/

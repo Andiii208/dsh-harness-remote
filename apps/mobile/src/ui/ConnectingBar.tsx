@@ -1,15 +1,18 @@
 /**
- * ConnectingBar — 连接中不定长进度条（UI-SYSTEM §3.7：3px、accent、不定长，不转圈）。
+ * ConnectingBar — 连接中不定长进度条（v7：2px、accent、不定长，不转圈）。
  */
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
-import { colors, radius } from "../theme";
+import { radius } from "../theme";
+import { useTheme } from "../theme-context";
 
 type Percent = `${number}%`;
 
 export function ConnectingBar() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const progress = useSharedValue(12);
   useEffect(() => {
     progress.value = withRepeat(
@@ -28,7 +31,9 @@ export function ConnectingBar() {
   );
 }
 
-const styles = StyleSheet.create({
-  track: { height: 3, borderRadius: radius.pill, backgroundColor: colors.surface2, overflow: "hidden" },
-  fill: { height: 3, borderRadius: radius.pill, backgroundColor: colors.accent },
-});
+function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+  return StyleSheet.create({
+    track: { height: 2, borderRadius: radius.pill, backgroundColor: colors.surface2, overflow: "hidden" },
+    fill: { height: 2, borderRadius: radius.pill, backgroundColor: colors.accent },
+  });
+}

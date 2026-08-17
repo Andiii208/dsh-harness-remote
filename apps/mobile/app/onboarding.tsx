@@ -1,11 +1,11 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
-import { colors, font, radius, space, stroke } from "../src/theme";
+import { font, radius, space, type ThemeColors } from "../src/theme";
+import { useTheme } from "../src/theme-context";
 import { WhaleMark } from "../src/ui/WhaleMark";
-import { WhaleWatermark } from "../src/ui/WhaleWatermark";
 import { useEntering } from "../src/ui/anim";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { Button } from "../src/ui/Button";
@@ -27,6 +27,8 @@ const STEPS = [
 ] as const;
 
 export default function OnboardingScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
@@ -41,8 +43,6 @@ export default function OnboardingScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + space.x7, paddingBottom: insets.bottom + space.x5 }]}>
-      <WhaleWatermark size={300} style={styles.watermark} />
-
       <View style={styles.brand}>
         <WhaleMark size={44} />
         <SectionLabel>harness remote</SectionLabel>
@@ -76,31 +76,35 @@ export default function OnboardingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: space.x5, justifyContent: "space-between" },
-  watermark: { position: "absolute", top: space.x6, right: -space.x7 },
-  brand: { alignItems: "center", gap: space.x2 },
-  stepCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-    padding: space.x6,
-    gap: space.x3,
-  },
-  title: { color: colors.text, fontSize: font.title, fontWeight: "600", letterSpacing: -0.2, lineHeight: 28 },
-  body: { color: colors.textMuted, fontSize: font.body, lineHeight: 21 },
-  codeBox: {
-    backgroundColor: colors.surface3,
-    borderRadius: radius.control,
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-    padding: space.x3,
-  },
-  code: { color: colors.textMuted, fontFamily: font.mono, fontSize: font.transcript - 1, lineHeight: 20 },
-  dots: { flexDirection: "row", gap: space.x2, justifyContent: "center", paddingTop: space.x2 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.surface3 },
-  dotActive: { width: 18, backgroundColor: colors.accent },
-  actions: { flexDirection: "row", gap: space.x3 },
-  flex: { flex: 1 },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: space.x5, justifyContent: "space-between" },
+    brand: { alignItems: "center", gap: space.x2 },
+    stepCard: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.card,
+      padding: space.x6,
+      gap: space.x3,
+    },
+    title: {
+      color: colors.text,
+      fontFamily: font.display,
+      fontSize: 22,
+      fontWeight: "600",
+      letterSpacing: -0.5,
+      lineHeight: 28,
+    },
+    body: { color: colors.textMuted, fontSize: font.body, lineHeight: 21 },
+    codeBox: {
+      backgroundColor: colors.codeBg,
+      borderRadius: radius.control,
+      padding: space.x3,
+    },
+    code: { color: colors.codeText, fontFamily: font.mono, fontSize: font.transcript - 1, lineHeight: 20 },
+    dots: { flexDirection: "row", gap: space.x2, justifyContent: "center", paddingTop: space.x2 },
+    dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.surface2 },
+    dotActive: { width: 18, backgroundColor: colors.accent },
+    actions: { flexDirection: "row", gap: space.x3 },
+    flex: { flex: 1 },
+  });
+}

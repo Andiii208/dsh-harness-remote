@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>harness remote — UI 原型 v4（鲸之海）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============ 主题令牌 v4：鲸之海 ============ */
+:root, [data-theme="dark"] {
+  --bg0: #04060D;
+  --bg1: #081226;
+  --bg2: #0D1D3A;
+  --glow: rgba(108,140,255,0.14);
+  --surface: rgba(13,22,44,0.72);
+  --surface2: rgba(20,32,62,0.78);
+  --surface3: rgba(26,40,78,0.85);
+  --hl: rgba(255,255,255,0.07);
+  --border: rgba(148,180,255,0.10);
+  --border-strong: rgba(148,180,255,0.22);
+  --text: #E9EFFC;
+  --muted: #97A8CC;
+  --dim: #5E7099;
+  --accent: #6E8BFF;
+  --accent-hi: #93AAFF;
+  --accent-soft: rgba(110,139,255,0.16);
+  --success: #3ED6A8;
+  --warn: #F5B94D;
+  --danger: #F0728C;
+  --code-text: #B9C9F0;
+  --whale: rgba(110,139,255,0.55);
+  --whale-trail: rgba(110,139,255,0.18);
+  --card-shadow: none;
+  --card-top: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0) 40%);
+  --bg-gradient: radial-gradient(120% 60% at 50% -10%, rgba(90,130,255,0.16), transparent 60%), linear-gradient(180deg, var(--bg0), var(--bg1) 45%, var(--bg2));
+}
+[data-theme="light"] {
+  --bg0: #F4F8FE;
+  --bg1: #EAF0FB;
+  --bg2: #E2EAF8;
+  --glow: rgba(77,107,254,0.10);
+  --surface: rgba(255,255,255,0.92);
+  --surface2: rgba(255,255,255,0.98);
+  --surface3: #EDF2FB;
+  --hl: rgba(255,255,255,0.9);
+  --border: rgba(31,64,140,0.12);
+  --border-strong: rgba(31,64,140,0.24);
+  --text: #0C1A38;
+  --muted: #4A5C85;
+  --dim: #8596BB;
+  --accent: #3D5AFE;
+  --accent-hi: #2C46D4;
+  --accent-soft: rgba(61,90,254,0.10);
+  --success: #0FA56F;
+  --warn: #C07E10;
+  --danger: #D63D5E;
+  --code-text: #2C3A5C;
+  --whale: rgba(45,80,160,0.30);
+  --whale-trail: rgba(45,80,160,0.08);
+  --card-shadow: 0 10px 34px rgba(45,80,160,0.10), 0 2px 8px rgba(45,80,160,0.06);
+  --card-top: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.2));
+  --bg-gradient: radial-gradient(100% 55% at 50% -5%, rgba(120,155,255,0.22), transparent 65%), linear-gradient(180deg, var(--bg0), var(--bg1) 50%, var(--bg2));
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body {
+  font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+  background: #03050A;
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 22px 16px 46px;
+  transition: background 300ms ease;
+}
+.mono { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+
+/* ============ 工具栏 ============ */
+.toolbar {
+  width: 100%; max-width: 920px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 18px; flex-wrap: wrap;
+}
+.toolbar .brand { color:#fff; font-size:12px; letter-spacing:3px; opacity:.75; font-weight:700; text-transform:uppercase; }
+.toolbar .brand b { color:#6E8BFF; }
+.tabs { display:flex; gap:6px; }
+.tab {
+  background:rgba(255,255,255,0.05);
+  color:#8FA0BF; border:1px solid rgba(255,255,255,0.08);
+  border-radius:999px; padding:8px 16px; font-size:13px; font-weight:500;
+  cursor:pointer; transition:all 160ms ease; font-family:inherit;
+}
+.tab:hover { color:#fff; background:rgba(255,255,255,0.09); }
+.tab.active { background:linear-gradient(135deg,#6E8BFF,#4D6BFE); color:#fff; border-color:transparent; box-shadow:0 4px 18px rgba(110,139,255,0.35); }
+.theme-switch { display:flex; gap:6px; }
+.ts {
+  background:rgba(255,255,255,0.05); color:#8FA0BF;
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:999px; padding:8px 14px; font-size:12px; font-weight:500;
+  cursor:pointer; transition:all 160ms ease; font-family:inherit;
+}
+.ts:hover { color:#fff; }
+.ts.active { background:rgba(255,255,255,0.12); color:#fff; border-color:rgba(255,255,255,0.2); }
+
+/* ============ 手机 ============ */
+.stage { position:relative; width:390px; }
+.phone {
+  width:390px; height:844px;
+  background: var(--bg-gradient);
+  border-radius:44px; overflow:hidden; position:relative;
+  border:8px solid #0E1322;
+  box-shadow: 0 40px 90px rgba(0,0,0,0.65), inset 0 0 0 1px rgba(255,255,255,0.04);
+  transition: background 300ms ease;
+}
+.phone::after { /* 顶部高光 */
+  content:""; position:absolute; top:0; left:8%; right:8%; height:2px;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,0.16), transparent);
+  border-radius:2px;
+}
+.statusbar {
+  position:absolute; top:0; left:0; right:0; z-index:50;
+  height:48px; display:flex; align-items:center; justify-content:space-between;
+  padding:0 26px; color:var(--text); font-size:13px; font-weight:600; letter-spacing:0.2px;
+}
+.screen { position:absolute; inset:0; overflow-y:auto; overflow-x:hidden; padding-top:48px; scrollbar-width:none; }
+.screen::-webkit-scrollbar { display:none; }
+.screen[hidden] { display:none; }
+.home-indicator { position:absolute; bottom:6px; left:50%; transform:translateX(-50%); width:120px; height:4px; border-radius:2px; background:var(--dim); opacity:.45; z-index:50; }
+
+/* ============ 组件 ============ */
+.eyebrow { font-family:"JetBrains Mono",monospace; font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--dim); }
+.chip {
+  display:inline-flex; align-items:center; gap:7px;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:999px; padding:5px 12px;
+  font-family:"JetBrains Mono",monospace; font-size:10px; font-weight:700; letter-spacing:0.8px;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.dot { width:7px; height:7px; border-radius:50%; flex:none; position:relative; }
+.dot::after { content:""; position:absolute; inset:-3px; border-radius:50%; background:inherit; opacity:.35; filter:blur(3px); }
+.card {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:16px;
+  box-shadow: var(--card-shadow);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  position:relative;
+  transition: background 300ms ease, border-color 300ms ease;
+}
+.card::before { /* 顶部高光 */
+  content:""; position:absolute; top:0; left:12%; right:12%; height:1px;
+  background:var(--card-top); border-radius:1px;
+}
+.btn {
+  height:48px; border-radius:12px; border:none; font-size:15px; font-weight:600;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease, opacity 160ms ease;
+  font-family:inherit; letter-spacing:0.2px;
+}
+.btn:active { transform:scale(0.975); }
+.btn-primary {
+  background:linear-gradient(135deg, #5B7CFF 0%, #3B63F7 55%, #3053E8 100%);
+  color:#fff; box-shadow:0 8px 26px rgba(59,99,247,0.40), inset 0 1px 0 rgba(255,255,255,0.25);
+}
+.btn-primary:hover { box-shadow:0 10px 32px rgba(59,99,247,0.52), inset 0 1px 0 rgba(255,255,255,0.3); }
+.btn-primary:disabled { opacity:0.45; box-shadow:none; }
+.btn-pill { border-radius:999px; } /* 主 CTA 药丸形（Linear 160px pill） */
+.btn-ghost { background:var(--surface); color:var(--text); border:1px solid var(--border); backdrop-filter: blur(10px); }
+.btn-ghost:hover { background:var(--surface2); }
+.btn-danger { background:transparent; color:var(--danger); border:1px solid var(--border); }
+.btn-full { width:100%; }
+.field {
+  background:var(--surface2); border:1px solid var(--border); border-radius:12px;
+  height:48px; padding:0 16px; font-family:"JetBrains Mono",monospace; font-size:13px;
+  color:var(--text); width:100%; transition: border-color 160ms ease, box-shadow 160ms ease;
+  backdrop-filter: blur(8px);
+}
+.field::placeholder { color:var(--dim); }
+.field:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft), 0 0 20px var(--glow); }
+.field-label { font-family:"JetBrains Mono",monospace; font-size:10px; font-weight:700; letter-spacing:2px; color:var(--dim); margin-bottom:7px; }
+
+/* ============ 连接页：鲸之海 hero ============ */
+.connect-pad { padding:16px; display:flex; flex-direction:column; gap:18px; }
+
+.hero {
+  position:relative;
+  border-radius:20px;
+  background:
+    radial-gradient(90% 70% at 70% 20%, var(--glow), transparent 60%),
+    linear-gradient(165deg, rgba(20,34,70,0.6), rgba(8,14,30,0.4));
+  border:1px solid var(--border);
+  overflow:hidden;
+  box-shadow: var(--card-shadow);
+  transition: background 300ms ease;
+}
+.hero::before { /* 海面光柱 */
+  content:""; position:absolute; top:-20%; left:62%; width:120px; height:150%;
+  background:linear-gradient(180deg, rgba(140,170,255,0.16), transparent 70%);
+  transform:rotate(18deg);
+  filter:blur(6px);
+  pointer-events:none;
+}
+.whale-canvas { position:relative; height:200px; overflow:hidden; }
+.whale-canvas svg { position:absolute; }
+
+/* 游鲸：尾→身→头 三段，连接时摆动 */
+.whale-group { animation: none; transform-origin: 65% 55%; }
+.whale-body { fill: var(--whale); transition: fill 300ms ease; }
+.whale-body.pulse { animation: whaleGlow 6s ease-in-out infinite; }
+@keyframes whaleGlow {
+  0%,100% { fill: var(--whale); filter: drop-shadow(0 0 6px var(--whale-trail)); }
+  50%     { fill: var(--whale); filter: drop-shadow(0 0 18px var(--glow)); }
+}
+.whale-tail { fill: var(--whale); transition: fill 300ms ease; transform-origin: 30% 50%; animation: none; }
+.whale-eye { fill: var(--bg0); transition: fill 300ms ease; }
+.hero .whale-body.stream { animation: whaleBreathe 3.2s ease-in-out infinite; }
+@keyframes whaleBreathe { 0%,100% { transform:scale(1,1); } 50% { transform:scale(1.02,0.985); } }
+.hero .whale-tail.stream { animation: tailWave 3.2s ease-in-out infinite; }
+@keyframes tailWave { 0%,100% { transform:rotate(0deg); } 50% { transform:rotate(-9deg); } }
+
+.hero-meta {
+  position:absolute; top:12px; left:14px; right:14px;
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+}
+.hero-target { font-family:"JetBrains Mono",monospace; font-size:10px; color:var(--dim); letter-spacing:0.6px; }
+.hero-target b { color:var(--text); font-weight:700; }
+
+.hero-title {
+  position:absolute; left:18px; bottom:34px; z-index:2;
+  display:flex; flex-direction:column; gap:3px;
+}
+.hero-title .t1 {
+  font-family:"Space Grotesk", sans-serif;
+  font-size:30px; font-weight:700; letter-spacing:-0.5px;
+  color:var(--text); line-height:1.05;
+  text-shadow: 0 2px 24px rgba(110,139,255,0.35);
+}
+.hero-title .t2 {
+  font-family:"JetBrains Mono",monospace; font-size:10px; font-weight:700;
+  letter-spacing:2.5px; text-transform:uppercase; color:var(--accent-hi);
+}
+
+.hero-state {
+  position:absolute; right:14px; bottom:14px; z-index:2;
+}
+
+.state-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:-4px; }
+.describe { font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--muted); }
+.connecting-bar { height:3px; border-radius:2px; background:var(--surface); overflow:hidden; margin-top:8px; }
+.connecting-bar .fill { height:100%; width:40%; background:linear-gradient(90deg, transparent, var(--accent), transparent); border-radius:2px; animation: slide 1.1s ease-in-out infinite; }
+@keyframes slide { 0% { margin-left:-40%; } 100% { margin-left:100%; } }
+
+/* 主机列表 */
+.section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.scan-link { font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--accent); cursor:pointer; letter-spacing:0.4px; }
+.host-list { border-radius:16px; overflow:hidden; border:1px solid var(--border); background:var(--surface); backdrop-filter: blur(14px); box-shadow: var(--card-shadow); position:relative; }
+.host-list::before { content:""; position:absolute; top:0; left:12%; right:12%; height:1px; background:var(--card-top); }
+.host-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; border-bottom:1px solid var(--border);
+  cursor:pointer; transition: background 160ms ease;
+}
+.host-row:last-child { border-bottom:none; }
+.host-row:hover { background:var(--surface2); }
+.host-name-row { display:flex; align-items:center; gap:9px; }
+.host-dot { width:6px; height:6px; border-radius:3px; background:var(--success); box-shadow:0 0 8px var(--success); }
+.host-name { font-size:15px; font-weight:600; color:var(--text); letter-spacing:-0.2px; }
+.paired {
+  font-family:"JetBrains Mono",monospace; font-size:9px; font-weight:700; letter-spacing:0.6px;
+  color:var(--success); border:1px solid rgba(62,214,168,0.4); border-radius:999px; padding:2px 9px;
+  background: rgba(62,214,168,0.08);
+}
+.host-meta { font-family:"JetBrains Mono",monospace; font-size:10px; color:var(--dim); margin-top:3px; letter-spacing:0.3px; }
+.host-arrow { font-family:"JetBrains Mono",monospace; color:var(--dim); font-size:15px; }
+.host-empty { padding:16px; color:var(--dim); font-size:12px; line-height:18px; }
+.discover-row { display:flex; gap:12px; margin-top:12px; }
+.discover-row .btn { flex:1; }
+
+/* 手动连接 */
+.manual-card { padding:16px; display:flex; flex-direction:column; gap:13px; }
+.token-clear { margin-top:2px; color:var(--danger); font-size:12px; cursor:pointer; align-self:flex-start; }
+
+/* 操作区 */
+.action-zone { display:flex; flex-direction:column; gap:12px; }
+.hint { font-size:12px; color:var(--muted); line-height:19px; letter-spacing:0.1px; }
+.hint.warn { color:var(--warn); }
+.version { font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--dim); text-align:center; letter-spacing:0.4px; }
+.link-accent { color:var(--accent); font-size:14px; text-align:center; cursor:pointer; }
+
+/* ============ 会话列表 ============ */
+.sessions-pad { padding:16px; display:flex; flex-direction:column; gap:12px; }
+.sessions-head { display:flex; align-items:flex-end; justify-content:space-between; }
+.sessions-title { font-size:26px; font-weight:700; letter-spacing:-0.6px; color:var(--text); }
+.head-actions { display:flex; align-items:center; gap:12px; }
+.settings-link { font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--muted); cursor:pointer; letter-spacing:0.4px; }
+.pending-banner {
+  display:flex; align-items:center; gap:13px;
+  background: linear-gradient(90deg, rgba(245,185,77,0.10), rgba(245,185,77,0.03));
+  border:1px solid rgba(245,185,77,0.25); border-radius:16px;
+  padding:13px 15px; cursor:pointer; box-shadow: var(--card-shadow);
+  position:relative; overflow:hidden;
+}
+.pending-rail { width:3px; align-self:stretch; border-radius:2px; background:var(--warn); flex:none; box-shadow:0 0 10px var(--warn); }
+.pending-text { color:var(--warn); font-size:13px; font-weight:600; letter-spacing:0.1px; }
+.session-row {
+  background:var(--surface); border:1px solid var(--border); border-radius:16px;
+  padding:16px; display:flex; flex-direction:column; gap:9px;
+  cursor:pointer; box-shadow: var(--card-shadow);
+  backdrop-filter: blur(14px); position:relative;
+  transition: transform 160ms ease, background 160ms ease;
+}
+.session-row::before { content:""; position:absolute; top:0; left:12%; right:12%; height:1px; background:var(--card-top); }
+.session-row:hover { background:var(--surface2); }
+.session-row:active { transform:scale(0.985); }
+.s-row-head { display:flex; align-items:center; gap:9px; }
+.s-title { font-size:16px; font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; letter-spacing:-0.2px; }
+.goal-pill {
+  font-family:"JetBrains Mono",monospace; font-size:9px; font-weight:700; letter-spacing:0.8px;
+  color:var(--warn); border:1px solid rgba(245,185,77,0.35); border-radius:999px;
+  padding:2px 9px; flex:none; background: rgba(245,185,77,0.07);
+}
+.goal-pill.done { color:var(--success); border-color:rgba(62,214,168,0.35); background:rgba(62,214,168,0.07); }
+.s-preview { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:18px; }
+.s-meta { display:flex; align-items:center; gap:12px; }
+.s-meta-text { font-family:"JetBrains Mono",monospace; font-size:10px; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; letter-spacing:0.3px; }
+.s-meta-time { margin-left:auto; flex:none; }
+.mini-bar { flex:1; height:3px; border-radius:2px; background:var(--surface3); overflow:hidden; max-width:88px; }
+.mini-bar .fill { height:100%; border-radius:2px; background:linear-gradient(90deg, var(--accent), var(--accent-hi)); box-shadow:0 0 6px var(--glow); }
+.mini-bar .fill.warn { background:linear-gradient(90deg, #C97B12, var(--warn)); box-shadow:0 0 6px rgba(245,185,77,0.4); }
+
+/* ============ 聊天页 ============ */
+.chat-pad { display:flex; flex-direction:column; height:100%; }
+.chat-head {
+  padding:14px 16px 12px; border-bottom:1px solid var(--border);
+  background: linear-gradient(180deg, var(--bg1), transparent);
+  display:flex; flex-direction:column; gap:10px;
+}
+.chat-title-row { display:flex; align-items:center; justify-content:space-between; }
+.chat-title { font-size:17px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; letter-spacing:-0.3px; }
+.msg { display:flex; flex-direction:row; border-radius:14px; max-width:94%; overflow:hidden; position:relative; }
+.msg.self { align-self:flex-end; background:linear-gradient(135deg, rgba(77,107,254,0.18), rgba(77,107,254,0.06)); border:1px solid rgba(110,139,255,0.22); box-shadow:0 4px 20px rgba(77,107,254,0.10); }
+.msg.other { align-self:flex-start; background:var(--surface); border:1px solid var(--border); backdrop-filter: blur(14px); }
+.msg-edge { width:3px; flex:none; align-self:stretch; border-radius:2px; }
+.msg-body { padding:13px; display:flex; flex-direction:column; gap:5px; flex:1; }
+.role-tag { font-family:"JetBrains Mono",monospace; font-size:9px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; }
+.role-tag.accent { color:var(--accent-hi); }
+.role-tag.muted { color:var(--dim); }
+.msg-text { font-family:"JetBrains Mono",monospace; font-size:13px; line-height:21px; color:var(--text); white-space:pre-wrap; word-break:break-word; }
+.msg-text.muted { color:var(--muted); }
+.code-block {
+  background:var(--surface3); border:1px solid var(--border); border-radius:11px;
+  padding:12px; margin:4px 0;
+  font-family:"JetBrains Mono",monospace; font-size:12px; line-height:20px; color:var(--code-text);
+  white-space:pre-wrap; word-break:break-word;
+}
+.tail { color:var(--warn); font-size:11px; font-family:"JetBrains Mono",monospace; }
+.cursor {
+  display:inline-block; width:8px; height:16px; background:var(--accent);
+  vertical-align:text-bottom; animation: blink 1s steps(2) infinite; border-radius:1px;
+  box-shadow:0 0 8px var(--accent);
+}
+@keyframes blink { 50% { opacity:0; } }
+.gap-row { align-self:center; padding:8px 0; }
+.gap-text { font-size:11px; color:var(--dim); font-style:italic; font-family:"JetBrains Mono",monospace; letter-spacing:0.4px; }
+.chat-list { flex:1; padding:12px 16px; display:flex; flex-direction:column; gap:11px; overflow-y:auto; scrollbar-width:none; }
+.chat-list::-webkit-scrollbar { display:none; }
+
+/* 输入条（毛玻璃） */
+.input-bar {
+  border-top:1px solid var(--border);
+  padding:12px 16px calc(16px + 10px);
+  background: rgba(10,18,38,0.55);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  display:flex; gap:10px; align-items:center;
+}
+[data-theme="light"] .input-bar { background: rgba(255,255,255,0.6); }
+.input-bar .field { flex:1; }
+.send-btn {
+  width:48px; height:48px; border-radius:12px; border:none; flex:none;
+  background:linear-gradient(135deg,#7A96FF,#4D6BFE); color:#fff; font-size:16px; cursor:pointer;
+  box-shadow:0 6px 20px rgba(77,107,254,0.35);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.send-btn:active { transform:scale(0.92); }
+.send-btn:disabled { opacity:0.4; }
+
+/* ============ 动效尊重 ============ */
+@media (prefers-reduced-motion: reduce) {
+  .whale-body.pulse, .whale-body.stream, .whale-tail.stream, .connecting-bar .fill, .cursor { animation:none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="brand"><b>HARNESS</b> REMOTE · 原型 v4</div>
+  <div class="tabs">
+    <button class="tab active" data-page="connect">连接</button>
+    <button class="tab" data-page="sessions">会话</button>
+    <button class="tab" data-page="chat">聊天</button>
+  </div>
+  <div class="theme-switch">
+    <button class="ts active" data-theme-btn="dark">深色</button>
+    <button class="ts" data-theme-btn="light">浅色</button>
+    <button class="ts" data-theme-btn="system">跟随系统</button>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="phone" id="phone">
+    <div class="statusbar">
+      <span>9:41</span>
+      <span style="letter-spacing:1px; font-size:11px;">⬆︎ ▮▮ ●</span>
+    </div>
+
+    <!-- ============ 连接页 ============ -->
+    <div class="screen connect-pad" id="screen-connect">
+      <!-- 鲸之海 hero -->
+      <div class="hero">
+        <div class="hero-meta">
+          <span class="hero-target mono" id="hero-target"><b>harness remote</b> · 192.168.1.5:3080</span>
+          <span class="chip" id="chip-hero"><span class="dot" id="dot-hero" style="background:var(--danger)"></span><span id="chip-hero-text">OFFLINE</span></span>
+        </div>
+        <div class="whale-canvas" id="whale-canvas">
+          <!-- 深海鲸鱼：横向游动，光柱从右上透下 -->
+          <svg viewBox="0 0 390 200" width="390" height="200" style="position:absolute; left:0; top:0;">
+            <ellipse cx="295" cy="118" rx="120" ry="14" fill="rgba(110,139,255,0.05)" filter="blur(14px)"/>
+            <g class="whale-group" id="whale-group">
+              <!-- 尾鳍 -->
+              <path class="whale-tail" id="whale-tail" d="M 84 104 C 62 88, 50 92, 44 100 C 56 108, 58 122, 46 132 C 54 136, 70 134, 86 122 Z"/>
+              <!-- 身体（向右游，头在右） -->
+              <path class="whale-body" id="whale-body" d="M 86 116 C 100 82, 140 60, 190 56 C 250 52, 310 64, 352 96 C 366 106, 372 116, 372 124 C 372 130, 362 136, 344 140 C 300 150, 240 150, 190 146 C 140 142, 104 132, 86 116 Z"/>
+              <!-- 白腹 -->
+              <path d="M 150 130 C 190 134, 250 134, 300 128 C 270 140, 220 146, 170 142 Z" fill="rgba(255,255,255,0.08)"/>
+              <!-- 眼睛 -->
+              <circle class="whale-eye" id="whale-eye" cx="336" cy="104" r="5"/>
+              <circle cx="336" cy="104" r="2" fill="rgba(255,255,255,0.9)"/>
+              <!-- 水花轨迹 -->
+              <circle cx="60" cy="120" r="2.5" fill="rgba(140,170,255,0.35)"/>
+              <circle cx="40" cy="126" r="1.6" fill="rgba(140,170,255,0.25)"/>
+              <circle cx="26" cy="118" r="1.2" fill="rgba(140,170,255,0.18)"/>
+            </g>
+          </svg>
+        </div>
+        <div class="hero-title">
+          <span class="t1" id="hero-t1">harness remote</span>
+          <span class="t2">DeepSeek Harness · LAN</span>
+        </div>
+        <div class="hero-state">
+          <span class="chip" id="chip-state"><span class="dot" id="dot-state" style="background:var(--danger)"></span><span id="chip-state-text">OFFLINE</span></span>
+        </div>
+      </div>
+
+      <div class="state-row">
+        <span class="describe mono" id="describe" hidden>dsh 0.1.0-rc.5</span>
+        <span></span>
+      </div>
+      <div class="connecting-bar" id="connecting-bar" hidden><div class="fill"></div></div>
+
+      <!-- 最近主机 -->
+      <div>
+        <div class="section-head">
+          <span class="eyebrow">Recent hosts</span>
+          <span class="scan-link">扫码配对 →</span>
+        </div>
+        <div class="host-list">
+          <div class="host-row" data-host="192.168.1.5">
+            <div>
+              <div class="host-name-row">
+                <span class="host-dot"></span>
+                <span class="host-name">studio-rig</span>
+                <span class="paired">PAIRED</span>
+              </div>
+              <div class="host-meta">192.168.1.5:3080 · dsh 0.1.0-rc.5</div>
+            </div>
+            <span class="host-arrow">→</span>
+          </div>
+          <div class="host-row" data-host="192.168.1.11">
+            <div>
+              <div class="host-name-row">
+                <span class="host-dot"></span>
+                <span class="host-name">dev-mini</span>
+              </div>
+              <div class="host-meta">192.168.1.11:3080</div>
+            </div>
+            <span class="host-arrow">→</span>
+          </div>
+        </div>
+        <div class="discover-row">
+          <button class="btn btn-ghost" id="btn-discover">自动发现</button>
+          <button class="btn btn-primary" id="btn-scan">扫码配对</button>
+        </div>
+      </div>
+
+      <!-- 手动连接 -->
+      <div class="card manual-card">
+        <span class="eyebrow">Manual connect</span>
+        <div>
+          <div class="field-label">HOST</div>
+          <input class="field" id="f-host" value="192.168.1.5" spellcheck="false" autocapitalize="off">
+        </div>
+        <div>
+          <div class="field-label">PORT</div>
+          <input class="field" id="f-port" value="3080" inputmode="numeric">
+        </div>
+        <div>
+          <div class="field-label">PAIR TOKEN · OPTIONAL</div>
+          <input class="field" id="f-token" placeholder="配对 token（可选）" type="password">
+        </div>
+        <span class="token-clear" id="token-clear" hidden>清除已保存的配对</span>
+      </div>
+
+      <div class="action-zone">
+        <button class="btn btn-primary btn-full btn-pill" id="btn-connect">连接</button>
+        <div class="hint warn" id="hint">LAN 直连，未配对时无鉴权——请仅在可信网络使用</div>
+      </div>
+      <div class="version mono">v0.4.0 · dsh-remote</div>
+    </div>
+
+    <!-- ============ 会话列表 ============ -->
+    <div class="screen sessions-pad" id="screen-sessions" hidden>
+      <div class="sessions-head">
+        <div>
+          <div class="sessions-title">Sessions</div>
+          <div class="eyebrow" style="margin-top:5px;">Sessions 3 · online</div>
+        </div>
+        <div class="head-actions">
+          <span class="settings-link">设置</span>
+          <span class="chip" id="chip-sessions"><span class="dot" style="background:var(--success)"></span>ONLINE</span>
+        </div>
+      </div>
+
+      <div class="pending-banner">
+        <div class="pending-rail"></div>
+        <span class="pending-text">2 个待处理请求（审批 / 提问）→</span>
+      </div>
+
+      <div class="session-row">
+        <div class="s-row-head">
+          <span class="s-title">修复登录页 bug</span>
+          <span class="goal-pill">IN_PROGRESS</span>
+        </div>
+        <div class="s-preview">正在重构 auth 流程，等待用户提供复现步骤…</div>
+        <div class="s-meta">
+          <span class="s-meta-text">dsh-remote/apps/mobile</span>
+          <span class="s-meta-text">1.2M tok</span>
+          <div class="mini-bar"><div class="fill" style="width:62%"></div></div>
+          <span class="s-meta-text s-meta-time">3 分钟前</span>
+        </div>
+      </div>
+
+      <div class="session-row">
+        <div class="s-row-head">
+          <span class="s-title">pnpm build 验证</span>
+          <span class="goal-pill done">COMPLETE</span>
+        </div>
+        <div class="s-preview">构建通过，产物 2.3MB，tree-shaking 生效</div>
+        <div class="s-meta">
+          <span class="s-meta-text">dsh-remote/packages/protocol</span>
+          <span class="s-meta-text">890K tok</span>
+          <div class="mini-bar"><div class="fill" style="width:41%"></div></div>
+          <span class="s-meta-text s-meta-time">12 分钟前</span>
+        </div>
+      </div>
+
+      <div class="session-row">
+        <div class="s-row-head">
+          <span class="s-title">生产部署检查</span>
+        </div>
+        <div class="s-preview">context 即将耗尽，建议尽快 checkpoint…</div>
+        <div class="s-meta">
+          <span class="s-meta-text">dsh-remote</span>
+          <span class="s-meta-text">2.1M tok</span>
+          <div class="mini-bar"><div class="fill warn" style="width:88%"></div></div>
+          <span class="s-meta-text s-meta-time">2 小时前</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 聊天页 ============ -->
+    <div class="screen chat-pad" id="screen-chat" hidden>
+      <div class="chat-head">
+        <div class="chat-title-row">
+          <span class="chat-title">修复登录页 bug</span>
+          <span class="chip"><span class="dot" style="background:var(--success)"></span>ONLINE</span>
+        </div>
+        <div class="goal-pill" style="align-self:flex-start;">GOAL · IN_PROGRESS</div>
+      </div>
+
+      <div class="chat-list">
+        <div class="msg other">
+          <div class="msg-edge" style="background:linear-gradient(180deg,#7A96FF,#4D6BFE)"></div>
+          <div class="msg-body">
+            <span class="role-tag accent">assistant</span>
+            <span class="msg-text">登录页报错，先看最近的提交记录：</span>
+            <div class="code-block">git log --oneline -5
+453d197 docs: next-session prompt v3
+5017b5c fix(mobile): orphan cleanup
+e851c21 feat(mobile): R24 notification toggle</div>
+            <span class="msg-text">问题可能出在 `auth/useLogin` 的竞态，我继续往下查。</span>
+            <span class="cursor"></span>
+          </div>
+        </div>
+
+        <div class="msg self">
+          <div class="msg-edge" style="background:linear-gradient(180deg,#5B7CFF,#3053E8)"></div>
+          <div class="msg-body">
+            <span class="role-tag accent" style="color:var(--accent-hi)">you</span>
+            <span class="msg-text" style="color:var(--accent-hi)">好，查完发我复现步骤</span>
+          </div>
+        </div>
+
+        <div class="gap-row"><span class="gap-text">— 3 分钟前 —</span></div>
+
+        <div class="msg other">
+          <div class="msg-edge" style="background:linear-gradient(180deg,#F5B94D,#C07E10)"></div>
+          <div class="msg-body">
+            <span class="role-tag muted" style="color:var(--warn)">tool · log</span>
+            <div class="code-block" style="border-left:2px solid rgba(245,185,77,0.4)">$ pnpm test --filter mobile
+✓ 42 tests passed (1.8s)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-bar">
+        <input class="field" placeholder="发送消息…" id="chat-input">
+        <button class="send-btn" id="btn-send">➤</button>
+      </div>
+    </div>
+
+    <div class="home-indicator"></div>
+  </div>
+</div>
+
+<script>
+/* ---- URL 参数：?theme=dark|light|system&page=connect|sessions|chat&state=online|connecting|offline ---- */
+const qp = new URLSearchParams(location.search);
+const qTheme = qp.get("theme");
+const qPage = qp.get("page");
+const qState = qp.get("state");
+
+/* ---- 主题 ---- */
+const media = window.matchMedia("(prefers-color-scheme: light)");
+let themeMode = ["dark","light","system"].includes(qTheme) ? qTheme : "dark";
+function applyTheme() {
+  const theme = themeMode === "system" ? (media.matches ? "light" : "dark") : themeMode;
+  document.documentElement.dataset.theme = theme;
+  document.querySelectorAll("[data-theme-btn]").forEach(b => b.classList.toggle("active", b.dataset.themeBtn === themeMode));
+}
+document.querySelectorAll("[data-theme-btn]").forEach(b => b.addEventListener("click", () => {
+  themeMode = b.dataset.themeBtn;
+  applyTheme();
+}));
+media.addEventListener("change", () => { if (themeMode === "system") applyTheme(); });
+applyTheme();
+
+/* ---- 连接状态 ---- */
+const conn = {
+  state: "offline",
+  set(s) {
+    this.state = s;
+    const map = { offline:["var(--danger)","OFFLINE"], connecting:["var(--warn)","CONNECTING"], online:["var(--success)","ONLINE"] };
+    const [c,l] = map[s];
+    ["dot-hero","dot-state"].forEach(id => { const el = document.getElementById(id); if (el) el.style.background = c; });
+    ["chip-hero-text","chip-state-text"].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = l; });
+    document.getElementById("halo") && null;
+    const body = document.getElementById("whale-body");
+    const tail = document.getElementById("whale-tail");
+    const btn = document.getElementById("btn-connect");
+    const bar = document.getElementById("connecting-bar");
+    const describe = document.getElementById("describe");
+    body.classList.toggle("pulse", s === "online");
+    body.classList.toggle("stream", s === "online");
+    tail.classList.toggle("stream", s === "online");
+    bar.hidden = s !== "connecting";
+    btn.hidden = s === "online";
+    btn.textContent = s === "connecting" ? "连接中…" : "连接";
+    btn.disabled = s === "connecting";
+    describe.hidden = s !== "online";
+    const sc = document.getElementById("chip-sessions");
+    if (s === "online") sc.innerHTML = '<span class="dot" style="background:var(--success)"></span>ONLINE';
+    if (s === "offline") sc.innerHTML = '<span class="dot" style="background:var(--danger)"></span>OFFLINE';
+  }
+};
+
+/* ---- 页面切换 ---- */
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  t.classList.add("active");
+  document.querySelectorAll(".screen").forEach(s => s.hidden = true);
+  document.getElementById("screen-" + t.dataset.page).hidden = false;
+}));
+
+/* ---- 初始状态 ---- */
+if (qPage && ["connect","sessions","chat"].includes(qPage)) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.page === qPage));
+  document.querySelectorAll(".screen").forEach(s => s.hidden = s.id !== "screen-" + qPage);
+}
+if (qState === "online" || qState === "connecting") conn.set(qState === "connecting" ? "connecting" : "online");
+
+/* ---- 交互 ---- */
+document.getElementById("btn-connect").addEventListener("click", () => {
+  const host = document.getElementById("f-host").value || "192.168.1.5";
+  const port = document.getElementById("f-port").value || "3080";
+  document.getElementById("hero-target").innerHTML = `<b>harness remote</b> · ${host}:${port}`;
+  conn.set("connecting");
+  setTimeout(() => { conn.set("online"); document.getElementById("hint").textContent = "已启用配对 token——仍请仅在可信网络使用"; }, 1600);
+});
+document.querySelectorAll(".host-row").forEach(r => r.addEventListener("click", () => {
+  const host = r.dataset.host;
+  document.getElementById("f-host").value = host;
+  document.getElementById("hero-target").innerHTML = `<b>harness remote</b> · ${host}:3080`;
+  conn.set("connecting");
+  setTimeout(() => conn.set("online"), 1400);
+}));
+document.getElementById("btn-send").addEventListener("click", () => {
+  const input = document.getElementById("chat-input");
+  const v = input.value.trim();
+  if (!v) return;
+  const list = document.querySelector("#screen-chat .chat-list");
+  const row = document.createElement("div");
+  row.className = "msg self";
+  row.innerHTML = `<div class="msg-edge" style="background:linear-gradient(180deg,#7A96FF,#3D5AFE)"></div>
+    <div class="msg-body"><span class="msg-text"></span></div>`;
+  row.querySelector(".msg-text").textContent = v;
+  list.appendChild(row);
+  input.value = "";
+  list.scrollTop = list.scrollHeight;
+});
+document.getElementById("chat-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("btn-send").click();
+});
+</script>
+</body>
+</html>

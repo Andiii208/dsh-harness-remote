@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, type ViewStyle } from "react-native";
-import { colors, control, font, radius, stroke } from "../theme";
+import { control, font, radius } from "../theme";
+import { useTheme } from "../theme-context";
 
 export type ButtonTone = "primary" | "ghost" | "danger";
 
@@ -12,8 +14,10 @@ interface ButtonProps {
   style?: ViewStyle;
 }
 
-/** 统一按钮：primary（强调色）/ ghost / danger-ghost；禁用 opacity 0.4。 */
+/** 统一按钮 v7：primary（DeepSeek 蓝）/ ghost / danger-ghost；禁用 opacity 0.4。 */
 export function Button({ label, onPress, tone = "primary", disabled, full, style }: ButtonProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const base = [styles.base, styles[tone], disabled && styles.disabled, full && styles.full, style];
   return (
     <Pressable
@@ -31,31 +35,25 @@ export function Button({ label, onPress, tone = "primary", disabled, full, style
   );
 }
 
-const styles = StyleSheet.create({
-  base: {
-    height: control.height,
-    borderRadius: radius.control,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: control.paddingX,
-  },
-  primary: { backgroundColor: colors.accent },
-  ghost: {
-    backgroundColor: colors.surface2,
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-  },
-  danger: {
-    backgroundColor: colors.surface2,
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-  },
-  disabled: { opacity: 0.4 },
-  full: { width: "100%" },
-  pressed: { transform: [{ scale: 0.98 }] },
-  pressedPrimary: { backgroundColor: colors.accentHover },
-  pressedGhost: { backgroundColor: colors.surface3 },
-  text: { color: "#FFFFFF", fontSize: font.body + 1, fontWeight: "600" },
-  textGhost: { color: colors.text, fontWeight: "600" },
-  textDanger: { color: colors.danger },
-});
+function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+  return StyleSheet.create({
+    base: {
+      height: control.height,
+      borderRadius: radius.control,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 16,
+    },
+    primary: { backgroundColor: colors.accent },
+    ghost: { backgroundColor: colors.surface2 },
+    danger: { backgroundColor: colors.surface2 },
+    disabled: { opacity: 0.4 },
+    full: { width: "100%" },
+    pressed: { transform: [{ scale: 0.99 }] },
+    pressedPrimary: { backgroundColor: colors.accent, opacity: 0.8 },
+    pressedGhost: { backgroundColor: colors.surface2, opacity: 0.7 },
+    text: { color: "#FFFFFF", fontSize: font.body + 1, fontWeight: "600" },
+    textGhost: { color: colors.text, fontWeight: "600" },
+    textDanger: { color: colors.danger },
+  });
+}

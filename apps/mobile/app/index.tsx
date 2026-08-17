@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
 import * as Network from "expo-network";
 import { useEntering } from "../src/ui/anim";
-import { WhaleWatermark } from "../src/ui/WhaleWatermark";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
 import { tokenStore } from "../src/data/secureStoreAdapter";
 import { hostStore } from "../src/discovery/hostStoreAdapter";
@@ -22,13 +21,14 @@ import { draftStore } from "../src/discovery/draftStoreAdapter";
 import { onboardingStore } from "../src/discovery/onboardingStoreAdapter";
 import { registerPairDeepLink } from "../src/discovery/pairLink";
 import { discoverHosts, type DiscoveredHost } from "../src/discovery/discover";
-import { colors, font, radius, space, stroke } from "../src/theme";
+import { font, radius, space } from "../src/theme";
 import { WhaleMark } from "../src/ui/WhaleMark";
 import { StatusChip, type StatusTone } from "../src/ui/StatusChip";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { Field } from "../src/ui/Field";
 import { Button } from "../src/ui/Button";
 import { ConnectingBar } from "../src/ui/ConnectingBar";
+import { useTheme } from "../src/theme-context";
 import { haptic } from "../src/ui/haptics";
 
 const STATE_TONE: Record<string, StatusTone> = {
@@ -40,6 +40,8 @@ const STATE_TONE: Record<string, StatusTone> = {
 
 export default function ConnectScreen() {
   const { state, describe, connect, disconnect } = useConnection();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [host, setHost] = useState("");
@@ -78,7 +80,6 @@ export default function ConnectScreen() {
       setHost(p.host);
       setPort(String(p.port));
       if (p.token) setToken(p.token);
-      // 等待连接真正在线后再跳转（justConnected + online effect）
       justConnected.current = true;
       void connect(p.host, p.port, p.token);
     });
@@ -88,7 +89,6 @@ export default function ConnectScreen() {
     void tokenStore.get().then((t) => {
       if (t) setToken(t);
     });
-    // 恢复上次手动输入的 host/port 草稿
     void draftStore.get().then((d) => {
       if (d) {
         setHost(d.host);
@@ -105,7 +105,6 @@ export default function ConnectScreen() {
       setConnectError("");
       router.push("/sessions");
     }
-    // 连接尝试落回离线（失败）：提示并清掉标记，避免残留导致下次误跳转。
     if (state === "offline") {
       if (justConnected.current) setConnectError("连接失败：请检查主机地址与网络");
       justConnected.current = false;
@@ -133,13 +132,10 @@ export default function ConnectScreen() {
     setPort(String(p));
     if (t) setToken(t);
     setConnectError("");
-    // 注意：最近/发现主机连接不写 draft——手动草稿不被覆盖（评审 #6）。
-    // 等待连接真正在线后再跳转（justConnected + online effect）
     justConnected.current = true;
     await connect(h, p, t);
   };
 
-  // 卸载/离开页面时取消扫描
   useEffect(() => {
     return () => {
       discoverAbort.current?.abort();
@@ -188,17 +184,18 @@ export default function ConnectScreen() {
       style={[styles.screen, { paddingTop: insets.top + space.x5 }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <WhaleWatermark size={340} style={styles.watermark} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Animated.View entering={heroEntering} style={styles.hero}>
-          <WhaleMark size={44} />
+          <View style={styles.brandMark}>
+            <WhaleMark size={48} />
+          </View>
           <View style={styles.heroText}>
             <Text style={styles.display}>harness remote</Text>
-            <SectionLabel>DeepSeek Harness · LAN remote</SectionLabel>
+            <SectionLabel>DeepSeek Harness · LAN</SectionLabel>
           </View>
         </Animated.View>
 
-        <View style={styles.statusRow}>
+        <View style={styles.stateRow}>
           <StatusChip tone={STATE_TONE[state] ?? "neutral"} label={STATE_LABEL[state] ?? state} />
           {describeName.length > 0 && <Text style={styles.describe} numberOfLines={1}>{describeName}</Text>}
         </View>
@@ -208,7 +205,7 @@ export default function ConnectScreen() {
           <View style={styles.sectionHeader}>
             <SectionLabel>{found.length > 0 ? "Discovered hosts" : "Recent hosts"}</SectionLabel>
             <Pressable style={({ pressed }) => pressed && styles.textPressed} onPress={() => router.push("/scan" as never)} hitSlop={8} accessibilityRole="button" accessibilityLabel="扫码配对">
-              <Text style={styles.scanLink}>扫码配对 →</Text>
+              <Text style={styles.scanLink}>扫码配对 ›</Text>
             </Pressable>
           </View>
           <View style={styles.hostList}>
@@ -239,7 +236,7 @@ export default function ConnectScreen() {
                     {`${h.host}:${h.port}${h.version ? ` · ${h.version}` : ""}`}
                   </Text>
                 </View>
-                <Text style={styles.hostRowArrow}>→</Text>
+                <Text style={styles.hostRowArrow}>›</Text>
               </Pressable>
             ))}
             {discoverError.length > 0 && <Text style={styles.discoverError}>{discoverError}</Text>}
@@ -312,92 +309,96 @@ export default function ConnectScreen() {
           </Pressable>
         )}
 
-        <View style={styles.warning}>
-          <Text style={styles.warningText}>
-            {token.trim()
-              ? "已启用配对 token——仍请仅在可信网络使用"
-              : "LAN 直连，未配对时无鉴权——请仅在可信网络使用"}
-          </Text>
-        </View>
+        <Text style={styles.hint}>
+          {token.trim()
+            ? "已启用配对 token——仍请仅在可信网络使用"
+            : "LAN 直连，未配对时无鉴权——请仅在可信网络使用"}
+        </Text>
 
-        <Text style={styles.version}>v0.1.0 · dsh-remote</Text>
+        <Text style={styles.version}>v0.7.0 · dsh-remote</Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: space.x5, paddingBottom: space.x7, gap: space.x5 },
-  hero: { flexDirection: "row", alignItems: "center", gap: space.x4 },
-  heroText: { gap: space.x1 },
-  display: { color: colors.text, fontSize: font.display, fontWeight: "700", letterSpacing: -0.3 },
-  watermark: { position: "absolute", top: -space.x3, right: -space.x7 },
-  statusRow: { flexDirection: "row", alignItems: "center", gap: space.x3, flexWrap: "wrap" },
-  describe: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono, flexShrink: 1 },
-  section: { gap: space.x2 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  scanLink: { color: colors.accent, fontSize: font.caption, fontFamily: font.mono },
-  hostList: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-    overflow: "hidden",
-  },
-  hostEmpty: { padding: space.x4 },
-  hostEmptyText: { color: colors.textDim, fontSize: font.caption, lineHeight: 18 },
-  hostRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: space.x4,
-    paddingVertical: space.x3,
-    borderBottomWidth: stroke.hairline,
-    borderBottomColor: colors.border,
-  },
-  hostRowPressed: { backgroundColor: colors.surface2 },
-  hostRowText: { flex: 1, gap: 2 },
-  hostRowTitleRow: { flexDirection: "row", alignItems: "center", gap: space.x2 },
-  hostDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success },
-  hostRowTitle: { color: colors.text, fontSize: font.body, fontWeight: "600", flexShrink: 1 },
-  pairedBadge: {
-    color: colors.success,
-    fontSize: font.eyebrow - 1,
-    fontFamily: font.monoBold,
-    fontWeight: "700",
-    borderWidth: 1,
-    borderColor: colors.success,
-    borderRadius: radius.pill,
-    paddingHorizontal: space.x2,
-    paddingVertical: 1,
-    overflow: "hidden",
-  },
-  hostRowMeta: { color: colors.textDim, fontSize: font.eyebrow, fontFamily: font.mono },
-  hostRowArrow: { color: colors.textDim, fontSize: font.body, fontFamily: font.mono },
-  discoverError: { color: colors.warn, fontSize: font.caption, padding: space.x3 },
-  discoverHint: { color: colors.textDim, fontSize: font.caption, paddingHorizontal: space.x3, paddingBottom: space.x3, lineHeight: 18 },
-  discoverRow: { flexDirection: "row", gap: space.x3 },
-  flex: { flex: 1 },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-    padding: space.x4,
-    gap: space.x3,
-  },
-  clearToken: { alignItems: "flex-start" },
-  textPressed: { opacity: 0.6 },
-  clearTokenText: { color: colors.danger, fontSize: font.caption },
-  connectError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
-  linkRow: { alignItems: "center", paddingVertical: space.x2 },
-  link: { color: colors.accent, fontSize: font.body },
-  warning: {
-    backgroundColor: colors.accentSoft,
-    borderRadius: radius.card,
-    padding: space.x3,
-  },
-  warningText: { color: colors.warn, fontSize: font.caption, lineHeight: 18 },
-  version: { color: colors.textDim, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
-});
+function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg },
+    content: { paddingHorizontal: 20, paddingBottom: space.x7, gap: 20 },
+    hero: { flexDirection: "row", alignItems: "center", gap: space.x4, paddingTop: 6 },
+    brandMark: {
+      width: 52,
+      height: 52,
+      borderRadius: 13,
+      backgroundColor: colors.surface,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    heroText: { gap: 3 },
+    display: {
+      color: colors.text,
+      fontFamily: font.display,
+      fontSize: 30,
+      fontWeight: "600",
+      letterSpacing: -0.8,
+      lineHeight: 32,
+    },
+    stateRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x3, flexWrap: "wrap" },
+    describe: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono, flexShrink: 1 },
+    section: { gap: space.x2 },
+    sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    scanLink: { color: colors.accent, fontSize: 13, fontWeight: "500" },
+    hostList: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.card,
+      overflow: "hidden",
+    },
+    hostEmpty: { padding: space.x4 },
+    hostEmptyText: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
+    hostRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: space.x5,
+      paddingVertical: space.x4,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.separator,
+    },
+    hostRowPressed: { backgroundColor: colors.surface2 },
+    hostRowText: { flex: 1, gap: 3 },
+    hostRowTitleRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+    hostDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
+    hostRowTitle: { color: colors.text, fontSize: font.body + 2, fontWeight: "500", letterSpacing: -0.1, flexShrink: 1 },
+    pairedBadge: {
+      color: colors.accent,
+      fontSize: 9,
+      fontFamily: font.monoBold,
+      fontWeight: "500",
+      backgroundColor: colors.accentSoft,
+      borderRadius: radius.pill,
+      paddingHorizontal: 9,
+      paddingVertical: 2,
+      overflow: "hidden",
+    },
+    hostRowMeta: { color: colors.textMuted, fontSize: 11, fontFamily: font.mono, letterSpacing: 0.2 },
+    hostRowArrow: { color: colors.textDim, fontSize: 18, fontWeight: "300" },
+    discoverError: { color: colors.warn, fontSize: font.caption, padding: space.x3 },
+    discoverHint: { color: colors.textMuted, fontSize: font.caption, paddingHorizontal: space.x3, paddingBottom: space.x3, lineHeight: 18 },
+    discoverRow: { flexDirection: "row", gap: space.x3, marginTop: 4 },
+    flex: { flex: 1 },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.card,
+      padding: space.x5,
+      gap: 13,
+    },
+    clearToken: { alignItems: "flex-start" },
+    textPressed: { opacity: 0.6 },
+    clearTokenText: { color: colors.danger, fontSize: font.caption },
+    connectError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
+    linkRow: { alignItems: "center", paddingVertical: space.x2 },
+    link: { color: colors.accent, fontSize: font.body },
+    hint: { fontSize: font.caption, color: colors.textMuted, lineHeight: 18 },
+    version: { color: colors.textDim, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
+  });
+}

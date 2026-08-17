@@ -1,7 +1,7 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -11,23 +11,67 @@ import {
   JetBrainsMono_700Bold,
   useFonts,
 } from "@expo-google-fonts/jetbrains-mono";
+import {
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold,
+  SpaceGrotesk_700Bold,
+} from "@expo-google-fonts/space-grotesk";
 import { ConnectionProvider } from "../src/transport/ConnectionProvider";
 import { notificationService } from "../src/notify/expoAdapter";
 import { registerNotificationDeepLink } from "../src/notify/deeplink";
-import { colors, font } from "../src/theme";
+import { font } from "../src/theme";
+import { ThemeProvider, useTheme } from "../src/theme-context";
 
 void SplashScreen.preventAutoHideAsync();
+
+function RootNavigator() {
+  const { colors, isDark } = useTheme();
+  return (
+    <>
+      <StatusBar style={isDark ? "light" : "dark"} />
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.bg },
+          headerTintColor: colors.text,
+          headerTitleStyle: { fontWeight: "600", fontSize: 15, fontFamily: font.monoBold },
+          contentStyle: { backgroundColor: colors.bg },
+          headerShadowVisible: false,
+          headerBackTitle: "返回",
+        }}
+      >
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="sessions" options={{ title: "Sessions", headerBackTitle: "连接" }} />
+        <Stack.Screen name="chat/[sessionId]" options={{ title: "Session" }} />
+        <Stack.Screen name="approval/[rpcId]" options={{ title: "请求" }} />
+        <Stack.Screen name="settings" options={{ title: "设置" }} />
+        <Stack.Screen name="scan" options={{ headerShown: false, presentation: "modal" }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      </Stack>
+    </>
+  );
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     JetBrainsMono_400Regular,
     JetBrainsMono_500Medium,
     JetBrainsMono_700Bold,
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_600SemiBold,
+    SpaceGrotesk_700Bold,
   });
+  // 兜底：字体 6s 内未就绪（离线/受限网络）则用系统字体继续渲染，避免白屏
+  const [fontFallback, setFontFallback] = useState(false);
+  useEffect(() => {
+    if (fontsLoaded) return;
+    const t = setTimeout(() => setFontFallback(true), 6000);
+    return () => clearTimeout(t);
+  }, [fontsLoaded]);
+  const ready = fontsLoaded || fontFallback;
 
   useEffect(() => {
-    if (fontsLoaded) void SplashScreen.hideAsync();
-  }, [fontsLoaded]);
+    if (ready) void SplashScreen.hideAsync();
+  }, [ready]);
 
   useEffect(() => {
     registerNotificationDeepLink();
@@ -36,32 +80,16 @@ export default function RootLayout() {
     void notificationService.ensurePermissions();
   }, []);
 
-  if (!fontsLoaded) return null;
+  if (!ready) return null;
 
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
-        <ConnectionProvider>
-          <StatusBar style="light" />
-          <Stack
-            screenOptions={{
-              headerStyle: { backgroundColor: colors.bg },
-              headerTintColor: colors.text,
-              headerTitleStyle: { fontWeight: "600", fontSize: 15, fontFamily: font.monoBold },
-              contentStyle: { backgroundColor: colors.bg },
-              headerShadowVisible: false,
-              headerBackTitle: "返回",
-            }}
-          >
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="sessions" options={{ title: "Sessions", headerBackTitle: "连接" }} />
-            <Stack.Screen name="chat/[sessionId]" options={{ title: "Session" }} />
-            <Stack.Screen name="approval/[rpcId]" options={{ title: "请求" }} />
-            <Stack.Screen name="settings" options={{ title: "设置" }} />
-            <Stack.Screen name="scan" options={{ headerShown: false, presentation: "modal" }} />
-            <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-          </Stack>
-        </ConnectionProvider>
+        <ThemeProvider>
+          <ConnectionProvider>
+            <RootNavigator />
+          </ConnectionProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from "react-native";
-import { colors, radius, space } from "../theme";
+import { radius, space } from "../theme";
+import { useTheme } from "../theme-context";
 
-/** 列表首载骨架：2 行条 + 140ms 透明度脉动；尊重系统「减弱动态」时静止。 */
+/** 列表首载骨架 v7：2 行条 + 140ms 透明度脉动；尊重系统「减弱动态」时静止。 */
 export function SkeletonRow() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const pulse = useRef(new Animated.Value(0.6)).current;
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
@@ -32,14 +35,14 @@ export function SkeletonRow() {
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: space.x4,
-    gap: space.x2,
-  },
-  bar: { height: 10, borderRadius: 5, backgroundColor: colors.surface2 },
-});
+function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+  return StyleSheet.create({
+    row: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.card,
+      padding: space.x4,
+      gap: space.x2,
+    },
+    bar: { height: 10, borderRadius: 5, backgroundColor: colors.surface2 },
+  });
+}

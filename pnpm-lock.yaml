@@ -16,6 +16,9 @@ importers:
       '@expo-google-fonts/jetbrains-mono':
         specifier: ^0.4.1
         version: 0.4.1
+      '@expo-google-fonts/space-grotesk':
+        specifier: ^0.4.1
+        version: 0.4.1
       '@shopify/flash-list':
         specifier: 2.0.2
         version: 2.0.2(@babel/runtime@7.29.7)(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
@@ -737,6 +740,9 @@ packages:
 
   '@expo-google-fonts/material-symbols@0.4.44':
     resolution: {integrity: sha512-36JP9Chcy/QEVZ9ZGY4i6zInlyFPbQjkIm6gRNuWWltScIj0WR8rddcD57EIjSC5YKCe2ZKLO6eO/N5r8Jit0A==}
+
+  '@expo-google-fonts/space-grotesk@0.4.1':
+    resolution: {integrity: sha512-ZVQYw4Ok/pgcSJiufP8oRZE3AVxS9xtmKEUfsurbHkHNdMc/GA1gDXP9G4Cr7KL4KqSc0haexR2TuMigotCn4Q==}
 
   '@expo/cli@57.0.15':
     resolution: {integrity: sha512-YIE5xgZlkwx6OyjjVq/zAfqtYvczsWLEkOukDJwaZDaMQl8x5/CjoqC/Oe670DFQc5xjqguH6cmZUWHHL7yH3g==}
@@ -4127,6 +4133,8 @@ snapshots:
   '@expo-google-fonts/jetbrains-mono@0.4.1': {}
 
   '@expo-google-fonts/material-symbols@0.4.44': {}
+
+  '@expo-google-fonts/space-grotesk@0.4.1': {}
 
   '@expo/cli@57.0.15(@expo/dom-webview@57.0.1)(@expo/metro-runtime@57.0.10)(expo-constants@57.0.11)(expo-font@57.0.1)(expo-router@57.0.13)(expo@57.0.13)(react-dom@19.2.3(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)':
     dependencies:

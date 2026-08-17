@@ -1,18 +1,21 @@
 import { useRouter } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { parsePairPayload } from "@dsh-remote/protocol";
 import { useConnection } from "../src/transport/ConnectionProvider";
 import { hostStore } from "../src/discovery/hostStoreAdapter";
 import { tokenStore } from "../src/data/secureStoreAdapter";
-import { colors, font, radius, space, stroke } from "../src/theme";
+import { font, radius, space, type ThemeColors } from "../src/theme";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { Button } from "../src/ui/Button";
+import { useTheme } from "../src/theme-context";
 import { haptic } from "../src/ui/haptics";
 
 export default function ScanScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { connect } = useConnection();
@@ -86,35 +89,35 @@ export default function ScanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  camera: { flex: 1 },
-  frame: { flex: 1, alignItems: "center", justifyContent: "center" },
-  corner: {
-    position: "absolute",
-    width: 44,
-    height: 44,
-    borderColor: colors.accent,
-    borderWidth: 3,
-  },
-  cornerTL: { top: "38%", left: "22%", borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
-  cornerTR: { top: "38%", right: "22%", borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
-  cornerBL: { bottom: "38%", left: "22%", borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
-  cornerBR: { bottom: "38%", right: "22%", borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
-  overlay: { padding: space.x5, paddingBottom: space.x7, gap: space.x3, backgroundColor: "rgba(10,12,16,0.55)" },
-  overlayTitle: { color: colors.text, fontSize: font.body, fontWeight: "600", textAlign: "center" },
-  overlayHint: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
-  error: { color: colors.danger, fontSize: font.caption, textAlign: "center" },
-  cancel: { alignItems: "center", paddingVertical: space.x3 },
-  cancelText: { color: colors.textMuted, fontSize: font.body, fontWeight: "600" },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: stroke.hairline,
-    borderColor: colors.border,
-    padding: space.x5,
-    gap: space.x3,
-    margin: space.x5,
-  },
-  hint: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bg },
+    camera: { flex: 1 },
+    frame: { flex: 1, alignItems: "center", justifyContent: "center" },
+    corner: {
+      position: "absolute",
+      width: 44,
+      height: 44,
+      borderColor: colors.accent,
+      borderWidth: 3,
+    },
+    cornerTL: { top: "38%", left: "22%", borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
+    cornerTR: { top: "38%", right: "22%", borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
+    cornerBL: { bottom: "38%", left: "22%", borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
+    cornerBR: { bottom: "38%", right: "22%", borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
+    overlay: { padding: space.x5, paddingBottom: space.x7, gap: space.x3, backgroundColor: "rgba(10,12,16,0.55)" },
+    overlayTitle: { color: colors.text, fontSize: font.body, fontWeight: "600", textAlign: "center" },
+    overlayHint: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
+    error: { color: colors.danger, fontSize: font.caption, textAlign: "center" },
+    cancel: { alignItems: "center", paddingVertical: space.x3 },
+    cancelText: { color: colors.textMuted, fontSize: font.body, fontWeight: "600" },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.card,
+      padding: space.x5,
+      gap: space.x3,
+      margin: space.x5,
+    },
+    hint: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
+  });
+}
