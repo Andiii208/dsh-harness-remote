@@ -1,111 +1,128 @@
-# 后续发展计划（NEXT PHASE PLAN）
+# 下一阶段计划（NEXT PHASE PLAN v2）
 
-> 制定日期：2026-08-17。基线：main `ef27fc7`，工作区干净；mobile 97 用例、protocol 77 用例全绿。
+> 制定日期：2026-08-17。基线：main `e15aba3`，工作区干净。
+> 全仓绿：protocol 97 / mobile 106 / harness-plugin 21 / relay 24 / mock-harness 29 / capture 24。
 > 原则：价值 × 依赖排序；协议只做加法不改旧行为；每阶段测试 + 截图自证；每阶段 ≥1 条 conventional commit；卡住写 BLOCKED.md 跳过。
-> 当前唯一 BLOCKED：流式暂停无协议级中断 RPC（本地暂停渲染，远端仍继续）。
 
 ---
 
-## Phase 1：流式真中断（关闭唯一 BLOCKED，1 个窗口）
+## 0. 已完成的上一阶段（Phase 1–5）
 
-**目标**：把聊天页「暂停流式」从本地冻结升级为真实中断：有连接时发 `session.interrupt` RPC，失败才回退本地暂停并明确提示。
-
-**范围/文件**
-- `apps/mobile/src/transport/ConnectionProvider.tsx`：`ConnectionApi` 增加 `interruptStream(sessionId): Promise<void>`
-- `apps/mobile/app/chat/[sessionId].tsx`：暂停按钮逻辑改为「先发中断，成功/失败分流」
-- `packages/protocol/src/rpc.ts`：`RpcClient` 增加 `interrupt(sessionId)`（内部走 `/api/session.interrupt`，与 `unary` 同构，不改旧行为）
-- `packages/protocol/src/transport.ts`：`Connection` 增加**可选** `interrupt?` 字段；`LanTransport` 返回该字段（测试假连接不破坏）
-- `mock-harness/fixtures/sessions.json`：`unaryResponses` 增加 `session.interrupt` 成功响应；`wsFrames` 增加中断场景（供 Web 联调）
-- 测试：`packages/protocol/test/rpc.test.ts` 增补 `session.interrupt` 路径（≥2）；mobile 增补 `interruptStream` 离线错误分支（≥1）
-
-**验收**
-- mobile test ≥ 98、protocol test ≥ 79、双 typecheck 0
-- Web 截图：聊天页点暂停后显示「已发送中断请求」（或 mock 联调看到 `session.interrupt` 被调用）
-- `BLOCKED.md` 该条改为已关闭；若 DSH 宿主侧暂无 `session.interrupt` 实现，在 harness-plugin 只做接线桩并保留备注
-
-**风险**：真实 DSH 是否支持 `session.interrupt` 未验证——设计成「发送失败自动回退本地暂停」，不会比现状差。
+| 阶段 | 内容 | 提交 |
+|---|---|---|
+| Phase 1 | 流式真中断（`session.interrupt` RPC + 失败回退本地暂停），BLOCKED.md 唯一阻塞项关闭 | `eda3ae5` |
+| Phase 2 | M3.1 中继控制面 MVP：`relay/` 包、`RelayTransport`、App Relay 模式、harness-plugin 中继客户端 | `a3ce361` |
+| Phase 3 | M3.2 E2E 加密：`relay-crypto`（ECDH P-256 + HKDF + AES-256-GCM）、RelayTransport/RelayClient 密封数据面、relay 密文透明转发 | `7ba2358` |
+| Phase 4 | M3.3 推送与离线队列：`relay/src/push.ts` + `queue.ts`、离线入队/TTL/重连投递、pushToken 上报 | `3c5702c` |
+| Phase 5 | M3.4 硬化与自部署：速率限制（E_RATE）、审计日志（仅元数据）、版本协商、MANUAL 部署章节 | `28b53b3` |
+| CI 修复 | rate-limit 测试改确定性（burst:0），CI 全绿 | `e15aba3` |
 
 ---
 
-## Phase 2：M3.1 中继控制面 MVP（最大窗口，2–3 个窗口）
+## 1. 当前缺口（本窗口要解决什么）
 
-**目标**：按 `docs/design/RELAY-M3.md` 把 relay 从占位做到可联调：手机 App 经 relay 看到在线与会话列表（数据面暂为 WSS/TLS 明文转发，**仅限开发联调**，M3.2 前不发布）。
-
-**范围/文件**
-- 新包 `relay/`：
-  - `package.json`（依赖 `ws`——仓库已有，非新生态）、`tsconfig.json`、`vitest.config.ts`
-  - `src/server.ts`：WS 控制面（`hello/register/pair/heartbeat` + 错误码）+ HTTP 健康检查
-  - `src/store.ts`：内存版 device/console/pairing/短时凭证存储（纯 TS 可单测）
-  - `src/credential.ts`：短时凭证签发/校验（`node:crypto` HMAC）
-  - `src/cli.ts`：`relay --port 4090` 启动入口
-  - `test/relay-server.test.ts`（≥5）
-- `packages/protocol/src/relay.ts` 增补：`RelayTransport`（使用全局 `WebSocket`，注入 `WsCtor` 测试）、请求构造器（`makeHello/makeRegister/makePair/makeHeartbeat` 纯函数）
-  - `test/relay-transport.test.ts`（≥4）
-- `apps/mobile/src/transport/ConnectionProvider.tsx`：连接模式选择——`LanTransport` / `RelayTransport`（显式切换或 URL 前缀 `relay://`，不碰现有 LAN 路径）
-- `apps/mobile/app/settings.tsx` 或连接页：Relay 入口（输入 relay URL，最小改动）
-- `harness-plugin/src/relay-client.ts`：出站中继客户端（注册/心跳/收发信封；只做接线桩，真实 DSH 数据面由插件宿主适配）
-- `docs/design/RELAY-M3.md`：实现后回填「实现现状」小节
-
-**验收**
-- 新增 `relay/` 包 build/typecheck/test 全绿
-- 协议/mobile/harness-plugin 全量测试不降；全仓 `pnpm -r build && typecheck && test` 绿
-- Web 截图：连接页/设置页出现 Relay 模式；本机 relay + mock-harness 联调，手机列表看到 session（截图留 `.shots/relay-*.png`）
-- 安全红线：relay 日志不含 DSH 内容明文；短时凭证过期被拒；未配对路由被拒（单测覆盖）
-
-**风险/边界**：relay 包新增 `ws` 依赖、harness-plugin 新增 relay 出站连接——这是 M3 必需；若评审不接受依赖则写 BLOCKED 改用原生 WebSocket。
+1. **M3 配对闭环缺失**：`relay.pair` 服务端已支持，但 App 没有 relay 配对入口；`RelayTransport` 与 `RelayClient` 注册时 `publicKey: null`，不交换 ECDH 公钥；E2E 密钥目前靠 options 注入（`privateKeyJwk/peerPublicKeyJwk`）——这是开发期捷径，不是真实闭环。
+2. **deviceId/私钥不持久化**：mobile 的 relay deviceId 在 web 用 localStorage、原生端用内存随机（`ConnectionProvider.tsx` 的 `getRelayDeviceId`）；私钥完全没有持久化。
+3. **console 侧收不到配对结果**：relay 服务器 `relay.pair` 成功后只回执给发起方，console 侧没有拿到 device 公钥，无法派生会话密钥。
+4. **真机推送/回归未做**：APNs/FCM 目前是 `MockPushProvider`/`NoopPushProvider` 桩；真机需要 development build + 推送账号。**本窗口不做**，列入后续窗口。
 
 ---
 
-## Phase 3：M3.2 E2E 加密（依赖 Phase 2，1–2 个窗口）
+## 2. 本窗口目标：M3.5 中继配对闭环 + 密钥持久化（纯代码，无需真机）
 
-**目标**：`relay.route` 只转发密文；relay 无法读 DSH 数据。
+**目标**：手机在连接页输入 relay URL + 6 位配对码即可完成配对；配对成功后双方自动交换 ECDH 公钥、派生会话密钥，数据面以 E2E 加密运行。未输入配对码时保持现有 M3.1 明文联调路径不变。
 
-**范围/文件**
-- `packages/protocol/src/relay-crypto.ts`：ECDH(P-256) + HKDF + AES-256-GCM 纯函数（注入 WebCrypto，可单测）；信封加解密 `sealRelayPayload/openRelayPayload`
-- `packages/protocol/test/relay-crypto.test.ts`（≥6：握手派生一致、篡改失败、双方向密钥独立、重连复用）
-- `relay/`：转发逻辑不解析 `ciphertext/nonce`，只读 `to`
-- `apps/mobile`：RelayTransport 接入加密层；`harness-plugin` 同
-- 抓包/日志验证：relay 端只能看到信封元数据
+### T1 协议层（`packages/protocol`）
 
-**验收**
-- 单测证明 relay 无明文；篡改信封被拒；全仓测试不降
-- `docs/SECURITY.md` 更新 M3 状态为「E2E 已实现」
+- `RelayTransportOptions` 增加：
+  - `pairCode?: string`：连接后自动发起 `relay.pair`。
+  - `privateKeyJwk?: JsonWebKey`：未提供时 connect 内部用 `generateRelayKeyPair` 自动生成（注入 `crypto` 可测）。
+  - `onPairAck?: (ack: { consoleId: string; peerPublicKey: unknown }) => void`：可选回调（mobile 用来拿 consoleId）。
+- `connect()` 流程：
+  1. 若没有 `privateKeyJwk`，自动生成 ECDH P-256 keypair。
+  2. `makeRegister` payload 携带 `publicKey`（不再 `publicKey: null`）。
+  3. 若配置了 `pairCode`：在 hello/register 握手完成后发送 `makePair(from, pairCode, from)`（payload 与现有 `makePair` 签名对齐；若 `makePair` 签名是 `(from, code, deviceId)`，deviceId 传自身 from）。
+  4. 收到 `relay.pair.ack`：从 payload 取 `consoleId` 与 `peerPublicKey`，调用 `deriveRelaySessionKeys` 派生 `encKey`，设置 peerId = consoleId，启用加密数据面，并回调 `onPairAck`。
+- **兼容约束**：未配置 `pairCode` 且未注入 `peerPublicKeyJwk` 时，行为与现在完全一致（M3.1 明文联调路径不破坏）；`peerPublicKeyJwk` 注入路径仍保留。
+- 测试（`packages/protocol/test/relay-transport.test.ts` 或新文件，≥3）：
+  - 未注入 key 时 register payload 含 `publicKey`（JWK，非 null）。
+  - 配置 `pairCode` 后发送 `relay.pair` 信封，字段正确。
+  - 收到 `relay.pair.ack`（含 peerPublicKey）后，`unary` 发出的是密文 route（payload 只有 `to/ciphertext/nonce`）。
+  - 未配置 `pairCode` 时 unary 仍为明文 route（现有路径回归）。
+
+### T2 relay 服务器（`relay/`）
+
+- `relay.pair` 成功后，除给发起方回 `relay.pair.ack`（已含 `peerPublicKey`）外，**向被配对 console 的在线 socket 推送一条通知**（复用 `relay.pair.ack` 信封，payload 含 `{ deviceId, peerPublicKey }`；或新增专用 type，二选一并写进 RELAY-M3.md）。
+- 若 console 离线，把该通知放进离线队列（复用 M3.3 的 `queue`），console 重连后投递。
+- 测试（`relay/test/relay-server.test.ts` 增补 ≥2）：
+  - console 在线时收到 pair 通知，且 payload 含 device 的 publicKey。
+  - console 离线时 pair 通知入队，重连后收到。
+
+### T3 mobile（`apps/mobile`）
+
+- 新增 `apps/mobile/src/relay/relayDeviceStore.ts`（或放 `src/data/`）：持久化 `{ deviceId, privateKeyJwk, publicKeyJwk }`。
+  - 原生端用 `expo-secure-store`（参考 `tokenStore.ts` 的守卫写法）；web 端回退 localStorage；不可用时降级为内存（每次生成新 key，不崩溃）。
+- `ConnectionProvider.tsx`：
+  - relay 模式 connect 前：从 store 读取/生成 deviceId + keypair，把 `privateKeyJwk`、`pairCode`（来自连接页）传给 `RelayTransport`。
+  - 支持 `pairCode` 参数（`connect(host, port, token?, pairCode?)` 或扩展 `ConnectionApi.connect` 签名——保持现有调用方兼容）。
+- 连接页 `apps/mobile/app/index.tsx`：
+  - 当 host 为 relay URL 时，显示可选的 6 位配对码输入框（数字键盘）。
+  - relay 模式连接成功后，显示 consoleId/配对成功状态（可用现有 `describe` 或新状态字段，最小改动）。
+- 测试（`apps/mobile/test/relayDeviceStore.test.ts` 或类似，≥2）：
+  - 存储不可用时降级不抛错。
+  - 同一存储键可读取回同一 deviceId/key。
+- 现有 mobile 106 测试不降。
+
+### T4 harness-plugin（`harness-plugin/`）
+
+- `RelayClientOptions` 增加：
+  - `privateKeyJwk?: JsonWebKey`：未提供时 connect 前自动生成。
+  - `onPaired?: (info: { deviceId: string; peerPublicKey: unknown }) => void`。
+- `registerPayload()` 携带 `publicKey`（不再 `null`）。
+- 收到 pair 通知（T2 定义的信封）后：取 `deviceId + peerPublicKey`，`deriveRelaySessionKeys` 派生 `encKey`，启用加密数据面，并回调 `onPaired`。
+- 测试（`harness-plugin/test/relay-client.test.ts` 增补 ≥2）：
+  - register payload 含 `publicKey`（非 null）。
+  - 收到 pair 通知后发送 route 为密文（payload 只有 `to/ciphertext/nonce`）。
 
 ---
 
-## Phase 4：M3.3 推送与离线队列（依赖 Phase 3）
+## 3. 验收
 
-**目标**：relay 检测 peer 离线后经 APNs/FCM 唤醒并投递暂存信封。
-
-**范围/文件**
-- `relay/src/push.ts`：APNs/FCM 接口 + 注入桩（真推送另开窗口）
-- `relay/src/queue.ts`：离线暂存（TTL 默认 2 分钟）
-- `harness-plugin`：推送 token 注册；`apps/mobile`：Expo push token 上报（需 development build）
-- 测试：离线唤醒/暂存过期/推送失败降级
-
-**验收**：mock push 联调闭环；真机推送留待设备/账号窗口。
+- [ ] 全仓 `pnpm -r build && pnpm -r typecheck && pnpm -r test` 全绿，且各包测试数不低于基线（protocol 97 / mobile 106 / relay 24 / harness-plugin 21 / mock-harness 29 / capture 24）。
+- [ ] Web 联调：更新/新增 `.shots/relay-pair-integration.mjs`——启动 relay + mock-harness + console（RelayClient），打印 6 位配对码；Playwright 在连接页输入 `ws://127.0.0.1:4090` + 配对码 → 配对成功 → Sessions 出现 mock session；截图存 `.shots/relay-pair-*.png`。
+- [ ] 日志红线：relay 日志只含元数据；route payload 在 E2E 配对成功后只有 `{to, ciphertext, nonce}`（截图或抓包日志为证）。
+- [ ] 文档：`docs/design/RELAY-M3.md` 回填 M3.5；`README.md` 里程碑表更新（M3 状态改为「配对闭环已实现」）；`PROGRESS.md` 增补本窗口记录。
+- [ ] 提交：每阶段（T1–T4 + 集成）≥1 条 conventional commit。
 
 ---
 
-## Phase 5：M3.4 硬化与自部署（发布闸门）
+## 4. 建议执行方式
 
-**目标**：可自部署、可运维。
-- TLS 终止说明、Docker/Caddy 示例、速率限制、审计日志、版本协商
-- `docs/MANUAL.md` 增补 relay 部署章节；README 更新 M3 状态
-- 全仓回归 + 真机回归
-
----
-
-## 跨阶段质量工程（每阶段收尾固定动作）
-1. README/相关文档同步
-2. 全仓 `pnpm -r build && pnpm -r typecheck && pnpm -r test`
-3. Web 截图回归存 `.shots/`
-4. 每阶段 ≥1 条 conventional commit
-5. 协议改动后先 `pnpm --filter @dsh-remote/protocol build`
+- **依赖顺序**：T1 先行（T2/T3/T4 依赖 T1 的协议类型与行为）→ T2/T3/T4 并行 → captain 做联调/截图/文档/提交。
+- **可选 AgentTeams**：captain 用 `deepseek-v4-pro-0813`，子成员用 `deepseek-v4-flash-0731`（模型名与上一窗口一致）。
+- **坑位提醒**：
+  - 协议改动后先 `pnpm --filter @dsh-remote/protocol build`，mobile/harness-plugin 依赖其 dist。
+  - relay rate-limit 集成测试已改为 `burst: 0`（确定性），不要改回 `burst: 2`。
+  - mock-harness 默认 fixtures 与 relay 无关；联调脚本参考 `.shots/relay-integration.mjs`（该脚本是 M3.1 明文桥，M3.5 联调脚本需在其基础上加配对码打印与 keypair 注入）。
+  - Windows 本地跑 `pnpm -r test` 时 expoGuard/pushToken 等 stderr 是预期降级日志，不是失败。
 
 ---
 
-## 建议执行节奏
-- **本窗口**：只做 **Phase 1**（最小、直接消 BLOCKED，预计 1 个窗口）
-- **下一窗口**：开 **Phase 2**（M3.1 是最大的架构增量，需要完整窗口）
-- **再往后**：Phase 3 → 4 → 5 顺序推进，每阶段独立验收
+## 5. 后续窗口（不纳入本窗口）
+
+| 窗口 | 内容 | 验收 |
+|---|---|---|
+| M3.6 真机推送与回归 | 真实 APNs/FCM 接入（替换 MockPushProvider）、EAS development build、Android 真机 relay 连接/断线重连/离线唤醒/通知去重/后台保活 | 真机锁屏可被唤醒并收到审批通知；真机回归全绿 |
+| M3.7 发布闸门 | relay store SQLite 可选持久化、多 console/多设备实测、TLS 部署实测（Caddy/Docker）、CI 升级 Node 24 actions、`pnpm audit --prod`、版本发布 | 自部署文档实测通过；audit 无运行时高危 |
+| 体验增强 | relay 配对二维码、E_PAIR/E_EXPIRED/E_RATE 中文文案、设置页 relay 状态页 | 可选，不阻塞发布 |
+
+---
+
+## 6. 每阶段收尾固定动作
+
+1. README/相关文档同步。
+2. 全仓 `pnpm -r build && pnpm -r typecheck && pnpm -r test`。
+3. Web 截图回归存 `.shots/`。
+4. 每阶段 ≥1 条 conventional commit。
+5. 协议改动后先 `pnpm --filter @dsh-remote/protocol build`。
+6. 卡住写 `BLOCKED.md` 并继续下一项，不中断窗口。
