@@ -242,3 +242,12 @@ export class RelayTransport implements Transport {
 - `RelayTransportOptions.pushToken` / `RelayClientOptions.pushToken`：注册时上报 push token。
 - `apps/mobile/src/notify/pushToken.ts`：Expo push token 守卫获取（Expo Go/Web/模块不可用/超时 2s 一律降级 null）；relay 模式连接时传入 RelayTransport。
 - 测试：relay 18（push-queue 6 + server 12）、protocol 97、mobile 106、harness-plugin 21；全仓 build/typecheck/test 全绿。
+
+### M3.4 硬化与自部署（2026-08-17 已实现）
+
+- `relay/src/rate-limit.ts`：令牌桶速率限制（默认 120/分钟、突发 240），已认证 clientId 超限回 E_RATE。
+- 审计日志：`audit` 回调（默认一行 JSON），只含 `event/from/to/ts/ok` 元数据，不含 payload/明文。
+- 版本协商：`relay.hello.ack` 返回 `relayVersion`/`protocolVersion`，不兼容附加 `compatible:false`。
+- `docs/MANUAL.md` 增补 relay 部署章节（TLS 终止/Caddy/Docker/配置项/版本协商）；README 更新 M3 状态。
+- 全仓回归：protocol 97 / mobile 106 / harness-plugin 21 / relay 24 / mock-harness 29 / capture 24，build/typecheck/test 全绿。
+- 真机推送与 relay 真机回归留待设备/账号窗口（见 MANUAL 已知限制）。

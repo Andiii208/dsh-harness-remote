@@ -11,8 +11,10 @@ import {
   createCredentialService,
   createRelayServer,
   MockPushProvider,
+  RELAY_SERVER_PROTOCOL_VERSION,
   verify,
   type PushProvider,
+  type RelayAuditEntry,
   type RelayServer,
 } from "../src/index.js";
 import type { RelayEnvelope } from "@dsh-remote/protocol";
@@ -456,6 +458,73 @@ describe("relay server", () => {
 
     device.close();
     consoleAgain.close();
+  });
+
+  it("rate limits authenticated clients and returns E_RATE", async () => {
+    const relay = await startRelay({
+      rateLimit: { perMinute: 60_000, burst: 2 },
+    });
+
+    const device = await TestClient.connect(relay.port);
+    device.send(registerEnvelope("reg-rl", "device-rl", { deviceId: "device-rl" }));
+    await device.next("relay.register.ack");
+
+    device.send(makeEnvelope("relay.heartbeat", "hb-1", "device-rl"));
+    await device.next("relay.heartbeat.ack");
+    device.send(makeEnvelope("relay.heartbeat", "hb-2", "device-rl"));
+    await device.next("relay.heartbeat.ack");
+
+    device.send(makeEnvelope("relay.heartbeat", "hb-3", "device-rl"));
+    const err = await device.next("relay.error");
+    expect((err.payload as { code: string }).code).toBe("E_RATE");
+
+    device.close();
+  });
+
+  it("hello.ack carries version fields and flags incompatible protocolVersion", async () => {
+    const relay = await startRelay();
+    const c = await TestClient.connect(relay.port);
+
+    c.send(
+      makeEnvelope("relay.hello", "hello-1", "device-v", {
+        protocolVersion: RELAY_SERVER_PROTOCOL_VERSION + 1,
+      }),
+    );
+    const ack = await c.next("relay.hello.ack");
+    expect(ack.payload).toMatchObject({
+      relayVersion: "0.1.0",
+      protocolVersion: RELAY_SERVER_PROTOCOL_VERSION,
+      compatible: false,
+    });
+
+    c.close();
+  });
+
+  it("audit callback receives metadata entries without payload", async () => {
+    const entries: RelayAuditEntry[] = [];
+    const relay = await startRelay({
+      audit: (entry) => {
+        entries.push(entry);
+      },
+    });
+
+    const device = await TestClient.connect(relay.port);
+    device.send(registerEnvelope("reg-audit", "device-audit", { deviceId: "device-audit" }));
+    await device.next("relay.register.ack");
+
+    const register = entries.find((e) => e.event === "register");
+    expect(register).toBeDefined();
+    expect(register).toMatchObject({
+      event: "register",
+      from: "device-audit",
+      to: "relay",
+      ok: true,
+    });
+    for (const entry of entries) {
+      expect(Object.keys(entry).sort()).toEqual(["event", "from", "ok", "to", "ts"]);
+    }
+
+    device.close();
   });
 
   it("rejects invalid envelopes with E_BAD_ENVELOPE", async () => {

@@ -77,6 +77,58 @@ pnpm start
 - 设置页（Sessions 右上「设置」）可查看当前目标主机/远端实例、切换自动重连、本地通知开关（Expo Go 下禁用）、断开连接。
 - 会话列表支持下拉刷新（重拉 session.list 全量校准）；上线后自动刷新一次，断线重连后再次自动刷新。
 
+## 2.8 Relay 部署（M3.4 自部署）
+
+### 启动 relay
+
+```bash
+pnpm --filter relay build
+node relay/dist/cli.js --port 4090          # 默认 127.0.0.1；对外联调用 --host 0.0.0.0
+```
+
+- 健康检查：`curl http://127.0.0.1:4090/healthz` → `{"ok":true,"ts":...}`
+- 日志：relay 只输出信封元数据（`type/from/to/ts`），不输出 payload/DSH 明文。
+
+### TLS 终止（必须）
+
+- relay 自身只监听明文 WS/HTTP；公网部署必须在反代层终止 TLS。
+- Caddy 示例（`Caddyfile`）：
+
+```caddyfile
+relay.example.com {
+    handle /healthz {
+        reverse_proxy 127.0.0.1:4090
+    }
+    handle {
+        reverse_proxy 127.0.0.1:4090
+    }
+}
+```
+
+- 客户端连接用 `wss://relay.example.com`（App 连接页 HOST 填 `wss://relay.example.com?peerId=<consoleId>`）。
+- 控制面必须 TLS；WSS 握手用 `?credential=` 携带短时凭证（与 M2 `?pairToken=` 相同的日志权衡）。
+
+### Docker 示例
+
+```dockerfile
+FROM node:22-alpine
+WORKDIR /app
+COPY relay/package.json pnpm-lock.yaml ./
+# 实际仓库内用 pnpm install --frozen-lockfile；示例从简
+COPY relay/dist ./dist
+EXPOSE 4090
+CMD ["node", "dist/cli.js", "--port", "4090", "--host", "0.0.0.0"]
+```
+
+### 环境变量 / 配置
+
+- CLI 参数：`--port`（默认 4090）、`--host`（默认 127.0.0.1）。
+- 服务器配置项（`createRelayServer`）：`credentialTtlMs`（短时凭证 TTL，默认 12h）、`queueTtlMs`（离线队列 TTL，默认 2 分钟）、`push`（APNs/FCM 注入桩，默认 Noop）、`rateLimit`（默认 120/分钟，突发 240）、`audit`（审计回调，默认 console 元数据日志）。
+
+### 版本协商
+
+- 客户端 `relay.hello` 携带 `protocolVersion`；relay `relay.hello.ack` 返回 `{ relayVersion, protocolVersion }`，若客户端协议版本不兼容会附加 `compatible: false`（不断连，由客户端决定是否降级/断开）。
+
 ## 3. 已知限制（如实告知用户）
 
 - 锁屏推送依赖系统调度；厂商省电策略（小米/华为/OPPO）可能延迟或阻止后台任务。

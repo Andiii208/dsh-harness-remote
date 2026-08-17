@@ -25,7 +25,24 @@ import {
 import { createCredentialService } from "./credential.js";
 import { createOfflineQueue, type OfflineQueue } from "./queue.js";
 import type { PushProvider } from "./push.js";
+import { createRateLimiter } from "./rate-limit.js";
 import { createRelayStore, type ClientKind, type RelayStore } from "./store.js";
+
+export const RELAY_SERVER_PROTOCOL_VERSION = 1;
+export const RELAY_SERVER_VERSION = "0.1.0";
+
+export interface RelayRateLimitOptions {
+  perMinute?: number;
+  burst?: number;
+}
+
+export interface RelayAuditEntry {
+  event: string;
+  from: string;
+  to: string;
+  ts: number;
+  ok: boolean;
+}
 
 export interface RelayServerOptions {
   host?: string;
@@ -36,6 +53,10 @@ export interface RelayServerOptions {
   push?: PushProvider;
   /** Offline queue TTL in ms. Defaults to 2 minutes. */
   queueTtlMs?: number;
+  /** Simple token-bucket rate limit. Defaults: perMinute=120, burst=240. */
+  rateLimit?: RelayRateLimitOptions;
+  /** Audit sink. Defaults to a one-line JSON console.log (metadata only). */
+  audit?: (entry: RelayAuditEntry) => void;
 }
 
 export interface RelayServer {
@@ -98,6 +119,15 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
   const store = createRelayStore();
   const queue = createOfflineQueue({ ttlMs: options.queueTtlMs ?? 2 * 60 * 1000 });
   const pushProvider = options.push;
+  const rateLimiter = createRateLimiter({
+    perMinute: options.rateLimit?.perMinute ?? 120,
+    burst: options.rateLimit?.burst ?? 240,
+  });
+  const audit =
+    options.audit ??
+    ((entry: RelayAuditEntry) => {
+      console.log(`[relay] audit ${JSON.stringify(entry)}`);
+    });
 
   const socketAuth = new Map<WebSocket, string>();
   const onlineSockets = new Map<string, Set<WebSocket>>();
@@ -126,6 +156,10 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
     }
   }
 
+  function auditEvent(event: string, from: string, to: string, ok: boolean): void {
+    audit({ event, from, to, ts: Date.now(), ok });
+  }
+
   function sendError(
     ws: WebSocket,
     id: string,
@@ -136,6 +170,7 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
     const env = makeEnvelope("relay.error", id || "0", to, { code, message });
     logLine("tx", env);
     sendTo(ws, env);
+    auditEvent("error", "relay", to || "", false);
   }
 
   function handleMessage(ws: WebSocket, data: RawData): void {
@@ -161,9 +196,33 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
     logLine("rx", env);
     const authClientId = socketAuth.get(ws);
 
+    // M3.4 rate limiting: applied to authenticated clients only.
+    // hello/register are exempt so registration and version negotiation are
+    // never throttled.
+    if (
+      authClientId &&
+      env.type !== "relay.hello" &&
+      env.type !== "relay.register"
+    ) {
+      const decision = rateLimiter.check(authClientId);
+      if (!decision.allowed) {
+        sendError(ws, env.id, "E_RATE", "rate limit exceeded", authClientId);
+        return;
+      }
+    }
+
     switch (env.type) {
       case "relay.hello": {
-        const ack = makeEnvelope("relay.hello.ack", env.id, env.from || "");
+        const payload = isRecord(env.payload) ? env.payload : {};
+        const protocolVersion =
+          typeof payload.protocolVersion === "number" ? payload.protocolVersion : undefined;
+        const incompatible =
+          protocolVersion !== undefined && protocolVersion !== RELAY_SERVER_PROTOCOL_VERSION;
+        const ack = makeEnvelope("relay.hello.ack", env.id, env.from || "", {
+          relayVersion: RELAY_SERVER_VERSION,
+          protocolVersion: RELAY_SERVER_PROTOCOL_VERSION,
+          ...(incompatible ? { compatible: false } : {}),
+        });
         logLine("tx", ack);
         sendTo(ws, ack);
         break;
@@ -218,6 +277,8 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
           logLine("tx", queued);
           sendTo(ws, queued);
         }
+
+        auditEvent("register", clientId, "relay", true);
         break;
       }
 
@@ -256,6 +317,7 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
         const ack = makeEnvelope("relay.pair.ack", env.id, authClientId ?? env.from, ackPayload);
         logLine("tx", ack);
         sendTo(ws, ack);
+        auditEvent("pair", deviceId, consumed.consoleId, true);
         break;
       }
 
@@ -289,7 +351,9 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
             }
           }
         }
-        if (!delivered) {
+        if (delivered) {
+          auditEvent("route", authClientId, to, true);
+        } else {
           // M3.3: queue the original envelope for the offline peer and fire
           // the push provider (if any) without blocking or throwing.
           queue.enqueue(to, env);
@@ -304,6 +368,7 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
               // Synchronous throw from a misbehaving provider: degrade silently.
             }
           }
+          auditEvent("route", authClientId, to, false);
           sendError(ws, env.id, "E_ROUTE", "target offline", authClientId);
         }
         break;
