@@ -8,6 +8,9 @@
 dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness（DSH），离开电脑后也能盯住 agent、接收通知、一键审批、回答提问、继续对话。对标 Claude Code Remote Control 的定位，但面向 DSH 开源生态，代码与数据都留在用户本机，手机只是视口。
 
 - **跨端**：React Native + Expo（TypeScript），iOS + Android 一套代码，EAS 云构建无需 Mac 即可出 iOS 包。
+- **审批流程**：会话列表待办横幅直达审批列表页，多选批量批准/拒绝、提问批量跳过；处理历史按时间倒序可查；通知点击深链直达 `approval/:rpcId`。
+- **会话列表**：搜索（标题/workspace/最近消息，大小写不敏感）、按 workspace 分组（无 workspace 归「其他」）、上下文压力分档提醒（<70 正常 / 70–85 偏高 / ≥85 告警）。
+- **聊天体验**：长按消息操作菜单（复制全文/按代码块分别复制）；代码块默认展开可折叠 + 轻量语法高亮（关键词/字符串/注释/数字四类）；流式渲染可本地暂停/恢复（协议暂无主动中断 RPC，见 BLOCKED.md）。
 - **LAN 起步、传输可插拔**：自动发现 + 二维码配对 + 最近主机一键重连，也可以手动直连局域网内的 DSH（`host:3080`）；传输层抽象为 `Transport` 接口，中继/公网为预留演进方向，不平滑推翻重来。
 - **低门槛连接（P2）**：首启 3 步引导 → 扫码电脑上的配对二维码即连（`dshremote://pair` 深链）；同一局域网点「自动发现」列出可用实例；冷启动自动重连最近主机。
 - **协议对齐**：纯 TS 协议包（`packages/protocol`，零 RN 依赖）与 DSH 原生类型零失真对齐；宽容解码，线上层永不因未知数据崩溃。
@@ -27,7 +30,7 @@ dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness�
 dsh-remote/
 ├── apps/
 │   └── mobile/            # Expo RN App（iOS + Android）
-│       ├── app/           # expo-router 页面：连接、会话列表、聊天、审批
+│       ├── app/           # expo-router 页面：连接、会话列表、聊天、审批列表/详情/历史、设置
 │       ├── src/
 │       │   ├── transport/ # ConnectionProvider + pipeline（装配 ConnectionLoop）
 │       │   ├── data/      # SessionStore：会话镜像、折叠、投影派生
@@ -39,7 +42,7 @@ dsh-remote/
 │       └── app.json       # EAS 配置（云构建）
 ├── packages/
 │   └── protocol/          # TS 协议核心（纯 TS，零运行时依赖）
-│       └── src/           # envelopes / codec / rpc / ws / transport / loop / dto
+│       └── src/           # envelopes / codec / rpc / ws / transport / loop / dto / relay(M3)
 ├── mock-harness/          # DSH /api + WS 测试桩（回放 conformance fixtures）
 ├── tools/
 │   └── capture/           # 录制真实 DSH 流量 → conformance fixtures
@@ -89,6 +92,7 @@ npx eas-cli build --profile production    # 商店版（自动递增 build numbe
 - [docs/MANUAL.md](docs/MANUAL.md) — 真机联调清单（M0/M1 手动验收）
 - [docs/design/UI-SYSTEM-v7.md](docs/design/UI-SYSTEM-v7.md) — App UI 设计系统 v7（双主题 · DeepSeek 品牌 · 官方黑色鲸鱼）
 - [docs/design/BRAND.md](docs/design/BRAND.md) — 品牌与 App 图标（DeepSeek 官方黑色鲸鱼）
+- [docs/design/RELAY-M3.md](docs/design/RELAY-M3.md) — M3 中继设计（控制面协议/E2E 密钥交换/RelayTransport/部署安全/分阶段计划）
 
 ## 里程碑状态
 
@@ -97,7 +101,7 @@ npx eas-cli build --profile production    # 商店版（自动递增 build numbe
 | M0 骨架与协议（monorepo + protocol + mock-harness + capture + docs + App 壳） | ✅ 已交付 |
 | M1 遥控闭环（通知/保活/审批提问/消息/goal-todo 控制） | ✅ 已交付 |
 | M2 跨端与安全（iOS EAS、配对 token 鉴权、开源发布） | ✅ 已交付 |
-| M3 中继（预留） | 预留 |
+| M3 中继 | 设计已交付（docs/design/RELAY-M3.md + protocol relay 类型/解析验证）；服务器/接入/推送另开窗口 |
 
 > 状态：M0–M2 已通过评审（全仓 typecheck/test 绿）；Phase B 真机联调已在 Android 真机（Expo Go）验证通过（连接/会话/流式聊天/发消息/审批/提问/goal 暂停/断线重连），通知与后台保活需 development build 验证（Expo Go SDK 53+ 限制，见 [docs/MANUAL.md](docs/MANUAL.md)）。
 
