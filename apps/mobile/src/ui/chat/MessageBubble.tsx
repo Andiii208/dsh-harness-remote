@@ -8,7 +8,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import type { PluginCommand } from "@dsh-remote/protocol";
 import type { TranscriptMessage } from "../../data/SessionStore";
+import { useConnection } from "../../transport/ConnectionProvider";
 import { font, radius, type ThemeColors } from "../../theme";
 import { useTheme } from "../../theme-context";
 import { StreamingCursor } from "../StreamingCursor";
@@ -34,13 +36,33 @@ function tokenColor(type: HighlightTokenType, colors: ThemeColors): string {
 export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolean }) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { pluginList, pluginExec } = useConnection();
   const [copied, setCopied] = useState(false);
+  const [pluginNotice, setPluginNotice] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const [pluginCommands, setPluginCommands] = useState<PluginCommand[]>([]);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pluginTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    if (pluginTimer.current) clearTimeout(pluginTimer.current);
   }, []);
+
+  // R2：菜单打开时读取宿主插件命令；读不到自动隐藏插件指令区。
+  useEffect(() => {
+    if (!menuOpen) {
+      setPluginCommands([]);
+      return;
+    }
+    let alive = true;
+    void pluginList().then((list) => {
+      if (alive) setPluginCommands(list?.commands ?? []);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [menuOpen, pluginList]);
 
   if (m.gap) {
     return (
@@ -68,6 +90,15 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
     setMenuOpen(false);
     if (copiedTimer.current) clearTimeout(copiedTimer.current);
     copiedTimer.current = setTimeout(() => setCopied(false), 1200);
+  };
+
+  const runPluginCommand = async (cmd: PluginCommand) => {
+    setMenuOpen(false);
+    void haptic("light");
+    const r = await pluginExec(cmd.id);
+    setPluginNotice(r?.ok === false ? `${cmd.title} · ${r.error?.message ?? "执行失败"}` : `${cmd.title} · 已发送`);
+    if (pluginTimer.current) clearTimeout(pluginTimer.current);
+    pluginTimer.current = setTimeout(() => setPluginNotice(""), 1600);
   };
 
   const onLongPress = () => {
@@ -137,6 +168,7 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
           {m.interrupted && <Text style={styles.tail}>⏹ 中断</Text>}
           {live && <StreamingCursor />}
           {copied && <Text style={styles.copied}>已复制</Text>}
+          {pluginNotice.length > 0 && <Text style={styles.copied}>{pluginNotice}</Text>}
         </View>
       </Pressable>
 
@@ -161,6 +193,21 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
                 accessibilityLabel={`复制代码块 ${i + 1}`}
               >
                 <Text style={styles.menuItemText}>复制代码块 #{i + 1}{seg.lang ? `（${seg.lang}）` : ""}</Text>
+              </Pressable>
+            ))}
+            {pluginCommands.length > 0 && (
+              <Text style={styles.menuTitle}>插件指令</Text>
+            )}
+            {pluginCommands.map((cmd) => (
+              <Pressable
+                key={`plugin-${cmd.id}`}
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => void runPluginCommand(cmd)}
+                accessibilityRole="button"
+                accessibilityLabel={cmd.title}
+              >
+                <Text style={styles.menuItemText}>{cmd.title}</Text>
+                {cmd.risk === "approve" && <Text style={styles.menuRisk}>需审批</Text>}
               </Pressable>
             ))}
             <Pressable
@@ -232,6 +279,7 @@ function createStyles(colors: ThemeColors) {
     },
     menuItemPressed: { opacity: 0.7 },
     menuItemText: { color: colors.text, fontSize: font.body, fontWeight: "500" },
+    menuRisk: { color: colors.warn, fontSize: 10, fontFamily: font.mono, marginTop: 3 },
     menuCancelText: { color: colors.textMuted },
   });
 }

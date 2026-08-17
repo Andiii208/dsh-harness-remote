@@ -16,7 +16,9 @@ import {
 import {
   LanTransport,
   RelayTransport,
+  readPluginList,
   type ConnectionState,
+  type PluginListResult,
 } from "@dsh-remote/protocol";
 import {
   createConnectionPipeline,
@@ -65,6 +67,10 @@ export interface ConnectionApi {
   respond(rpcId: string, result: unknown): Promise<void>;
   /** 请求宿主中断流式（session.interrupt）；失败抛错，由 UI 回退本地暂停。 */
   interruptStream(sessionId: string): Promise<void>;
+  /** R2：读取宿主插件能力清单；读不到/离线返回 null（UI 自动隐藏）。 */
+  pluginList(): Promise<PluginListResult | null>;
+  /** R2：执行宿主插件命令；读不到/离线返回 null。 */
+  pluginExec(commandId: string, args?: Record<string, unknown>): Promise<{ ok: boolean; result?: unknown; error?: { code: string; message: string } } | null>;
 }
 
 const ConnectionContext = createContext<ConnectionApi | null>(null);
@@ -244,6 +250,55 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     await requestInterrupt(pipelineRef.current?.loop.connection, sessionId);
   }, []);
 
+  // R2：插件能力面。所有读取失败/离线都返回 null，UI 自动隐藏，不报错。
+  const pluginList = useCallback(async (): Promise<PluginListResult | null> => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return null;
+    try {
+      const r = await c.unary("plugin.list", {});
+      if (!r.ok) return null;
+      return readPluginList(r.result);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const pluginExec = useCallback(
+    async (commandId: string, args?: Record<string, unknown>) => {
+      const c = pipelineRef.current?.loop.connection;
+      if (!c) return null;
+      try {
+        const r = await c.unary("plugin.exec", { commandId, args });
+        if (!r.ok) {
+          const err = r.error;
+          return {
+            ok: false,
+            error: {
+              code: err?.code ?? "UnknownError",
+              message: err?.message ?? "plugin.exec failed",
+            },
+          };
+        }
+        const result = (r.result ?? {}) as Record<string, unknown>;
+        return {
+          ok: typeof result.ok === "boolean" ? result.ok : true,
+          result: result.result,
+          ...(result.error && typeof result.error === "object"
+            ? {
+                error: {
+                  code: String((result.error as { code?: unknown }).code ?? "UnknownError"),
+                  message: String((result.error as { message?: unknown }).message ?? "plugin.exec failed"),
+                },
+              }
+            : {}),
+        };
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
+
   const transcript = useCallback((sessionId: string) => {
     return pipelineRef.current?.store.getTranscript(sessionId) ?? [];
   }, []);
@@ -303,8 +358,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       sendMessage,
       respond,
       interruptStream,
+      pluginList,
+      pluginExec,
     }),
-    [state, describe, relayPeerId, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, connect, disconnect, sendMessage, respond, interruptStream, transcript, liveMessage, setNotificationsEnabled],
+    [state, describe, relayPeerId, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, connect, disconnect, sendMessage, respond, interruptStream, transcript, liveMessage, setNotificationsEnabled, pluginList, pluginExec],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;

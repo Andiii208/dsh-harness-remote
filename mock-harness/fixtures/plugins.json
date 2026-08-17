@@ -1,0 +1,67 @@
+{
+  "meta": {
+    "baselineVersion": "0.1.0-rc.5",
+    "recordedAt": "2026-08-18T00:00:00.000Z",
+    "describe": { "name": "dsh", "version": "0.1.0-rc.5" }
+  },
+  "unaryResponses": [
+    {
+      "method": "plugin.list",
+      "response": {
+        "ok": true,
+        "result": {
+          "plugins": [
+            {
+              "id": "dsh-remote",
+              "name": "dsh-remote",
+              "version": "0.1.0",
+              "description": "手机视口基础能力（fixture）",
+              "commands": [
+                {
+                  "id": "dsh-remote.ping",
+                  "pluginId": "dsh-remote",
+                  "title": "Ping 宿主",
+                  "description": "返回宿主在线状态与当前时间",
+                  "risk": "read"
+                },
+                {
+                  "id": "dsh-remote.echo",
+                  "pluginId": "dsh-remote",
+                  "title": "回显文本",
+                  "description": "把参数原样返回",
+                  "risk": "read",
+                  "args": [
+                    { "name": "text", "label": "文本", "type": "string", "required": true }
+                  ]
+                }
+              ],
+              "settings": [
+                {
+                  "key": "dsh-remote.notifyLevel",
+                  "title": "通知级别",
+                  "type": "select",
+                  "options": ["off", "errors", "all"],
+                  "value": "errors",
+                  "description": "控制手机端收到的系统通知级别"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "method": "plugin.exec",
+      "response": {
+        "ok": true,
+        "result": {
+          "rpcId": "",
+          "commandId": "dsh-remote.ping",
+          "ok": true,
+          "result": { "pong": true, "now": 1755446400000 }
+        }
+      }
+    }
+  ],
+  "wsFrames": []
+}

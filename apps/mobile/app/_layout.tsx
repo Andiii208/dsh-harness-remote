@@ -43,6 +43,7 @@ function RootNavigator() {
         <Stack.Screen name="chat/[sessionId]" options={{ title: "对话" }} />
         <Stack.Screen name="approval/[rpcId]" options={{ title: "请求" }} />
         <Stack.Screen name="settings" options={{ title: "设置" }} />
+        <Stack.Screen name="plugins" options={{ title: "插件", headerBackTitle: "设置" }} />
         <Stack.Screen name="scan" options={{ headerShown: false, presentation: "modal" }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       </Stack>
