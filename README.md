@@ -11,7 +11,7 @@ dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness�
 - **LAN 起步、传输可插拔**：自动发现 + 二维码配对 + 最近主机一键重连，也可以手动直连局域网内的 DSH（`host:3080`）；传输层抽象为 `Transport` 接口，中继/公网为预留演进方向，不平滑推翻重来。
 - **低门槛连接（P2）**：首启 3 步引导 → 扫码电脑上的配对二维码即连（`dshremote://pair` 深链）；同一局域网点「自动发现」列出可用实例；冷启动自动重连最近主机。
 - **协议对齐**：纯 TS 协议包（`packages/protocol`，零 RN 依赖）与 DSH 原生类型零失真对齐；宽容解码，线上层永不因未知数据崩溃。
-- **设计**：深色终端风 v2（docs/design/UI-SYSTEM.md）——JetBrains Mono 等宽数据、单一强调色 `#4D6BFE`、DeepSeek 黑色鲸鱼品牌；动效克制且尊重系统「减弱动态」。
+- **设计**：UI 设计系统 v7（docs/design/UI-SYSTEM-v7.md）——双主题（浅/深跟随系统）、DeepSeek 官方主按钮蓝（浅 `#3964FE` / 深 `#5686FE`）、官方黑色鲸鱼、Space Grotesk 显示字体；动效克制且尊重系统「减弱动态」。
 
 ## 界面预览
 
@@ -19,7 +19,7 @@ dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness�
 |---|---|---|---|
 | ![connect](docs/screenshots/connect.png) | ![sessions](docs/screenshots/sessions.png) | ![chat](docs/screenshots/chat.png) | ![onboarding](docs/screenshots/onboarding.png) |
 
-> 截图来自 Web 预览（390×844 视口）；真机观感一致（通知/扫码为原生能力，Web 会优雅降级）。
+> 截图来自 Web 预览（390×844 视口，浅/深双主题各截其一：连接页浅色、会话列表深色、聊天浅色、首启引导深色）；真机观感一致（通知/扫码为原生能力，Web 会优雅降级）。
 
 ## 仓库结构
 
@@ -33,8 +33,9 @@ dsh-remote/
 │       │   ├── data/      # SessionStore：会话镜像、折叠、投影派生
 │       │   ├── notify/    # 通知分类器 → 本地通知（expo-notifications）+ 后台保活
 │       │   ├── discovery/ # 最近主机 / 子网自动发现 / 配对深链 / 首启引导
-│       │   ├── ui/        # 设计系统 v2 组件（WhaleMark/StatusChip/Button/Field/…）
-│       │   └── theme.ts   # DSH 设计令牌（暗色终端质感 v2）
+│       │   ├── ui/        # 设计系统 v7 组件（WhaleMark/StatusChip/Button/Field/…）
+│       │   ├── theme.ts   # DSH 设计令牌 v7（双主题：浅 #3964FE / 深 #5686FE）
+│       │   └── theme-context.tsx # ThemeProvider + useTheme（跟随系统深浅色）
 │       └── app.json       # EAS 配置（云构建）
 ├── packages/
 │   └── protocol/          # TS 协议核心（纯 TS，零运行时依赖）
@@ -86,8 +87,8 @@ npx eas-cli build --profile production    # 商店版（自动递增 build numbe
 - [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) — 协议版本矩阵与 fixtures 回归流程
 - [docs/SECURITY.md](docs/SECURITY.md) — 安全模型（MVP LAN → M2 配对 → M3 中继）
 - [docs/MANUAL.md](docs/MANUAL.md) — 真机联调清单（M0/M1 手动验收）
-- [docs/design/UI-SYSTEM.md](docs/design/UI-SYSTEM.md) — App UI 设计系统（暗色终端质感）
-- [docs/design/BRAND.md](docs/design/BRAND.md) — 品牌与 App 图标（DeepSeek 黑色鲸鱼）
+- [docs/design/UI-SYSTEM-v7.md](docs/design/UI-SYSTEM-v7.md) — App UI 设计系统 v7（双主题 · DeepSeek 品牌 · 官方黑色鲸鱼）
+- [docs/design/BRAND.md](docs/design/BRAND.md) — 品牌与 App 图标（DeepSeek 官方黑色鲸鱼）
 
 ## 里程碑状态
 
