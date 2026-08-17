@@ -29,6 +29,8 @@ export type RelayEnvelopeType =
   | "relay.register.ack"
   | "relay.pair"
   | "relay.pair.ack"
+  | "relay.pair.code"
+  | "relay.pair.code.ack"
   | "relay.route"
   | "relay.route.ack"
   | "relay.heartbeat"
@@ -65,6 +67,19 @@ export interface RelayRegistration {
 export interface RelayPairing {
   code: string;
   deviceId: string;
+}
+
+/** M3.5 payload: an authenticated console asks the relay for a one-time 6-digit code. */
+export interface RelayPairCodeRequest {
+  /** Optional lifetime for the code (defaults to 10 minutes). */
+  ttlMs?: number;
+}
+
+/** M3.5 ack payload: the one-time 6-digit pairing code issued to the console. */
+export interface RelayPairCodeAck {
+  code: string;
+  /** Requested/actual lifetime in ms. */
+  ttlMs: number;
 }
 
 /** M3.2 routing payload: relay delivers this opaque encrypted payload to the peer. */
@@ -190,6 +205,24 @@ export function makePair(
   };
 }
 
+/** Build a control-plane pair-code request envelope (console → relay). */
+export function makePairCode(
+  from: string,
+  payload?: RelayPairCodeRequest,
+  opts: { id?: string; ts?: number } = {},
+): RelayEnvelope {
+  const env: RelayEnvelope = {
+    v: RELAY_ENVELOPE_VERSION,
+    type: "relay.pair.code",
+    id: opts.id ?? makeRpcId(),
+    from,
+    to: "relay",
+    ts: opts.ts ?? Date.now(),
+  };
+  if (payload !== undefined) env.payload = payload;
+  return env;
+}
+
 /** Build a control-plane heartbeat envelope. */
 export function makeHeartbeat(
   from: string,
@@ -215,6 +248,8 @@ const KNOWN_TYPES: readonly string[] = [
   "relay.register.ack",
   "relay.pair",
   "relay.pair.ack",
+  "relay.pair.code",
+  "relay.pair.code.ack",
   "relay.route",
   "relay.route.ack",
   "relay.heartbeat",

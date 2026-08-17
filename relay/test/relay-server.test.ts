@@ -137,7 +137,7 @@ function makeEnvelope(
     type,
     id,
     from,
-    to: type === "relay.hello" || type === "relay.register" || type === "relay.pair"
+    to: type === "relay.hello" || type === "relay.register" || type === "relay.pair" || type === "relay.pair.code"
       ? "relay"
       : "",
     ts: Date.now(),
@@ -177,6 +177,69 @@ describe("relay server", () => {
 
     device.close();
   });
+
+    it("rejects relay.pair.code from an unauthenticated socket with E_AUTH", async () => {
+      const relay = await startRelay();
+      const c = await TestClient.connect(relay.port);
+      c.send(makeEnvelope("relay.pair.code", "pc-unauth", "console-x"));
+
+      const err = await c.next("relay.error");
+      expect((err.payload as { code: string }).code).toBe("E_AUTH");
+
+      c.close();
+    });
+
+    it("issues a one-time 6-digit code to an authenticated console", async () => {
+      const relay = await startRelay();
+
+      const consoleClient = await TestClient.connect(relay.port);
+      consoleClient.send(
+        registerEnvelope("reg-pc-console", "console-pc", { consoleId: "console-pc" }),
+      );
+      await consoleClient.next("relay.register.ack");
+
+      consoleClient.send(makeEnvelope("relay.pair.code", "pc-1", "console-pc"));
+      const ack = await consoleClient.next("relay.pair.code.ack");
+      expect(ack.from).toBe("relay");
+      expect(ack.to).toBe("console-pc");
+
+      const payload = ack.payload as { code: string; ttlMs: number };
+      expect(payload.code).toMatch(/^\d{6}$/);
+      expect(payload.ttlMs).toBe(600_000);
+
+      // 同一个码只能被消费一次：第一次配对成功，第二次返回 E_PAIR。
+      const device = await TestClient.connect(relay.port);
+      device.send(registerEnvelope("reg-pc-device", "device-pc", { deviceId: "device-pc" }));
+      await device.next("relay.register.ack");
+
+      device.send(
+        makeEnvelope("relay.pair", "pair-pc-1", "device-pc", { code: payload.code, deviceId: "device-pc" }),
+      );
+      const pairAck = await device.next("relay.pair.ack");
+      expect(pairAck.payload).toMatchObject({ deviceId: "device-pc", consoleId: "console-pc" });
+
+      device.send(
+        makeEnvelope("relay.pair", "pair-pc-2", "device-pc", { code: payload.code, deviceId: "device-pc" }),
+      );
+      const pairErr = await device.next("relay.error");
+      expect((pairErr.payload as { code: string }).code).toBe("E_PAIR");
+
+      consoleClient.close();
+      device.close();
+    });
+
+    it("rejects relay.pair.code from an authenticated device (not console)", async () => {
+      const relay = await startRelay();
+      const device = await TestClient.connect(relay.port);
+      device.send(registerEnvelope("reg-pc-dev", "device-only", { deviceId: "device-only" }));
+      await device.next("relay.register.ack");
+
+      device.send(makeEnvelope("relay.pair.code", "pc-dev", "device-only"));
+      const err = await device.next("relay.error");
+      expect((err.payload as { code: string }).code).toBe("E_AUTH");
+
+      device.close();
+    });
 
   it("rejects route from an unauthenticated socket with E_AUTH", async () => {
     const relay = await startRelay();

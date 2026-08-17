@@ -355,6 +355,36 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
         break;
       }
 
+      case "relay.pair.code": {
+        if (!authClientId) {
+          sendError(ws, env.id, "E_AUTH", "authentication required", "");
+          break;
+        }
+
+        // R5a：只有 console 能取码；device 客户端请求取码按未授权处理。
+        const client = store.getClient(authClientId);
+        if (!client || client.kind !== "console") {
+          sendError(ws, env.id, "E_AUTH", "pair code requires a console registration", authClientId);
+          break;
+        }
+
+        const payload = isRecord(env.payload) ? env.payload : {};
+        const rawTtl = typeof payload.ttlMs === "number" ? payload.ttlMs : undefined;
+        const ttlMs =
+          rawTtl !== undefined && Number.isFinite(rawTtl) && rawTtl > 0
+            ? Math.floor(rawTtl)
+            : 10 * 60 * 1000;
+        const code = store.createPairingCode(authClientId, ttlMs);
+        const ack = makeEnvelope("relay.pair.code.ack", env.id, authClientId, {
+          code,
+          ttlMs,
+        });
+        logLine("tx", ack);
+        sendTo(ws, ack);
+        auditEvent("pair_code", authClientId, "relay", true);
+        break;
+      }
+
       case "relay.route": {
         if (!authClientId) {
           sendError(ws, env.id, "E_AUTH", "authentication required", "");
