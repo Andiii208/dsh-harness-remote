@@ -59,6 +59,11 @@ export class RpcClient {
     return this.post(`/api/${method}`, envelope);
   }
 
+  /** POST /api/session.interrupt — request the host to interrupt a live stream. */
+  async interrupt(sessionId: string): Promise<RpcResult> {
+    return this.unary("session.interrupt", { sessionId });
+  }
+
   /** POST /api/respond — answer a server-request (approval / question). */
   async respond(rpcId: string, result: unknown): Promise<void> {
     const body = { rpcId, result };

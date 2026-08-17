@@ -1,1 +1,1 @@
-- 流式暂停：协议层（packages/protocol/src/rpc.ts / transport.ts）当前没有主动中断 RPC（仅 AbortController 超时用），因此 B 按任务书「没有 → 本地暂停渲染 + 提示」实现：聊天页暂停按钮只冻结本地 liveMessage 渲染，远端可能仍在继续。真正的中断 RPC（如 session.interrupt / cancel）需要协议新增 + harness 支持，留待后续窗口。
+- ~~流式暂停：协议层（packages/protocol/src/rpc.ts / transport.ts）当前没有主动中断 RPC~~ → **已关闭（Phase 1）**：`RpcClient.interrupt(sessionId)` 已新增（`/api/session.interrupt`，与 `unary` 同构）；`Connection.interrupt?` 可选字段 + `LanTransport` 接线；聊天页暂停按钮先发中断，失败才回退本地暂停并提示。宿主侧（DSH）暂无 `session.interrupt` 实现时，`harness-plugin/src/interrupt.ts` 提供接线桩（入参校验 + 响应构造），待真机实现后接入。

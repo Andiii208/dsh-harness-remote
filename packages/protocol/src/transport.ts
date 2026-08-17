@@ -24,6 +24,8 @@ export type ConnectionState = "connecting" | "online" | "offline" | "backoff";
 export interface Connection {
   unary(method: string, payload: unknown): Promise<RpcResult>;
   respond(rpcId: string, result: unknown): Promise<void>;
+  /** 可选：主动中断流式（session.interrupt）。旧连接/测试假连接可不实现。 */
+  interrupt?(sessionId: string): Promise<void>;
   /** Merged downlink frames from events.mux + events.host (incl. UnknownFrame). */
   events: AsyncIterable<DownlinkFrame>;
   close(): void;
@@ -109,6 +111,9 @@ export class LanTransport implements Transport {
     return {
       unary: (method, payload) => rpc.unary(method, payload),
       respond: (rpcId, result) => rpc.respond(rpcId, result),
+      interrupt: async (sessionId) => {
+        await rpc.interrupt(sessionId);
+      },
       events: ws.events,
       close: () => ws.close(),
     };

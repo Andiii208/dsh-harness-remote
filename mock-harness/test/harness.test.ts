@@ -55,6 +55,17 @@ describe("api-server unary replay", () => {
     expect(body).toMatchObject({ rpcId: "r2", ok: true, result: { accepted: true } });
   });
 
+  it("replays session.interrupt (stream-interrupt path)", async () => {
+    const h = await harnessWith("sessions");
+    const res = await post(h.url, "/api/session.interrupt", {
+      rpcId: "r3",
+      method: "session.interrupt",
+      payload: { sessionId: "s1" },
+    });
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ rpcId: "r3", ok: true, result: { interrupted: true } });
+  });
+
   it("returns ok:false NOT_FOUND for unmatched methods", async () => {
     const h = await harnessWith("sessions");
     const res = await post(h.url, "/api/session.get", { rpcId: "r1", method: "session.get", payload: {} });

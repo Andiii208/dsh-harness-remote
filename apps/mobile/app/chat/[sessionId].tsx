@@ -28,11 +28,12 @@ export default function ChatScreen() {
   const id = Array.isArray(sessionId) ? sessionId[0] : sessionId;
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { sessions, transcript, liveMessage, sendMessage, state } = useConnection();
+  const { sessions, transcript, liveMessage, sendMessage, state, interruptStream } = useConnection();
   const [draft, setDraft] = useState("");
   const [sendError, setSendError] = useState("");
   const [showJump, setShowJump] = useState(false);
   const [streamPaused, setStreamPaused] = useState(false);
+  const [pauseHint, setPauseHint] = useState("");
   const showJumpRef = useRef(false);
   const listRef = useRef<FlashListRef<TranscriptMessage> | null>(null);
   const messages = id ? transcript(id) : [];
@@ -40,6 +41,7 @@ export default function ChatScreen() {
   const liveId = live?.id;
   useEffect(() => {
     setStreamPaused(false); // 新一轮流式开始时恢复渲染
+    setPauseHint("");
   }, [liveId]);
   const data = streamPaused ? messages : live ? [...messages, live] : messages;
   const summary = id ? sessions.find((s) => s.id === id) : undefined;
@@ -80,6 +82,26 @@ export default function ChatScreen() {
     } catch (err) {
       setDraft(text);
       setSendError(err instanceof Error ? err.message : "发送失败");
+    }
+  };
+
+  // Phase 1：暂停流式 = 先发 session.interrupt，失败才回退本地暂停。
+  const togglePause = async () => {
+    if (streamPaused) {
+      setStreamPaused(false);
+      setPauseHint("");
+      void haptic("light");
+      return;
+    }
+    if (!id) return;
+    void haptic("light");
+    try {
+      await interruptStream(id);
+      setStreamPaused(true);
+      setPauseHint("已发送中断请求");
+    } catch {
+      setStreamPaused(true);
+      setPauseHint("发送中断失败，已回退本地暂停（远端可能仍在继续）");
     }
   };
 
@@ -145,16 +167,13 @@ export default function ChatScreen() {
           <View style={styles.pauseRow}>
             <Pressable
               style={({ pressed }) => [styles.pauseButton, pressed && styles.pauseButtonPressed]}
-              onPress={() => {
-                setStreamPaused((v) => !v);
-                void haptic("light");
-              }}
+              onPress={() => void togglePause()}
               accessibilityRole="button"
               accessibilityLabel={streamPaused ? "恢复流式渲染" : "暂停流式渲染"}
             >
               <Text style={styles.pauseButtonText}>{streamPaused ? "▶ 恢复渲染" : "⏸ 暂停流式"}</Text>
             </Pressable>
-            {streamPaused && <Text style={styles.pauseHint}>本地暂停渲染中（远端可能仍在继续）</Text>}
+            {streamPaused && <Text style={styles.pauseHint}>{pauseHint}</Text>}
           </View>
         )}
         {sendError.length > 0 && <Text style={styles.sendError}>{sendError}</Text>}

@@ -133,6 +133,43 @@ describe("RpcClient.respond & call", () => {
   });
 });
 
+describe("RpcClient.interrupt", () => {
+  it("posts session.interrupt to /api/session.interrupt with the sessionId payload", async () => {
+    const calls: Array<{ url: string; body: unknown }> = [];
+    const client = new RpcClient({
+      baseUrl: "http://h:3080",
+      fetchImpl: (async (url, init) => {
+        calls.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+        const req = JSON.parse(String(init?.body)) as { rpcId: string };
+        return jsonResponse({ rpcId: req.rpcId, ok: true, result: { interrupted: true } });
+      }) as typeof fetch,
+    });
+    const res = await client.interrupt("s1");
+    expect(res.ok).toBe(true);
+    expect(res.result).toEqual({ interrupted: true });
+    expect(calls[0]?.url).toBe("http://h:3080/api/session.interrupt");
+    expect(calls[0]?.body).toMatchObject({
+      method: "session.interrupt",
+      payload: { sessionId: "s1" },
+    });
+  });
+
+  it("throws RpcError with typed code when the host rejects the interrupt", async () => {
+    const client = new RpcClient({
+      baseUrl: "http://h:3080",
+      fetchImpl: echoFetch((req) => ({
+        rpcId: req.rpcId,
+        ok: false,
+        error: { code: "SESSION_BUSY", message: "no live stream for session" },
+      })),
+    });
+    await expect(client.interrupt("ghost")).rejects.toMatchObject({
+      name: "RpcError",
+      code: "SESSION_BUSY",
+    });
+  });
+});
+
 describe("RpcClient pairing token", () => {
   it("sends Authorization Bearer when a token is configured", async () => {
     const headers: Record<string, string> = {};

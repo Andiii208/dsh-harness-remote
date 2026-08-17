@@ -21,6 +21,10 @@
           ]
         }
       }
+    },
+    {
+      "method": "session.interrupt",
+      "response": { "ok": true, "result": { "interrupted": true } }
     }
   ],
   "wsFrames": [
@@ -35,6 +39,10 @@
     {
       "stream": "mux",
       "frame": { "type": "session/projection", "sessionId": "s1", "title": "deploy checklist", "goal": { "status": "active", "objective": "deploy app" }, "tokenUsage": { "total": 12000 } }
+    },
+    {
+      "stream": "mux",
+      "frame": { "type": "session/event", "sessionId": "s1", "event": "interrupted" }
     }
   ]
 }

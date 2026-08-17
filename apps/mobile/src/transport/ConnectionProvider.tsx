@@ -18,6 +18,7 @@ import {
   createConnectionPipeline,
   type ConnectionPipeline,
 } from "./pipeline";
+import { requestInterrupt } from "./interrupt";
 import { notificationService } from "../notify/expoAdapter";
 import { notificationPrefsStore } from "../notify/notificationPrefsStoreAdapter";
 import { hostStore } from "../discovery/hostStoreAdapter";
@@ -53,6 +54,8 @@ export interface ConnectionApi {
   disconnect(): void;
   sendMessage(sessionId: string, text: string): Promise<void>;
   respond(rpcId: string, result: unknown): Promise<void>;
+  /** 请求宿主中断流式（session.interrupt）；失败抛错，由 UI 回退本地暂停。 */
+  interruptStream(sessionId: string): Promise<void>;
 }
 
 const ConnectionContext = createContext<ConnectionApi | null>(null);
@@ -203,6 +206,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     void notificationService.dismissByRoute(`approval/${rpcId}`);
   }, []);
 
+  const interruptStream = useCallback(async (sessionId: string) => {
+    await requestInterrupt(pipelineRef.current?.loop.connection, sessionId);
+  }, []);
+
   const transcript = useCallback((sessionId: string) => {
     return pipelineRef.current?.store.getTranscript(sessionId) ?? [];
   }, []);
@@ -260,8 +267,9 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       disconnect,
       sendMessage,
       respond,
+      interruptStream,
     }),
-    [state, describe, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, connect, disconnect, sendMessage, respond, transcript, liveMessage, setNotificationsEnabled],
+    [state, describe, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, connect, disconnect, sendMessage, respond, interruptStream, transcript, liveMessage, setNotificationsEnabled],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;
