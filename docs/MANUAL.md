@@ -129,6 +129,15 @@ CMD ["node", "dist/cli.js", "--port", "4090", "--host", "0.0.0.0"]
 
 - 客户端 `relay.hello` 携带 `protocolVersion`；relay `relay.hello.ack` 返回 `{ relayVersion, protocolVersion }`，若客户端协议版本不兼容会附加 `compatible: false`（不断连，由客户端决定是否降级/断开）。
 
+### 配对闭环（M3.5，手机输入 6 位码）
+
+- 开发者联调脚本：`.shots/relay-pair-integration.mjs`（dev-only，不在包内）会同时启动 relay（4090）+ mock-harness + console（harness-plugin `RelayClient`），并打印 `RELAY_PAIR_CODE=<6 位码>`。
+- App 端步骤：
+  1. HOST 填 `ws://127.0.0.1:4090`（或 `wss://relay.example.com`）；relay 模式会显示可选「配对码 · 可选」输入框。
+  2. 输入 6 位配对码，点「连接」。
+  3. 配对成功后连接页显示 `consoleId · paired`；Sessions 出现 mock session。
+- 安全行为：未填配对码时保持 M3.1 明文联调路径；填入配对码后双方自动交换 ECDH 公钥并启用 E2E 加密数据面（relay 只看到 `{to, ciphertext, nonce}`）。
+
 ## 3. 已知限制（如实告知用户）
 
 - 锁屏推送依赖系统调度；厂商省电策略（小米/华为/OPPO）可能延迟或阻止后台任务。

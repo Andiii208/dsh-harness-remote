@@ -6,7 +6,7 @@
 |---|---|---|
 | MVP（LAN） | 手机与 DSH 同一可信局域网直连 `host:3080` | 官方 user patch 层开 `0.0.0.0:3080`（`<harness-home>/profiles/web/cordis.patch.yml` restate webserver）；沿用 **信任围栏**；文档强制"仅可信网络"；**特权功能只读 + 横幅**；连接页明示安全警告 |
 | M2 加固 | 同上 + 公网预告 | `harness-plugin` 配对：宿主生成一次性配对 token，App 扫码/手输，请求带 token 头，插件校验；信任围栏 → **配对围栏** |
-| M3 中继（E2E 已实现） | 任意网络 | 同一插件做设备配对 + E2E 加密出站连接；短时凭证；APNs/FCM 真推送 |
+| M3 中继（配对闭环已实现） | 任意网络 | 同一插件做设备配对 + E2E 加密出站连接；短时凭证；APNs/FCM 真推送 |
 
 ## MVP 信任围栏（DSH 侧，官方行为）
 
@@ -27,12 +27,14 @@
 - 宽容解码杜绝"未知数据导致崩溃"的可用性攻击面。
 - **配对 token 传输**：HTTP 走 `Authorization: Bearer` 头；WS 握手不支持自定义头，用 `?pairToken=` query 携带——注意 URL 可能进入代理/访问日志，属已知权衡：token 为短期凭证（15min 过期）+ 单 token 轮换，泄露面有限；M3 中继升级为 E2E 加密握手后移除。token 绝不写入应用日志。
 
-## M3 中继 E2E（2026-08-17 已实现）
+## M3 中继配对闭环（2026-08-17 已实现）
 
 - 数据面采用 ECDH(P-256) + HKDF-SHA256 派生 AES-256-GCM 会话密钥；每方向独立密钥（`packages/protocol/src/relay-crypto.ts`）。
 - `relay.route` 的 payload 对 relay 只暴露 `{ to, ciphertext, nonce }`；relay 服务端只读 `to`，不解析、不记录 ciphertext/nonce，日志仅 `type/from/to/ts`。
 - 密文被篡改或 nonce 重放时 `openRelayPayload` 校验失败拒绝（GCM 认证），单测覆盖（`relay-crypto.test.ts`）。
 - 短时凭证与配对码均为一次性/TTL 限制；私钥不出设备（App/插件各自持有）。
+- M3.5 配对闭环：手机输入 relay URL + 6 位配对码即完成 ECDH 公钥交换与会话密钥派生；`relay.pair` 成功会向被配对 console 推送对端公钥（在线直投/离线入队），双方据此启用加密数据面。
+- M3.5 密钥持久化：mobile 的 relay deviceId 与 ECDH 私钥经 `expo-secure-store` 持久化（Web 回退 localStorage，不可用降级内存不崩溃）；console 侧私钥由 harness-plugin 进程内生成/注入持有。
 
 ## 报告漏洞
 
