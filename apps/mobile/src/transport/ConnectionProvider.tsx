@@ -36,30 +36,7 @@ import { backgroundTaskApi, KEEPALIVE_TASK } from "../notify/keepaliveAdapter";
 import { GoalsClient, type GoalsApi } from "../data/goals";
 import type { PendingRequest, SessionSummary, TranscriptMessage } from "../data/SessionStore";
 import type { NotificationEvent } from "../notify/classifier";
-
-// M3.1 relay deviceId：Web 端落在 localStorage，原生端暂为模块变量；
-// M3.4 前迁移到 SecureStore/Keychain。
-let relayDeviceId = "";
-
-function getRelayDeviceId(): string {
-  const storage = (globalThis as { localStorage?: { getItem(k: string): string | null; setItem(k: string, v: string): void } }).localStorage;
-  if (!relayDeviceId) {
-    try {
-      relayDeviceId = storage?.getItem("relayDeviceId") ?? "";
-    } catch {
-      relayDeviceId = "";
-    }
-  }
-  if (!relayDeviceId) {
-    relayDeviceId = `relay-device-${Math.random().toString(36).slice(2, 10).padEnd(8, "0")}`;
-    try {
-      storage?.setItem("relayDeviceId", relayDeviceId);
-    } catch {
-      /* 非浏览器环境无 localStorage，忽略 */
-    }
-  }
-  return relayDeviceId;
-}
+import { relayDeviceStore } from "../relay/relayDeviceStoreAdapter";
 
 export interface ConnectionApi {
   state: ConnectionState;
@@ -80,7 +57,9 @@ export interface ConnectionApi {
   setGoalStatus(sessionId: string, status: string): void;
   /** 下拉刷新：重新拉取 session.list 并全量替换会话列表。 */
   refreshSessions(): Promise<void>;
-  connect(host: string, port: number, token?: string): Promise<void>;
+  connect(host: string, port: number, token?: string, pairCode?: string): Promise<void>;
+  /** Relay 配对成功后对方的 consoleId（仅 relay 模式在线配对时非空）。 */
+  relayPeerId: string | null;
   disconnect(): void;
   sendMessage(sessionId: string, text: string): Promise<void>;
   respond(rpcId: string, result: unknown): Promise<void>;
@@ -97,6 +76,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const lastEndpointRef = useRef<{ host: string; port: number } | null>(null);
   const [state, setState] = useState<ConnectionState>("offline");
   const [describe, setDescribe] = useState<unknown>(null);
+  const [relayPeerId, setRelayPeerId] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
   const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
@@ -155,13 +135,14 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const connectRef = useRef<(host: string, port: number, token?: string) => Promise<void>>(async () => {});
+  const connectRef = useRef<(host: string, port: number, token?: string, pairCode?: string) => Promise<void>>(async () => {});
 
-  const connect = useCallback(async (host: string, port: number, token?: string) => {
+  const connect = useCallback(async (host: string, port: number, token?: string, pairCode?: string) => {
     // 先等旧 pipeline 完全退出再建新连接，避免 WS/定时器重叠（评审 #14）。
     await pipelineRef.current?.stop();
     pipelineRef.current = null;
     setNotifications([]);
+    setRelayPeerId(null);
 
     // M3.1 连接模式选择：relay:// / ws:// / wss:// → RelayTransport；
     // 其余 host 走既有 LAN 路径（行为不变）。
@@ -177,8 +158,15 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     // 获取失败/超时降级为 undefined，不阻塞连接。
     const pushToken = relayMode ? ((await getExpoPushToken()) ?? undefined) : undefined;
 
+    const relayDevice = relayMode ? await relayDeviceStore.getOrCreate() : null;
     const transport = relayMode
-      ? new RelayTransport({ deviceId: getRelayDeviceId(), pushToken })
+      ? new RelayTransport({
+          deviceId: relayDevice!.deviceId,
+          privateKeyJwk: relayDevice!.privateKeyJwk ?? undefined,
+          pairCode: pairCode?.trim() || undefined,
+          onPairAck: (ack) => setRelayPeerId(ack.consoleId),
+          pushToken,
+        })
       : new LanTransport({
           onDescribe: (d) => {
             setDescribe(d);
@@ -208,7 +196,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       (globalThis as Record<string, unknown>).__dshDebug = pipeline.store;
     }
     pipeline.start();
-  }, [setStateBoth]);
+  }, [setStateBoth, setRelayPeerId]);
 
   connectRef.current = connect;
 
@@ -220,9 +208,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       if (pipelineRef.current === prev) pipelineRef.current = null;
     }
     lastEndpointRef.current = null;
+    setRelayPeerId(null);
     setStateBoth("offline");
     void autoReconnectStore.setEnabled(false); // 用户主动断开：关掉自动重连
-  }, [setStateBoth]);
+  }, [setStateBoth, setRelayPeerId]);
 
   const sendMessage = useCallback(async (sessionId: string, text: string) => {
     const c = pipelineRef.current?.loop.connection;
@@ -297,6 +286,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     () => ({
       state,
       describe,
+      relayPeerId,
       lastEndpoint: lastEndpointRef.current,
       sessions: pipelineRef.current?.store.getSessions() ?? [],
       pending: pipelineRef.current?.store.getPendingRequests() ?? [],
@@ -314,7 +304,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       respond,
       interruptStream,
     }),
-    [state, describe, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, connect, disconnect, sendMessage, respond, interruptStream, transcript, liveMessage, setNotificationsEnabled],
+    [state, describe, relayPeerId, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, connect, disconnect, sendMessage, respond, interruptStream, transcript, liveMessage, setNotificationsEnabled],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;

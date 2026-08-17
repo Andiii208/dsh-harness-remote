@@ -40,7 +40,7 @@ const STATE_TONE: Record<string, StatusTone> = {
 };
 
 export default function ConnectScreen() {
-  const { state, describe, connect, disconnect } = useConnection();
+  const { state, describe, relayPeerId, connect, disconnect } = useConnection();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
@@ -48,6 +48,7 @@ export default function ConnectScreen() {
   const [host, setHost] = useState("");
   const [port, setPort] = useState("3080");
   const [token, setToken] = useState("");
+  const [pairCode, setPairCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [recent, setRecent] = useState<RecentHost[]>([]);
   const [found, setFound] = useState<DiscoveredHost[]>([]);
@@ -126,7 +127,7 @@ export default function ConnectScreen() {
       const relayMode = isRelayUrl(host.trim());
       const p = relayMode ? 0 : Number.parseInt(port || "3080", 10);
       void draftStore.set(host.trim(), p);
-      await connect(host.trim(), p, t || undefined);
+      await connect(host.trim(), p, t || undefined, pairCode.trim() || undefined);
     } finally {
       setBusy(false);
     }
@@ -203,6 +204,7 @@ export default function ConnectScreen() {
         <View style={styles.stateRow}>
           <StatusChip tone={STATE_TONE[state] ?? "neutral"} label={STATE_LABEL[state] ?? state} />
           {describeName.length > 0 && <Text style={styles.describe} numberOfLines={1}>{describeName}</Text>}
+          {online && relayPeerId && <Text style={styles.pairedConsole} numberOfLines={1}>{relayPeerId} · paired</Text>}
         </View>
         {state === "connecting" && <ConnectingBar />}
 
@@ -278,6 +280,18 @@ export default function ConnectScreen() {
             onBlur={() => void draftStore.set(host.trim(), hostRelayMode ? 0 : Number.parseInt(port || "3080", 10))}
             editable={!online && !hostRelayMode}
           />
+          {hostRelayMode && (
+            <Field
+              label="配对码 · 可选"
+              mono
+              placeholder="6 位配对码（可选）"
+              keyboardType="number-pad"
+              maxLength={6}
+              value={pairCode}
+              onChangeText={setPairCode}
+              editable={!online}
+            />
+          )}
           <Field
             label="PAIR TOKEN · OPTIONAL"
             mono
@@ -351,6 +365,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     },
     stateRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x3, flexWrap: "wrap" },
     describe: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono, flexShrink: 1 },
+    pairedConsole: { color: colors.success, fontSize: 11, fontFamily: font.mono, letterSpacing: 0.2, flexShrink: 1 },
     section: { gap: space.x2 },
     sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     scanLink: { color: colors.accent, fontSize: 13, fontWeight: "500" },
