@@ -16,6 +16,7 @@ import {
   type RawData,
 } from "ws";
 import {
+  makeRpcId,
   parseRelayEnvelope,
   RELAY_ENVELOPE_VERSION,
   type RelayEnvelope,
@@ -318,6 +319,37 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
         logLine("tx", ack);
         sendTo(ws, ack);
         auditEvent("pair", deviceId, consumed.consoleId, true);
+
+        // M3.5: notify the paired console that a device completed pairing.
+        // Reuse relay.pair.ack as the notification type; use a fresh envelope
+        // id so it is distinguishable from the initiator's ack.
+        const deviceRecord = store.getClient(deviceId);
+        const notifyPayload: Record<string, unknown> = { deviceId };
+        if (deviceRecord?.publicKey !== undefined) {
+          notifyPayload.peerPublicKey = deviceRecord.publicKey;
+        }
+        const notification = makeEnvelope(
+          "relay.pair.ack",
+          makeRpcId(),
+          consumed.consoleId,
+          notifyPayload,
+        );
+        logLine("tx", notification);
+
+        const consoleTargets = onlineSockets.get(consumed.consoleId);
+        let notified = false;
+        if (consoleTargets) {
+          for (const target of consoleTargets) {
+            if (target.readyState === WebSocket.OPEN) {
+              sendTo(target, notification);
+              notified = true;
+            }
+          }
+        }
+        if (!notified) {
+          queue.enqueue(consumed.consoleId, notification);
+        }
+        auditEvent("pair_notify", "relay", consumed.consoleId, true);
         break;
       }
 

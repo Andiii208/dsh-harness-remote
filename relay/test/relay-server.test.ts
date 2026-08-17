@@ -348,6 +348,86 @@ describe("relay server", () => {
     consoleClient.close();
   });
 
+  it("notifies an online console when a device pairs (relay.pair.ack)", async () => {
+    const relay = await startRelay();
+    const devicePublicKey = { kty: "EC", crv: "P-256", x: "dev-x", y: "dev-y" };
+
+    const device = await TestClient.connect(relay.port);
+    device.send(
+      registerEnvelope("reg-d", "device-1", { deviceId: "device-1", publicKey: devicePublicKey }),
+    );
+    await device.next("relay.register.ack");
+
+    const consoleClient = await TestClient.connect(relay.port);
+    consoleClient.send(
+      registerEnvelope("reg-c", "console-1", { consoleId: "console-1" }),
+    );
+    await consoleClient.next("relay.register.ack");
+
+    const code = relay.store.createPairingCode("console-1");
+    device.send(
+      makeEnvelope("relay.pair", "pair-online", "device-1", { code, deviceId: "device-1" }),
+    );
+
+    const ack = await device.next("relay.pair.ack");
+    const notice = await consoleClient.next("relay.pair.ack");
+
+    expect(ack.id).not.toBe(notice.id);
+    expect(notice.from).toBe("relay");
+    expect(notice.to).toBe("console-1");
+    expect(notice.payload).toMatchObject({
+      deviceId: "device-1",
+      peerPublicKey: devicePublicKey,
+    });
+
+    device.close();
+    consoleClient.close();
+  });
+
+  it("queues pair notification for an offline console and delivers after re-register", async () => {
+    const relay = await startRelay();
+    const devicePublicKey = { kty: "EC", crv: "P-256", x: "dev-x", y: "dev-y" };
+
+    const device = await TestClient.connect(relay.port);
+    device.send(
+      registerEnvelope("reg-d", "device-1", { deviceId: "device-1", publicKey: devicePublicKey }),
+    );
+    await device.next("relay.register.ack");
+
+    const consoleClient = await TestClient.connect(relay.port);
+    consoleClient.send(
+      registerEnvelope("reg-c", "console-1", { consoleId: "console-1" }),
+    );
+    await consoleClient.next("relay.register.ack");
+
+    consoleClient.close();
+    await new Promise((r) => setTimeout(r, 30));
+
+    const code = relay.store.createPairingCode("console-1");
+    device.send(
+      makeEnvelope("relay.pair", "pair-offline", "device-1", { code, deviceId: "device-1" }),
+    );
+    const ack = await device.next("relay.pair.ack");
+    expect(ack.payload).toMatchObject({ deviceId: "device-1", consoleId: "console-1" });
+
+    const consoleAgain = await TestClient.connect(relay.port);
+    consoleAgain.send(
+      registerEnvelope("reg-c-again", "console-1", { consoleId: "console-1" }),
+    );
+    await consoleAgain.next("relay.register.ack");
+
+    const notice = await consoleAgain.next("relay.pair.ack");
+    expect(notice.from).toBe("relay");
+    expect(notice.to).toBe("console-1");
+    expect(notice.payload).toMatchObject({
+      deviceId: "device-1",
+      peerPublicKey: devicePublicKey,
+    });
+
+    device.close();
+    consoleAgain.close();
+  });
+
   it("queues route and calls push provider when target is offline", async () => {
     const push = new MockPushProvider();
     const relay = await startRelay({ push });
