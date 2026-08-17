@@ -30,7 +30,8 @@ export class DraftStore {
   }
 
   async set(host: string, port: number): Promise<void> {
-    if (!host || host.trim().length === 0 || !Number.isInteger(port) || port <= 0 || port > 65535) {
+    // port 0 表示 relay 模式草稿（R1 远程优先：地址自动补全 ws://…:4090）。
+    if (!host || host.trim().length === 0 || !Number.isInteger(port) || port < 0 || port > 65535) {
       return; // 无效草稿不落盘
     }
     try {

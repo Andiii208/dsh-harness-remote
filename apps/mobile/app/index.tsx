@@ -14,7 +14,7 @@ import Animated from "react-native-reanimated";
 import * as Network from "expo-network";
 import { useEntering } from "../src/ui/anim";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
-import { isRelayUrl } from "../src/transport/relayMode";
+import { isRelayUrl, RELAY_DEFAULT_PORT, toRelayWsUrl } from "../src/transport/relayMode";
 import { tokenStore } from "../src/data/secureStoreAdapter";
 import { hostStore } from "../src/discovery/hostStoreAdapter";
 import type { RecentHost } from "../src/discovery/hostStore";
@@ -38,12 +38,15 @@ const STATE_TONE: Record<string, StatusTone> = {
   offline: "danger",
 };
 
+type ConnectMode = "remote" | "lan";
+
 export default function ConnectScreen() {
   const { state, describe, relayPeerId, connect, disconnect } = useConnection();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [mode, setMode] = useState<ConnectMode>("remote");
   const [host, setHost] = useState("");
   const [port, setPort] = useState("3080");
   const [token, setToken] = useState("");
@@ -58,7 +61,9 @@ export default function ConnectScreen() {
   const [showToken, setShowToken] = useState(false);
   const justConnected = useRef(false);
   const discoverAbort = useRef<AbortController | null>(null);
-  const heroEntering = useEntering(10, 260);
+  const heroEntering = useEntering(10, 240);
+  const bannerEntering = useEntering(6, 200);
+  const formEntering = useEntering(6, 200);
 
   // 首启引导 + 最近主机
   useEffect(() => {
@@ -77,9 +82,10 @@ export default function ConnectScreen() {
     };
   }, [router]);
 
-  // 配对深链（dshremote://pair?…）→ 一键连接
+  // 配对深链（dshremote://pair?…）→ 一键连接（LAN 模式）
   useEffect(() => {
     return registerPairDeepLink((p) => {
+      setMode("lan");
       setHost(p.host);
       setPort(String(p.port));
       if (p.token) setToken(p.token);
@@ -98,13 +104,22 @@ export default function ConnectScreen() {
     void draftStore.get().then((d) => {
       if (d) {
         setHost(d.host);
-        setPort(String(d.port));
+        if (d.port === 0) {
+          // 远程草稿：只恢复地址，端口由地址自动补全。
+          setMode("remote");
+        } else {
+          setMode("lan");
+          setPort(String(d.port));
+        }
       }
     });
   }, []);
 
   const online = state === "online";
-  const hostRelayMode = isRelayUrl(host.trim());
+  const normalizedRelayUrl = useMemo(
+    () => (mode === "remote" ? toRelayWsUrl(host) : ""),
+    [mode, host],
+  );
 
   useEffect(() => {
     if (online && justConnected.current) {
@@ -113,7 +128,7 @@ export default function ConnectScreen() {
       router.push("/sessions");
     }
     if (state === "offline") {
-      if (justConnected.current) setConnectError("连接失败：请检查主机地址与网络");
+      if (justConnected.current) setConnectError("连接失败：请检查地址与网络");
       justConnected.current = false;
     }
   }, [online, state, router]);
@@ -125,13 +140,17 @@ export default function ConnectScreen() {
     justConnected.current = true;
     void haptic("light");
     try {
-      const t = token.trim();
-      if (t) await tokenStore.set(t);
-      // relay:// / ws:// / wss:// 填在 HOST 里，端口忽略。
-      const relayMode = isRelayUrl(host.trim());
-      const p = relayMode ? 0 : Number.parseInt(port || "3080", 10);
-      void draftStore.set(host.trim(), p);
-      await connect(host.trim(), p, t || undefined, pairCode.trim() || undefined);
+      if (mode === "remote") {
+        const wsUrl = toRelayWsUrl(host);
+        void draftStore.set(host.trim(), 0);
+        await connect(wsUrl, 0, undefined, pairCode.trim() || undefined);
+      } else {
+        const t = token.trim();
+        if (t) await tokenStore.set(t);
+        const p = Number.parseInt(port || "3080", 10);
+        void draftStore.set(host.trim(), p);
+        await connect(host.trim(), p, t || undefined);
+      }
     } finally {
       setBusy(false);
     }
@@ -139,11 +158,17 @@ export default function ConnectScreen() {
 
   const connectTo = async (h: string, p: number, t?: string) => {
     setHost(h);
-    setPort(String(p));
-    if (t) setToken(t);
     setConnectError("");
     justConnected.current = true;
-    await connect(h, p, t);
+    if (p === 0 || isRelayUrl(h)) {
+      setMode("remote");
+      await connect(isRelayUrl(h) ? h : toRelayWsUrl(h), 0, t, undefined);
+    } else {
+      setMode("lan");
+      setPort(String(p));
+      if (t) setToken(t);
+      await connect(h, p, t);
+    }
   };
 
   useEffect(() => {
@@ -214,72 +239,121 @@ export default function ConnectScreen() {
           </View>
         )}
 
-        <View style={styles.card}>
-          <View style={styles.fieldsRow}>
-            <View style={styles.hostField}>
+        <Animated.View entering={bannerEntering} style={styles.banner}>
+          <Text style={styles.bannerTitle}>
+            {mode === "remote" ? "使用远程模式连接" : "使用局域网模式连接"}
+          </Text>
+          <Text style={styles.bannerDesc}>
+            {mode === "remote"
+              ? "通过你自己的中继服务器，随时随地访问电脑。只需填写 relay 地址。"
+              : "手机与电脑在同一 Wi-Fi 下直连，填写主机、端口与配对 token。"}
+          </Text>
+        </Animated.View>
+
+        <View style={styles.segment}>
+          <Pressable
+            style={[styles.segmentItem, mode === "remote" && styles.segmentItemActive]}
+            onPress={() => setMode("remote")}
+            accessibilityRole="button"
+            accessibilityLabel="远程模式"
+          >
+            <Text style={[styles.segmentText, mode === "remote" && styles.segmentTextActive]}>远程模式</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.segmentItem, mode === "lan" && styles.segmentItemActive]}
+            onPress={() => setMode("lan")}
+            accessibilityRole="button"
+            accessibilityLabel="局域网模式"
+          >
+            <Text style={[styles.segmentText, mode === "lan" && styles.segmentTextActive]}>局域网模式</Text>
+          </Pressable>
+        </View>
+
+        <Animated.View key={mode} entering={formEntering} style={styles.card}>
+          {mode === "remote" ? (
+            <>
               <Field
-                label="主机"
-                placeholder="192.168.1.5"
+                label="relay 地址"
+                placeholder="relay.example.com"
                 autoCapitalize="none"
                 autoCorrect={false}
                 value={host}
                 onChangeText={setHost}
-                onBlur={() => void draftStore.set(host.trim(), hostRelayMode ? 0 : Number.parseInt(port || "3080", 10))}
+                onBlur={() => void draftStore.set(host.trim(), 0)}
                 editable={!online}
               />
-            </View>
-            <View style={styles.portField}>
               <Field
-                label="端口"
-                placeholder="3080"
+                label="配对码 · 可选"
+                placeholder={`6 位配对码（${RELAY_DEFAULT_PORT} 端口自动补全）`}
                 keyboardType="number-pad"
-                value={port}
-                onChangeText={setPort}
-                onBlur={() => void draftStore.set(host.trim(), hostRelayMode ? 0 : Number.parseInt(port || "3080", 10))}
-                editable={!online && !hostRelayMode}
+                maxLength={6}
+                value={pairCode}
+                onChangeText={setPairCode}
+                editable={!online}
               />
-            </View>
-          </View>
+              <Text style={styles.relayHint}>
+                {host.trim() && !isRelayUrl(host.trim())
+                  ? `将连接 ${normalizedRelayUrl}`
+                  : `只填主机名即可，App 自动补全 ws://…:${RELAY_DEFAULT_PORT}`}
+              </Text>
+            </>
+          ) : (
+            <>
+              <View style={styles.fieldsRow}>
+                <View style={styles.hostField}>
+                  <Field
+                    label="主机"
+                    placeholder="192.168.1.5"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={host}
+                    onChangeText={setHost}
+                    onBlur={() => void draftStore.set(host.trim(), Number.parseInt(port || "3080", 10))}
+                    editable={!online}
+                  />
+                </View>
+                <View style={styles.portField}>
+                  <Field
+                    label="端口"
+                    placeholder="3080"
+                    keyboardType="number-pad"
+                    value={port}
+                    onChangeText={setPort}
+                    onBlur={() => void draftStore.set(host.trim(), Number.parseInt(port || "3080", 10))}
+                    editable={!online}
+                  />
+                </View>
+              </View>
 
-          {hostRelayMode && (
-            <Field
-              label="配对码 · 可选"
-              placeholder="6 位配对码（可选）"
-              keyboardType="number-pad"
-              maxLength={6}
-              value={pairCode}
-              onChangeText={setPairCode}
-              editable={!online}
-            />
+              <View style={styles.advancedRow}>
+                <Pressable onPress={() => setShowToken((v) => !v)} hitSlop={8} accessibilityRole="button" accessibilityLabel="展开配对高级设置">
+                  <Text style={styles.linkText}>{showToken ? "收起高级" : "高级"}</Text>
+                </Pressable>
+                {token.length > 0 && !showToken && <Text style={styles.savedToken}>已保存配对</Text>}
+              </View>
+
+              {showToken && (
+                <Field
+                  label="配对 Token"
+                  placeholder="可选"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={token}
+                  onChangeText={setToken}
+                  editable={!online}
+                  secureTextEntry
+                />
+              )}
+
+              <Text style={styles.relayHint}>LAN 直连，未配对时无鉴权——请仅在可信网络使用</Text>
+              {showToken && token.length > 0 && (
+                <Pressable style={({ pressed }) => [styles.clearToken, pressed && styles.textPressed]} onPress={onClearToken} accessibilityRole="button" accessibilityLabel="清除已保存的配对">
+                  <Text style={styles.clearTokenText}>清除已保存的配对</Text>
+                </Pressable>
+              )}
+            </>
           )}
-
-          <View style={styles.advancedRow}>
-            <Pressable onPress={() => setShowToken((v) => !v)} hitSlop={8} accessibilityRole="button" accessibilityLabel="展开配对高级设置">
-              <Text style={styles.linkText}>{showToken ? "收起高级" : "高级"}</Text>
-            </Pressable>
-            {token.length > 0 && !showToken && <Text style={styles.savedToken}>已保存配对</Text>}
-          </View>
-
-          {showToken && (
-            <Field
-              label="配对 Token"
-              placeholder="可选"
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={token}
-              onChangeText={setToken}
-              editable={!online}
-              secureTextEntry
-            />
-          )}
-
-          <Text style={styles.relayHint}>支持 relay:// 或 ws:// URL（Relay 模式）</Text>
-          {showToken && token.length > 0 && (
-            <Pressable style={({ pressed }) => [styles.clearToken, pressed && styles.textPressed]} onPress={onClearToken} accessibilityRole="button" accessibilityLabel="清除已保存的配对">
-              <Text style={styles.clearTokenText}>清除已保存的配对</Text>
-            </Pressable>
-          )}
-        </View>
+        </Animated.View>
 
         <View style={styles.quickRow}>
           <Pressable onPress={() => void onDiscover()} hitSlop={8} disabled={discovering} accessibilityRole="button" accessibilityLabel="自动发现主机">
@@ -350,9 +424,11 @@ export default function ConnectScreen() {
         )}
 
         <Text style={styles.hint}>
-          {token.trim()
-            ? "已启用配对 token——仍请仅在可信网络使用"
-            : "LAN 直连，未配对时无鉴权——请仅在可信网络使用"}
+          {mode === "remote"
+            ? "远程模式通过你的中继服务器转发；配对码为可选，仅用于绑定电脑端一次性码。"
+            : token.trim()
+              ? "已启用配对 token——仍请仅在可信网络使用"
+              : "LAN 直连，未配对时无鉴权——请仅在可信网络使用"}
         </Text>
 
         <Text style={styles.version}>v0.7.0 · dsh-remote</Text>
@@ -378,6 +454,31 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     stateRow: { flexDirection: "row", alignItems: "center", gap: space.x3, flexWrap: "wrap" },
     describe: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono, flexShrink: 1 },
     pairedConsole: { color: colors.success, fontSize: 11, fontFamily: font.mono, letterSpacing: 0.2, flexShrink: 1 },
+    banner: {
+      backgroundColor: colors.accentSoft,
+      borderRadius: radius.card,
+      padding: space.x5,
+      gap: 6,
+    },
+    bannerTitle: { color: colors.text, fontSize: font.section, fontWeight: "600", letterSpacing: -0.2 },
+    bannerDesc: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
+    segment: {
+      flexDirection: "row",
+      backgroundColor: colors.surface2,
+      borderRadius: radius.control,
+      padding: 3,
+      gap: 3,
+    },
+    segmentItem: {
+      flex: 1,
+      height: 38,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    segmentItemActive: { backgroundColor: colors.surface },
+    segmentText: { color: colors.textMuted, fontSize: 13, fontWeight: "500" },
+    segmentTextActive: { color: colors.text, fontWeight: "600" },
     card: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,
