@@ -10,6 +10,11 @@
 
 import { decodeFrame, type DownlinkFrame } from "./codec.js";
 import { makeRpcId } from "./envelopes.js";
+import {
+  deriveRelaySessionKeys,
+  openRelayPayload,
+  sealRelayPayload,
+} from "./relay-crypto.js";
 import type { RpcResult } from "./rpc.js";
 import type { Auth, Connection, Endpoint, Transport } from "./transport.js";
 import { FrameQueue, type WsCtor, type WsLike } from "./ws.js";
@@ -99,6 +104,12 @@ export interface RelayTransportOptions {
   deviceId?: string;
   /** M3.1 dev target: peer id used as the relay.route `to` for data-plane traffic. */
   peerId?: string;
+  /** M3.2: local ECDH private JWK (kept by the client, never sent to relay). */
+  privateKeyJwk?: JsonWebKey;
+  /** M3.2: peer ECDH public JWK (from relay.pair.ack). */
+  peerPublicKeyJwk?: JsonWebKey;
+  /** M3.2: WebCrypto injection point; defaults to globalThis.crypto. */
+  crypto?: Crypto;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -295,6 +306,15 @@ function extractPeerIdFromUrl(url: string): string | undefined {
   }
 }
 
+function isSealedRoutePayload(
+  v: unknown,
+): v is { to: string; ciphertext: string; nonce: string } {
+  return isRecord(v)
+    && str(v.to) !== undefined
+    && str(v.ciphertext) !== undefined
+    && str(v.nonce) !== undefined;
+}
+
 class RelayConnection implements Connection {
   readonly events: AsyncIterable<DownlinkFrame>;
   /** Set while connect() is waiting for the control-plane handshake. */
@@ -308,6 +328,8 @@ class RelayConnection implements Connection {
   constructor(
     private readonly ws: RelaySocket,
     private readonly from: string,
+    private readonly crypto: Crypto | undefined,
+    private readonly encKey: CryptoKey | undefined,
     private readonly peerId?: string,
   ) {
     this.events = this.queue;
@@ -326,34 +348,49 @@ class RelayConnection implements Connection {
 
   private readonly pending = new Map<string, (res: RpcResult) => void>();
 
-  unary(method: string, payload: unknown): Promise<RpcResult> {
+  async unary(method: string, payload: unknown): Promise<RpcResult> {
     const id = makeRpcId();
-    // M3.1 plaintext debug path: the relay.route payload carries the same
-    // { rpcId, method, payload } shape as a DSH unary request. The console
-    // bridge turns it into a real /api call and replies with
-    // { rpcId, ok, result } | { rpcId, ok: false, error }.
-    // M3.2 will replace this with sealRelayPayload(payload).
-    this.sendEnvelope({
-      v: RELAY_ENVELOPE_VERSION,
-      type: "relay.route",
-      id,
-      from: this.from,
-      to: this.peerId ?? "",
-      ts: Date.now(),
-      payload: {
-        rpcId: id,
-        method,
-        payload,
-        ...(this.peerId ? { to: this.peerId } : {}),
-      },
-    });
-    return new Promise<RpcResult>((resolve) => {
+    const result = new Promise<RpcResult>((resolve) => {
       this.pending.set(id, resolve);
     });
+
+    try {
+      if (this.encKey) {
+        // M3.2: seal the whole { rpcId, method, payload } request; the relay
+        // only ever sees { to, ciphertext, nonce }.
+        await this.sendSealedRoute({ rpcId: id, method, payload });
+      } else {
+        // M3.1 plaintext debug path: the relay.route payload carries the same
+        // { rpcId, method, payload } shape as a DSH unary request.
+        this.sendEnvelope({
+          v: RELAY_ENVELOPE_VERSION,
+          type: "relay.route",
+          id,
+          from: this.from,
+          to: this.peerId ?? "",
+          ts: Date.now(),
+          payload: {
+            rpcId: id,
+            method,
+            payload,
+            ...(this.peerId ? { to: this.peerId } : {}),
+          },
+        });
+      }
+    } catch (err) {
+      this.pending.delete(id);
+      throw err;
+    }
+    return result;
   }
 
-  respond(rpcId: string, result: unknown): Promise<void> {
-    // M3.1 plaintext debug path: M3.2 will seal { rpcId, result }.
+  async respond(rpcId: string, result: unknown): Promise<void> {
+    if (this.encKey) {
+      // M3.2: seal { rpcId, result } before it goes anywhere near the relay.
+      await this.sendSealedRoute({ rpcId, result });
+      return;
+    }
+    // M3.1 plaintext debug path.
     this.sendEnvelope({
       v: RELAY_ENVELOPE_VERSION,
       type: "relay.route",
@@ -367,7 +404,26 @@ class RelayConnection implements Connection {
         ...(this.peerId ? { to: this.peerId } : {}),
       },
     });
-    return Promise.resolve();
+  }
+
+  private async sendSealedRoute(inner: unknown): Promise<void> {
+    if (!this.encKey || !this.crypto) {
+      throw new Error("RelayTransport: encryption key is not available");
+    }
+    const sealed = await sealRelayPayload(this.crypto, this.encKey, inner);
+    this.sendEnvelope({
+      v: RELAY_ENVELOPE_VERSION,
+      type: "relay.route",
+      id: makeRpcId(),
+      from: this.from,
+      to: this.peerId ?? "",
+      ts: Date.now(),
+      payload: {
+        to: this.peerId ?? "",
+        ciphertext: sealed.ciphertext,
+        nonce: sealed.nonce,
+      },
+    });
   }
 
   close(): void {
@@ -410,33 +466,66 @@ class RelayConnection implements Connection {
     }
 
     if (env.type === "relay.route") {
-      // Two M3.1 payload shapes share the relay.route channel:
-      //  - unary response { rpcId, ok, result | error } → settle pending RPC
-      //  - anything else → treat as a DSH downlink frame (lenient decode).
-      if (isRecord(env.payload)) {
-        const rpcId = str(env.payload.rpcId);
-        if (rpcId && typeof env.payload.ok === "boolean") {
-          const resolve = this.pending.get(rpcId);
-          if (resolve) {
-            this.pending.delete(rpcId);
-            if (env.payload.ok) {
-              resolve({ rpcId, ok: true, result: env.payload.result });
-            } else {
-              resolve({
-                rpcId,
-                ok: false,
-                error: normalizeRelayError(env.payload.error ?? { code: "E_UNKNOWN", message: "unknown error" }),
-              });
-            }
-            return;
-          }
-        }
+      if (isSealedRoutePayload(env.payload)) {
+        // M3.2 encrypted route. Without a session key we must not parse
+        // ciphertext as if it were M3.1 plaintext.
+        if (!this.encKey) return;
+        void this.handleSealedRoute(env.payload);
+        return;
       }
-      if (env.payload !== undefined) this.queue.push(decodeFrame(env.payload));
+
+      if (this.encKey) {
+        // M3.2 mode: only sealed route payloads are processed; a plaintext
+        // route arriving while we have a session key is ignored.
+        return;
+      }
+
+      this.dispatchRoutePayload(env.payload);
       return;
     }
 
     this.onControl?.(env);
+  }
+
+  private async handleSealedRoute(
+    sealed: { to: string; ciphertext: string; nonce: string },
+  ): Promise<void> {
+    if (!this.encKey || !this.crypto) return;
+    try {
+      const inner = await openRelayPayload(this.crypto, this.encKey, {
+        ciphertext: sealed.ciphertext,
+        nonce: sealed.nonce,
+      });
+      this.dispatchRoutePayload(inner);
+    } catch {
+      // Decryption failed: discard. Never let a bad ciphertext become a frame.
+    }
+  }
+
+  private dispatchRoutePayload(payload: unknown): void {
+    // Two payload shapes share the relay.route channel:
+    //  - unary response { rpcId, ok, result | error } → settle pending RPC
+    //  - anything else → treat as a DSH downlink frame (lenient decode).
+    if (isRecord(payload)) {
+      const rpcId = str(payload.rpcId);
+      if (rpcId && typeof payload.ok === "boolean") {
+        const resolve = this.pending.get(rpcId);
+        if (resolve) {
+          this.pending.delete(rpcId);
+          if (payload.ok) {
+            resolve({ rpcId, ok: true, result: payload.result });
+          } else {
+            resolve({
+              rpcId,
+              ok: false,
+              error: normalizeRelayError(payload.error ?? { code: "E_UNKNOWN", message: "unknown error" }),
+            });
+          }
+          return;
+        }
+      }
+    }
+    if (payload !== undefined) this.queue.push(decodeFrame(payload));
   }
 }
 
@@ -462,7 +551,28 @@ export class RelayTransport implements Transport {
 
     const from = this.opts.deviceId ?? "relay-client";
     const peerId = this.opts.peerId ?? extractPeerIdFromUrl(url);
-    const conn = new RelayConnection(ws, from, peerId);
+    const crypto = this.opts.crypto
+      ?? (globalThis as { crypto?: Crypto }).crypto;
+
+    let encKey: CryptoKey | undefined;
+    if (this.opts.privateKeyJwk && this.opts.peerPublicKeyJwk) {
+      if (!crypto) {
+        ws.close();
+        throw new Error("RelayTransport: no WebCrypto implementation available");
+      }
+      try {
+        ({ encKey } = await deriveRelaySessionKeys(
+          crypto,
+          this.opts.privateKeyJwk,
+          this.opts.peerPublicKeyJwk,
+        ));
+      } catch (err) {
+        ws.close();
+        throw err;
+      }
+    }
+
+    const conn = new RelayConnection(ws, from, crypto, encKey, peerId);
     const timeoutMs = this.opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
 
     return new Promise<Connection>((resolve, reject) => {

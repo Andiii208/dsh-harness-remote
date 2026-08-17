@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   makeHeartbeat,
   makeHello,
@@ -7,7 +7,15 @@ import {
   RELAY_ENVELOPE_VERSION,
   RelayTransport,
 } from "../src/relay.js";
+import {
+  deriveRelaySessionKeys,
+  generateRelayKeyPair,
+  openRelayPayload,
+  sealRelayPayload,
+} from "../src/relay-crypto.js";
 import type { WsCtor, WsLike } from "../src/ws.js";
+
+const crypto = globalThis.crypto;
 
 class FakeWs implements WsLike {
   onopen: (() => void) | null = null;
@@ -94,6 +102,51 @@ async function connectedPair(): Promise<{ conn: Awaited<ReturnType<RelayTranspor
 
   const conn = await p;
   return { conn, ws };
+}
+
+async function connectedEncryptedPair(): Promise<{
+  conn: Awaited<ReturnType<RelayTransport["connect"]>>;
+  ws: FakeWs;
+  encKey: CryptoKey;
+}> {
+  const device = await generateRelayKeyPair(crypto);
+  const console_ = await generateRelayKeyPair(crypto);
+  const keys = await deriveRelaySessionKeys(
+    crypto,
+    device.privateKeyJwk,
+    console_.publicKeyJwk,
+  );
+
+  const transport = new RelayTransport({
+    wsImpl: FakeWs.fresh(),
+    deviceId: "device-a",
+    peerId: "console-c",
+    privateKeyJwk: device.privateKeyJwk,
+    peerPublicKeyJwk: console_.publicKeyJwk,
+    crypto,
+  });
+  const p = transport.connect({ host: "relay.example", port: 4090 }, {});
+  const ws = FakeWs.instances[0]!;
+  ws.open();
+
+  // M3.2 key derivation is async: connect() creates the socket first, then
+  // awaits deriveRelaySessionKeys before attaching onopen and sending hello.
+  await vi.waitFor(() => {
+    expect(ws.sent.length).toBe(2);
+  });
+
+  const hello = JSON.parse(ws.sent[0]!) as { id: string };
+  const register = JSON.parse(ws.sent[1]!) as { id: string };
+  ws.recv(relayAck("relay.hello.ack", hello.id, "device-a"));
+  ws.recv(
+    relayAck("relay.register.ack", register.id, "device-a", {
+      credential: "cred-1",
+      ttlMs: 900_000,
+    }),
+  );
+
+  const conn = await p;
+  return { conn, ws, encKey: keys.encKey };
 }
 
 describe("relay request constructors", () => {
@@ -282,6 +335,117 @@ describe("RelayTransport.connect", () => {
     );
     const got = await frames;
     expect(got[0]).toMatchObject({ type: "session/event", sessionId: "s1" });
+  });
+
+  it("encKey mode: unary sends a sealed relay.route without plaintext rpcId/method", async () => {
+    const { conn, ws, encKey } = await connectedEncryptedPair();
+
+    const unaryP = conn.unary("host.describe", { want: "list" });
+    await vi.waitFor(() => {
+      expect(ws.sent.length).toBe(3);
+    });
+
+    const route = JSON.parse(ws.sent[2]!) as {
+      type: string;
+      payload: {
+        to?: string;
+        ciphertext?: string;
+        nonce?: string;
+        rpcId?: string;
+        method?: string;
+        payload?: unknown;
+      };
+    };
+    expect(route.type).toBe("relay.route");
+    expect(route.payload.to).toBe("console-c");
+    expect(typeof route.payload.ciphertext).toBe("string");
+    expect(typeof route.payload.nonce).toBe("string");
+    expect(route.payload.rpcId).toBeUndefined();
+    expect(route.payload.method).toBeUndefined();
+    expect(route.payload.payload).toBeUndefined();
+    expect(JSON.stringify(route)).not.toContain("host.describe");
+    expect(JSON.stringify(route)).not.toContain("want");
+
+    const inner = await openRelayPayload(crypto, encKey, {
+      ciphertext: route.payload.ciphertext!,
+      nonce: route.payload.nonce!,
+    });
+    expect(inner).toMatchObject({ method: "host.describe", payload: { want: "list" } });
+
+    // Resolve the pending unary through an encrypted response.
+    const rpcId = (inner as { rpcId: string }).rpcId;
+    const sealed = await sealRelayPayload(crypto, encKey, {
+      rpcId,
+      ok: true,
+      result: { name: "dsh" },
+    });
+    ws.recv(
+      JSON.stringify({
+        v: 1,
+        type: "relay.route",
+        id: "resp-1",
+        from: "console-c",
+        to: "device-a",
+        ts: Date.now(),
+        payload: { to: "device-a", ciphertext: sealed.ciphertext, nonce: sealed.nonce },
+      }),
+    );
+    await expect(unaryP).resolves.toEqual({ rpcId, ok: true, result: { name: "dsh" } });
+  });
+
+  it("encKey mode: incoming sealed route is decrypted and yields the inner frame", async () => {
+    const { conn, ws, encKey } = await connectedEncryptedPair();
+
+    const frames = collect(conn.events, 1);
+    const sealed = await sealRelayPayload(crypto, encKey, {
+      type: "session/event",
+      sessionId: "s-enc",
+    });
+    ws.recv(
+      JSON.stringify({
+        v: 1,
+        type: "relay.route",
+        id: "r-enc",
+        from: "console-c",
+        to: "device-a",
+        ts: Date.now(),
+        payload: { to: "device-a", ciphertext: sealed.ciphertext, nonce: sealed.nonce },
+      }),
+    );
+
+    const got = await frames;
+    expect(got[0]).toMatchObject({ type: "session/event", sessionId: "s-enc" });
+  });
+
+  it("without encKey: sealed route payloads are ignored, plaintext frames still flow", async () => {
+    const { conn, ws } = await connectedPair();
+
+    const frames = collect(conn.events, 1);
+    ws.recv(
+      JSON.stringify({
+        v: 1,
+        type: "relay.route",
+        id: "r-sealed",
+        from: "console-c",
+        to: "device-a",
+        ts: Date.now(),
+        payload: { to: "device-a", ciphertext: "abc", nonce: "xyz" },
+      }),
+    );
+    ws.recv(
+      JSON.stringify({
+        v: 1,
+        type: "relay.route",
+        id: "r-plain",
+        from: "console-c",
+        to: "device-a",
+        ts: Date.now(),
+        payload: { type: "task/event" },
+      }),
+    );
+
+    const got = await frames;
+    expect(got[0]).toMatchObject({ type: "task/event" });
   });
 
   it("times out when the relay never acks hello/register", async () => {

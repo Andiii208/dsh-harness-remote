@@ -1,18 +1,24 @@
 /**
- * relay-client.ts — harness-plugin 出站中继客户端接线桩（M3.1）。
+ * relay-client.ts — harness-plugin 出站中继客户端接线桩（M3.2）。
  *
  * ⚠️ 真实 DSH 数据面由插件宿主适配：本类只负责注册/心跳/收发信封。
- * M3.1 为明文联调：send()/onEnvelope() 原样收发 RelayEnvelope，
- * 不解析 DSH frame、不做加密（M3.2 由协议层替换为 sealRelayPayload）。
+ * M3.2 起支持加密数据面：配置 privateKeyJwk + peerPublicKeyJwk 后，
+ * `send(relay.route)` 会把内层 payload 用 sealRelayPayload 密封为
+ * `{ to, ciphertext, nonce }`；收到加密 route 则先 openRelayPayload
+ * 解密再把内层 payload 交给 onEnvelope 回调。未配置密钥时保持 M3.1
+ * 明文路径不变。
  */
 
 import {
+  deriveRelaySessionKeys,
   makeHeartbeat,
   makeHello,
   makeRegister,
   normalizeRelayError,
+  openRelayPayload,
   parseRelayEnvelope,
   RELAY_ENVELOPE_VERSION,
+  sealRelayPayload,
 } from "@dsh-remote/protocol";
 import type {
   RelayEnvelope,
@@ -39,6 +45,12 @@ export interface RelayClientOptions {
   wsImpl?: WsCtor;
   /** 控制面握手超时（毫秒），默认 15s。 */
   connectTimeoutMs?: number;
+  /** M3.2 E2E：本 console 的 ECDH 私钥 JWK（与 peerPublicKeyJwk 一起提供时启用加密数据面）。 */
+  privateKeyJwk?: JsonWebKey;
+  /** M3.2 E2E：对端（device）公钥 JWK。 */
+  peerPublicKeyJwk?: JsonWebKey;
+  /** 注入 WebCrypto（缺省 globalThis.crypto）。 */
+  crypto?: Crypto;
 }
 
 /** console 注册负载（M3.1）：server 用 consoleId 推断 kind，platform 仅记录。 */
@@ -64,18 +76,43 @@ function str(v: unknown): string | undefined {
  * connect() 打开到 relay 的 WS/WSS 连接并完成 hello + register 控制面握手；
  * 拿到 relay.register.ack 后保存短时 credential 并标记在线。
  * 之后只提供 heartbeat / send / onEnvelope / close 信封级收发能力。
+ * 配置 E2E 密钥后，relay.route 数据面自动加解密（M3.2）。
  */
 export class RelayClient {
   private ws: RelaySocket | null = null;
   private credentialValue: string | null = null;
   private online = false;
   private readonly listeners = new Set<(env: RelayEnvelope) => void>();
+  private readonly errorListeners = new Set<(err: unknown) => void>();
+  private readonly cryptoImpl: Crypto | null;
+  private readonly encKeyPromise: Promise<CryptoKey> | null;
   private connectPromise: Promise<void> | null = null;
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private handshakeSettled = false;
   private settleHandshake: ((err: Error | null) => void) | null = null;
 
-  constructor(private readonly opts: RelayClientOptions) {}
+  constructor(private readonly opts: RelayClientOptions) {
+    this.cryptoImpl = opts.crypto
+      ?? (globalThis as { crypto?: Crypto }).crypto
+      ?? null;
+
+    if (opts.privateKeyJwk && opts.peerPublicKeyJwk) {
+      if (!this.cryptoImpl) {
+        throw new Error(
+          "RelayClient: privateKeyJwk/peerPublicKeyJwk provided but no WebCrypto available",
+        );
+      }
+      // 双方 key 都提供时派生 AES-256-GCM 会话密钥；派生是异步的，
+      // send/收包路径会 await 该 Promise。
+      this.encKeyPromise = deriveRelaySessionKeys(
+        this.cryptoImpl,
+        opts.privateKeyJwk,
+        opts.peerPublicKeyJwk,
+      ).then((keys) => keys.encKey);
+    } else {
+      this.encKeyPromise = null;
+    }
+  }
 
   /** 最近一次 register.ack 签发的短时 credential（未注册时为 null）。 */
   get credential(): string | null {
@@ -101,16 +138,46 @@ export class RelayClient {
     this.sendEnvelope(makeHeartbeat(this.opts.clientId));
   }
 
-  /** 发送任意 RelayEnvelope（信封级透传）。 */
-  send(envelope: RelayEnvelope): void {
-    this.sendEnvelope(envelope);
+  /**
+   * 发送 RelayEnvelope。relay.route 且配置了 E2E 密钥时，把 payload 密封成
+   * `{ to, ciphertext, nonce }` 后发送；其余类型（或未配置密钥）原样发送。
+   */
+  async send(envelope: RelayEnvelope): Promise<void> {
+    if (envelope.type !== "relay.route" || !this.encKeyPromise) {
+      this.sendEnvelope(envelope);
+      return;
+    }
+
+    const payload = isRecord(envelope.payload) ? envelope.payload : {};
+    const to = str(payload.to);
+    if (to === undefined) {
+      // route payload 缺 to 时无法构造密文路由，按明文原样发送保持兼容。
+      this.sendEnvelope(envelope);
+      return;
+    }
+
+    const crypto = this.requireCrypto();
+    const encKey = await this.encKeyPromise;
+    const sealed = await sealRelayPayload(crypto, encKey, envelope.payload);
+    this.sendEnvelope({
+      ...envelope,
+      payload: { to, ...sealed },
+    });
   }
 
-  /** 订阅收到的 RelayEnvelope；返回取消订阅函数。 */
+  /** 订阅收到的 RelayEnvelope（加密 route 会先解密为内层 payload）；返回取消订阅函数。 */
   onEnvelope(cb: (env: RelayEnvelope) => void): () => void {
     this.listeners.add(cb);
     return () => {
       this.listeners.delete(cb);
+    };
+  }
+
+  /** 订阅解密/处理错误（如收到无法解密的 route）；返回取消订阅函数。 */
+  onError(cb: (err: unknown) => void): () => void {
+    this.errorListeners.add(cb);
+    return () => {
+      this.errorListeners.delete(cb);
     };
   }
 
@@ -135,6 +202,13 @@ export class RelayClient {
       }
     }
     this.settleHandshake?.(new Error("RelayClient: closed"));
+  }
+
+  private requireCrypto(): Crypto {
+    if (!this.cryptoImpl) {
+      throw new Error("RelayClient: no WebCrypto available");
+    }
+    return this.cryptoImpl;
   }
 
   private doConnect(): Promise<void> {
@@ -188,7 +262,7 @@ export class RelayClient {
       }, timeoutMs);
 
       ws.onmessage = (ev) => {
-        this.handleMessage(ev.data);
+        void this.handleMessage(ev.data);
       };
       ws.onclose = () => {
         this.online = false;
@@ -230,7 +304,7 @@ export class RelayClient {
     return payload as unknown as RelayRegistration;
   }
 
-  private handleMessage(data: unknown): void {
+  private async handleMessage(data: unknown): Promise<void> {
     let env: RelayEnvelope | null = null;
     if (typeof data === "string") {
       try {
@@ -255,11 +329,44 @@ export class RelayClient {
       );
     }
 
+    let delivered = env;
+    if (env.type === "relay.route" && this.encKeyPromise) {
+      const routePayload = isRecord(env.payload) ? env.payload : null;
+      const ciphertext = routePayload ? str(routePayload.ciphertext) : undefined;
+      const nonce = routePayload ? str(routePayload.nonce) : undefined;
+      if (ciphertext && nonce) {
+        try {
+          const crypto = this.requireCrypto();
+          const encKey = await this.encKeyPromise;
+          const inner = await openRelayPayload(crypto, encKey, {
+            ciphertext,
+            nonce,
+          });
+          delivered = { ...env, payload: inner };
+        } catch (err) {
+          // 解密失败：丢弃该帧并通知宿主（测试覆盖）。
+          this.emitError(err);
+          return;
+        }
+      }
+      // 配置了密钥但收到明文 route 则透传（保持 M3.1 兼容）。
+    }
+
     for (const cb of this.listeners) {
       try {
-        cb(env);
+        cb(delivered);
       } catch {
         /* 监听器异常不能打断 socket 收包 */
+      }
+    }
+  }
+
+  private emitError(err: unknown): void {
+    for (const cb of this.errorListeners) {
+      try {
+        cb(err);
+      } catch {
+        /* 错误监听器异常忽略 */
       }
     }
   }

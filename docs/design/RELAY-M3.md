@@ -225,3 +225,11 @@ export class RelayTransport implements Transport {
 - `harness-plugin/src/relay-client.ts`：出站中继客户端接线桩（注册/心跳/收发信封；真实 DSH 数据面由宿主适配）+ 4 单测。
 - 联调：`.shots/relay-integration.mjs`（relay + mock-harness + console 桥）已跑通，手机经 relay 看到 2 个 session（截图 `.shots/relay-sessions.png`、连接页 `.shots/relay-connect.png`）。
 - 全仓 `pnpm -r build && pnpm -r typecheck && pnpm -r test` 全绿。
+
+### M3.2 E2E 加密（2026-08-17 已实现）
+
+- `packages/protocol/src/relay-crypto.ts`：`generateRelayKeyPair`（ECDH P-256）、`deriveRelaySessionKeys`（HKDF-SHA256 → AES-256-GCM）、`sealRelayPayload` / `openRelayPayload`（GCM 认证，篡改/重放失败）；`relay-crypto.test.ts` 7 用例。
+- `RelayTransport` 接入加密数据面：`privateKeyJwk` + `peerPublicKeyJwk` 提供时，`unary/respond` 先 `sealRelayPayload` 再 `relay.route`（payload 仅 `{to, ciphertext, nonce}`）；收到密文 route 先 `openRelayPayload` 再分发；未配置密钥保持 M3.1 明文路径。
+- `harness-plugin/src/relay-client.ts` 同步接入 `seal/open`（配置密钥时）。
+- relay 服务器只读 `payload.to`，`ciphertext/nonce` 透明转发，日志仅元数据（`relay-server.test.ts` 增补 2 用例）。
+- `docs/SECURITY.md` 已更新 M3 状态为「E2E 已实现」。

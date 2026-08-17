@@ -7,3 +7,4 @@ export * from "./transport.js";
 export * from "./loop.js";
 export * from "./discovery.js";
 export * from "./relay.js";
+export * from "./relay-crypto.js";

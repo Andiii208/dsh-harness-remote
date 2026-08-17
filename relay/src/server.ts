@@ -227,11 +227,17 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
         }
 
         store.bindPair(deviceId, consumed.consoleId);
-        const ack = makeEnvelope("relay.pair.ack", env.id, authClientId ?? env.from, {
+
+        // M3.2: return the console's public key (when it was registered with
+        // one) so the device can finish ECDH without asking again.
+        const peer = store.getClient(consumed.consoleId);
+        const ackPayload: Record<string, unknown> = {
           code: consumed.code,
           deviceId,
           consoleId: consumed.consoleId,
-        });
+          ...(peer?.publicKey !== undefined ? { peerPublicKey: peer.publicKey } : {}),
+        };
+        const ack = makeEnvelope("relay.pair.ack", env.id, authClientId ?? env.from, ackPayload);
         logLine("tx", ack);
         sendTo(ws, ack);
         break;
@@ -243,8 +249,10 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
           break;
         }
 
-        const payload = isRecord(env.payload) ? env.payload : {};
-        const to = str(payload.to);
+        // M3.2 red line: the relay reads only `payload.to` for routing.
+        // `ciphertext`, `nonce` and any inner fields are never read, logged
+        // or parsed — the original envelope is forwarded verbatim below.
+        const to = isRecord(env.payload) ? str(env.payload.to) : undefined;
         if (!to) {
           sendError(ws, env.id, "E_BAD_ENVELOPE", "route payload requires to", authClientId);
           break;

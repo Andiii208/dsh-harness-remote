@@ -249,6 +249,73 @@ describe("relay server", () => {
     consoleClient.close();
   });
 
+  it("route forwards ciphertext/nonce opaquely", async () => {
+    const relay = await startRelay();
+
+    const device = await TestClient.connect(relay.port);
+    device.send(registerEnvelope("reg-d", "device-1", { deviceId: "device-1" }));
+    await device.next("relay.register.ack");
+
+    const consoleClient = await TestClient.connect(relay.port);
+    consoleClient.send(registerEnvelope("reg-c", "console-1", { consoleId: "console-1" }));
+    await consoleClient.next("relay.register.ack");
+
+    const code = relay.store.createPairingCode("console-1");
+    device.send(
+      makeEnvelope("relay.pair", "pair-1", "device-1", { code, deviceId: "device-1" }),
+    );
+    await device.next("relay.pair.ack");
+
+    const opaque = { to: "console-1", ciphertext: "abc", nonce: "xyz" };
+    device.send({
+      v: 1,
+      type: "relay.route",
+      id: "r-opaque",
+      from: "device-1",
+      to: "console-1",
+      ts: Date.now(),
+      payload: opaque,
+    });
+
+    const routed = await consoleClient.next("relay.route");
+    expect(routed.id).toBe("r-opaque");
+    // M3.2 red line: the relay must not parse/rewrite the route payload —
+    // the exact same object arrives at the target.
+    expect(routed.payload).toEqual(opaque);
+
+    device.close();
+    consoleClient.close();
+  });
+
+  it("pair.ack contains peerPublicKey when console registered with publicKey", async () => {
+    const relay = await startRelay();
+    const publicKey = { kty: "EC", crv: "P-256", x: "x-key", y: "y-key" };
+
+    const device = await TestClient.connect(relay.port);
+    device.send(registerEnvelope("reg-d", "device-1", { deviceId: "device-1" }));
+    await device.next("relay.register.ack");
+
+    const consoleClient = await TestClient.connect(relay.port);
+    consoleClient.send(
+      registerEnvelope("reg-c", "console-1", { consoleId: "console-1", publicKey }),
+    );
+    await consoleClient.next("relay.register.ack");
+
+    const code = relay.store.createPairingCode("console-1");
+    device.send(
+      makeEnvelope("relay.pair", "pair-1", "device-1", { code, deviceId: "device-1" }),
+    );
+    const pairAck = await device.next("relay.pair.ack");
+    expect(pairAck.payload).toMatchObject({
+      deviceId: "device-1",
+      consoleId: "console-1",
+      peerPublicKey: publicKey,
+    });
+
+    device.close();
+    consoleClient.close();
+  });
+
   it("rejects invalid envelopes with E_BAD_ENVELOPE", async () => {
     const relay = await startRelay();
     const c = await TestClient.connect(relay.port);

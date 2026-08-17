@@ -1,6 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import {
+  deriveRelaySessionKeys,
+  generateRelayKeyPair,
+  openRelayPayload,
+  sealRelayPayload,
+} from "@dsh-remote/protocol";
 import { RelayClient } from "../src/relay-client.js";
 import type { WsCtor, WsLike } from "@dsh-remote/protocol";
+
+const crypto = globalThis.crypto;
 
 class FakeWs implements WsLike {
   onopen: (() => void) | null = null;
@@ -71,6 +79,37 @@ async function connectedClient(): Promise<{ client: RelayClient; ws: FakeWs }> {
   ws.recv(registerAck(register.id, "console-c", { credential: "cred-1", ttlMs: 900_000 }));
   await p;
   return { client, ws };
+}
+
+async function connectedEncryptedClient(): Promise<{
+  client: RelayClient;
+  ws: FakeWs;
+  consoleKeys: Awaited<ReturnType<typeof deriveRelaySessionKeys>>;
+}> {
+  const consolePair = await generateRelayKeyPair(crypto);
+  const devicePair = await generateRelayKeyPair(crypto);
+  const consoleKeys = await deriveRelaySessionKeys(
+    crypto,
+    consolePair.privateKeyJwk,
+    devicePair.publicKeyJwk,
+  );
+
+  const client = new RelayClient({
+    url: "ws://relay.example:4090",
+    clientId: "console-c",
+    kind: "console",
+    wsImpl: FakeWs.fresh(),
+    privateKeyJwk: consolePair.privateKeyJwk,
+    peerPublicKeyJwk: devicePair.publicKeyJwk,
+    crypto,
+  });
+  const p = client.connect();
+  const ws = FakeWs.instances[0]!;
+  ws.open();
+  const register = JSON.parse(ws.sent[1]!) as { id: string };
+  ws.recv(registerAck(register.id, "console-c", { credential: "cred-1", ttlMs: 900_000 }));
+  await p;
+  return { client, ws, consoleKeys };
 }
 
 describe("RelayClient", () => {
@@ -156,7 +195,7 @@ describe("RelayClient", () => {
     const seen: Array<Record<string, unknown>> = [];
     client.onEnvelope((env) => seen.push(env as unknown as Record<string, unknown>));
 
-    client.send({
+    await client.send({
       v: 1,
       type: "relay.route",
       id: "r1",
@@ -209,5 +248,92 @@ describe("RelayClient", () => {
 
     await expect(p).rejects.toThrow(/relay error E_AUTH: bad credential/);
     expect(client.isOnline()).toBe(false);
+  });
+
+  it("seals relay.route payload with keys configured (no plaintext leak)", async () => {
+    const { client, ws, consoleKeys } = await connectedEncryptedClient();
+
+    const original = {
+      to: "device-1",
+      rpcId: "r1",
+      method: "host.describe",
+      payload: { want: "list" },
+    };
+    await client.send({
+      v: 1,
+      type: "relay.route",
+      id: "r1",
+      from: "console-c",
+      to: "device-1",
+      ts: Date.now(),
+      payload: original,
+    });
+
+    const sent = JSON.parse(ws.sent[2]!) as {
+      type: string;
+      payload: { to?: string; ciphertext?: string; nonce?: string; rpcId?: string; method?: string };
+    };
+    expect(sent).toMatchObject({ type: "relay.route" });
+
+    const payload = sent.payload;
+    expect(payload.to).toBe("device-1");
+    expect(payload.rpcId).toBeUndefined();
+    expect(payload.method).toBeUndefined();
+    expect(Object.keys(payload).sort()).toEqual(["ciphertext", "nonce", "to"]);
+
+    await expect(
+      openRelayPayload(crypto, consoleKeys.encKey, {
+        ciphertext: payload.ciphertext!,
+        nonce: payload.nonce!,
+      }),
+    ).resolves.toEqual(original);
+  });
+
+  it("decrypts incoming encrypted route and drops tampered ciphertext with onError", async () => {
+    const { client, ws, consoleKeys } = await connectedEncryptedClient();
+    const seen: Array<Record<string, unknown>> = [];
+    const errors: unknown[] = [];
+    client.onEnvelope((env) => seen.push(env as unknown as Record<string, unknown>));
+    client.onError((err) => errors.push(err));
+
+    const inner = { rpcId: "r1", method: "host.describe" };
+    const sealed = await sealRelayPayload(crypto, consoleKeys.encKey, inner);
+    ws.recv(
+      JSON.stringify({
+        v: 1,
+        type: "relay.route",
+        id: "r1",
+        from: "device-1",
+        to: "console-c",
+        ts: Date.now(),
+        payload: { to: "console-c", ...sealed },
+      }),
+    );
+
+    await vi.waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen[0]).toMatchObject({ type: "relay.route", id: "r1", payload: inner });
+
+    // 翻转 AES-GCM 输出（iv 之后）的一个真实字节，确保密文被真正篡改
+    // （只改最后一个 base64url 字符可能只改到被忽略的 padding bits）。
+    const tamperedBytes = Buffer.from(sealed.ciphertext, "base64url");
+    tamperedBytes[tamperedBytes.length - 1] = tamperedBytes[tamperedBytes.length - 1]! ^ 0xff;
+    const tampered = {
+      ...sealed,
+      ciphertext: tamperedBytes.toString("base64url"),
+    };
+    ws.recv(
+      JSON.stringify({
+        v: 1,
+        type: "relay.route",
+        id: "r2",
+        from: "device-1",
+        to: "console-c",
+        ts: Date.now(),
+        payload: { to: "console-c", ...tampered },
+      }),
+    );
+
+    await vi.waitFor(() => expect(errors).toHaveLength(1), { timeout: 2000, interval: 10 });
+    expect(seen).toHaveLength(1);
   });
 });
