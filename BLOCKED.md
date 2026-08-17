@@ -1,1 +1,1 @@
-无
+- 流式暂停：协议层（packages/protocol/src/rpc.ts / transport.ts）当前没有主动中断 RPC（仅 AbortController 超时用），因此 B 按任务书「没有 → 本地暂停渲染 + 提示」实现：聊天页暂停按钮只冻结本地 liveMessage 渲染，远端可能仍在继续。真正的中断 RPC（如 session.interrupt / cancel）需要协议新增 + harness 支持，留待后续窗口。

@@ -32,11 +32,16 @@ export default function ChatScreen() {
   const [draft, setDraft] = useState("");
   const [sendError, setSendError] = useState("");
   const [showJump, setShowJump] = useState(false);
+  const [streamPaused, setStreamPaused] = useState(false);
   const showJumpRef = useRef(false);
   const listRef = useRef<FlashListRef<TranscriptMessage> | null>(null);
   const messages = id ? transcript(id) : [];
   const live = id ? liveMessage(id) : undefined;
-  const data = live ? [...messages, live] : messages;
+  const liveId = live?.id;
+  useEffect(() => {
+    setStreamPaused(false); // 新一轮流式开始时恢复渲染
+  }, [liveId]);
+  const data = streamPaused ? messages : live ? [...messages, live] : messages;
   const summary = id ? sessions.find((s) => s.id === id) : undefined;
   const online = state === "online";
   const entering = useEntering(6, 200);
@@ -136,6 +141,22 @@ export default function ChatScreen() {
       )}
       <View style={styles.inputBar}>
         {!online && <SectionLabel tone="danger">Offline</SectionLabel>}
+        {live && (
+          <View style={styles.pauseRow}>
+            <Pressable
+              style={({ pressed }) => [styles.pauseButton, pressed && styles.pauseButtonPressed]}
+              onPress={() => {
+                setStreamPaused((v) => !v);
+                void haptic("light");
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={streamPaused ? "恢复流式渲染" : "暂停流式渲染"}
+            >
+              <Text style={styles.pauseButtonText}>{streamPaused ? "▶ 恢复渲染" : "⏸ 暂停流式"}</Text>
+            </Pressable>
+            {streamPaused && <Text style={styles.pauseHint}>本地暂停渲染中（远端可能仍在继续）</Text>}
+          </View>
+        )}
         {sendError.length > 0 && <Text style={styles.sendError}>{sendError}</Text>}
         <View style={styles.inputRow}>
           <TextInput
@@ -192,6 +213,16 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       borderTopColor: colors.separator,
       backgroundColor: colors.bg,
     },
+    pauseRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+    pauseButton: {
+      backgroundColor: colors.surface2,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    pauseButtonPressed: { opacity: 0.7 },
+    pauseButtonText: { color: colors.accent, fontSize: font.caption, fontFamily: font.monoMedium, fontWeight: "500" },
+    pauseHint: { color: colors.textMuted, fontSize: font.eyebrow, fontFamily: font.mono, flexShrink: 1 },
     inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 9 },
     input: {
       flex: 1,
