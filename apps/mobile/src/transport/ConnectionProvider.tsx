@@ -13,11 +13,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { LanTransport, type ConnectionState } from "@dsh-remote/protocol";
+import {
+  LanTransport,
+  RelayTransport,
+  type ConnectionState,
+} from "@dsh-remote/protocol";
 import {
   createConnectionPipeline,
   type ConnectionPipeline,
 } from "./pipeline";
+import { isRelayUrl, toRelayWsUrl } from "./relayMode";
 import { requestInterrupt } from "./interrupt";
 import { notificationService } from "../notify/expoAdapter";
 import { notificationPrefsStore } from "../notify/notificationPrefsStoreAdapter";
@@ -30,6 +35,30 @@ import { backgroundTaskApi, KEEPALIVE_TASK } from "../notify/keepaliveAdapter";
 import { GoalsClient, type GoalsApi } from "../data/goals";
 import type { PendingRequest, SessionSummary, TranscriptMessage } from "../data/SessionStore";
 import type { NotificationEvent } from "../notify/classifier";
+
+// M3.1 relay deviceId：Web 端落在 localStorage，原生端暂为模块变量；
+// M3.4 前迁移到 SecureStore/Keychain。
+let relayDeviceId = "";
+
+function getRelayDeviceId(): string {
+  const storage = (globalThis as { localStorage?: { getItem(k: string): string | null; setItem(k: string, v: string): void } }).localStorage;
+  if (!relayDeviceId) {
+    try {
+      relayDeviceId = storage?.getItem("relayDeviceId") ?? "";
+    } catch {
+      relayDeviceId = "";
+    }
+  }
+  if (!relayDeviceId) {
+    relayDeviceId = `relay-device-${Math.random().toString(36).slice(2, 10).padEnd(8, "0")}`;
+    try {
+      storage?.setItem("relayDeviceId", relayDeviceId);
+    } catch {
+      /* 非浏览器环境无 localStorage，忽略 */
+    }
+  }
+  return relayDeviceId;
+}
 
 export interface ConnectionApi {
   state: ConnectionState;
@@ -132,20 +161,31 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     await pipelineRef.current?.stop();
     pipelineRef.current = null;
     setNotifications([]);
-    lastEndpointRef.current = { host, port };
-    void hostStore.add(host, port, undefined, token);
+
+    // M3.1 连接模式选择：relay:// / ws:// / wss:// → RelayTransport；
+    // 其余 host 走既有 LAN 路径（行为不变）。
+    const relayMode = isRelayUrl(host);
+    const endpoint = relayMode
+      ? { host: toRelayWsUrl(host), port: 0 }
+      : { host, port };
+    lastEndpointRef.current = relayMode ? { host, port: 0 } : { host, port };
+    void hostStore.add(host, relayMode ? 0 : port, undefined, token);
     void autoReconnectStore.setEnabled(true); // 手动连接即恢复自动重连
 
+    const transport = relayMode
+      ? new RelayTransport({ deviceId: getRelayDeviceId() })
+      : new LanTransport({
+          onDescribe: (d) => {
+            setDescribe(d);
+            const name = d && typeof d === "object" ? (d as { name?: string }).name : undefined;
+            if (name) void hostStore.add(host, port, name, token);
+          },
+        });
+
     const pipeline = createConnectionPipeline({
-      endpoint: { host, port },
+      endpoint,
       auth: token ? { token } : {},
-      transport: new LanTransport({
-        onDescribe: (d) => {
-          setDescribe(d);
-          const name = d && typeof d === "object" ? (d as { name?: string }).name : undefined;
-          if (name) void hostStore.add(host, port, name, token);
-        },
-      }),
+      transport,
       onStateChange: (s) => setStateBoth(s),
       onError: (err) => {
         console.warn("[conn]", err);

@@ -14,6 +14,7 @@ import Animated from "react-native-reanimated";
 import * as Network from "expo-network";
 import { useEntering } from "../src/ui/anim";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
+import { isRelayUrl } from "../src/transport/relayMode";
 import { tokenStore } from "../src/data/secureStoreAdapter";
 import { hostStore } from "../src/discovery/hostStoreAdapter";
 import type { RecentHost } from "../src/discovery/hostStore";
@@ -98,6 +99,7 @@ export default function ConnectScreen() {
   }, []);
 
   const online = state === "online";
+  const hostRelayMode = isRelayUrl(host.trim());
 
   useEffect(() => {
     if (online && justConnected.current) {
@@ -120,8 +122,11 @@ export default function ConnectScreen() {
     try {
       const t = token.trim();
       if (t) await tokenStore.set(t);
-      void draftStore.set(host.trim(), Number.parseInt(port || "3080", 10));
-      await connect(host.trim(), Number.parseInt(port || "3080", 10), t || undefined);
+      // relay:// / ws:// / wss:// 填在 HOST 里，端口忽略。
+      const relayMode = isRelayUrl(host.trim());
+      const p = relayMode ? 0 : Number.parseInt(port || "3080", 10);
+      void draftStore.set(host.trim(), p);
+      await connect(host.trim(), p, t || undefined);
     } finally {
       setBusy(false);
     }
@@ -260,7 +265,7 @@ export default function ConnectScreen() {
             autoCorrect={false}
             value={host}
             onChangeText={setHost}
-            onBlur={() => void draftStore.set(host.trim(), Number.parseInt(port || "3080", 10))}
+            onBlur={() => void draftStore.set(host.trim(), hostRelayMode ? 0 : Number.parseInt(port || "3080", 10))}
             editable={!online}
           />
           <Field
@@ -270,8 +275,8 @@ export default function ConnectScreen() {
             keyboardType="number-pad"
             value={port}
             onChangeText={setPort}
-            onBlur={() => void draftStore.set(host.trim(), Number.parseInt(port || "3080", 10))}
-            editable={!online}
+            onBlur={() => void draftStore.set(host.trim(), hostRelayMode ? 0 : Number.parseInt(port || "3080", 10))}
+            editable={!online && !hostRelayMode}
           />
           <Field
             label="PAIR TOKEN · OPTIONAL"
@@ -284,6 +289,7 @@ export default function ConnectScreen() {
             editable={!online}
             secureTextEntry
           />
+          <Text style={styles.relayHint}>支持 relay:// 或 ws:// URL（Relay 模式）</Text>
           {token.length > 0 && (
             <Pressable style={({ pressed }) => [styles.clearToken, pressed && styles.textPressed]} onPress={onClearToken} accessibilityRole="button" accessibilityLabel="清除已保存的配对">
               <Text style={styles.clearTokenText}>清除已保存的配对</Text>
@@ -395,6 +401,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     clearToken: { alignItems: "flex-start" },
     textPressed: { opacity: 0.6 },
     clearTokenText: { color: colors.danger, fontSize: font.caption },
+    relayHint: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
     connectError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
     linkRow: { alignItems: "center", paddingVertical: space.x2 },
     link: { color: colors.accent, fontSize: font.body },

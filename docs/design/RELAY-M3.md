@@ -206,3 +206,22 @@ export class RelayTransport implements Transport {
   - `parseRelayEnvelope`（lenient，不抛错）、`isRelayEnvelope`、`normalizeRelayError`
 - 新增 `packages/protocol/test/relay.test.ts`：4 用例。
 - 验证命令：`pnpm --filter @dsh-remote/protocol build && pnpm --filter @dsh-remote/protocol test`（≥76 且 skipped=0）。
+
+---
+
+## 9. 实现现状（M3.1，2026-08-17 回填）
+
+- `relay/` 包已落地（根目录，workspace 成员）：
+  - `src/credential.ts`：HMAC-SHA256 短时凭证签发/校验（`node:crypto`）。
+  - `src/store.ts`：内存 device/console/配对码/绑定/在线状态 store（纯 TS）。
+  - `src/server.ts`：WS 控制面（hello/register/pair/route/heartbeat + E_* 错误码）+ `GET /healthz`；日志仅 `type/from/to/ts`（无 payload，无 DSH 明文）。
+  - `src/cli.ts`：`relay --port 4090` 启动入口。
+  - `test/relay-server.test.ts`：7 用例（含安全红线：未认证 E_AUTH、未配对 E_PAIR、过期凭证重连被拒）。
+- `packages/protocol/src/relay.ts` 增补：
+  - 请求构造器 `makeHello/makeRegister/makePair/makeHeartbeat`（纯函数，id/ts 可注入）。
+  - `RelayTransport implements Transport`：单 WSS/WS 连接、hello/register 握手、`?credential=`/`?peerId=` 支持；数据面 M3.1 明文 `relay.route` 转发（unary 请求 `{rpcId,method,payload}` 并等待匹配响应；注释已标明 M3.2 换 `sealRelayPayload`）。
+  - `test/relay-transport.test.ts`：7 用例。
+- `apps/mobile`：连接页 HOST 支持 `relay://` / `ws://` / `wss://` URL（Relay 模式，端口忽略）；`ConnectionProvider` 按 URL 选择 `RelayTransport`，LAN 路径不变；`relayMode.ts` 纯函数 + 3 单测。
+- `harness-plugin/src/relay-client.ts`：出站中继客户端接线桩（注册/心跳/收发信封；真实 DSH 数据面由宿主适配）+ 4 单测。
+- 联调：`.shots/relay-integration.mjs`（relay + mock-harness + console 桥）已跑通，手机经 relay 看到 2 个 session（截图 `.shots/relay-sessions.png`、连接页 `.shots/relay-connect.png`）。
+- 全仓 `pnpm -r build && pnpm -r typecheck && pnpm -r test` 全绿。

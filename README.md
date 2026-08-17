@@ -11,7 +11,7 @@ dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness�
 - **审批流程**：会话列表待办横幅直达审批列表页，多选批量批准/拒绝、提问批量跳过；处理历史按时间倒序可查；通知点击深链直达 `approval/:rpcId`。
 - **会话列表**：搜索（标题/workspace/最近消息，大小写不敏感）、按 workspace 分组（无 workspace 归「其他」）、上下文压力分档提醒（<70 正常 / 70–85 偏高 / ≥85 告警）。
 - **聊天体验**：长按消息操作菜单（复制全文/按代码块分别复制）；代码块默认展开可折叠 + 轻量语法高亮（关键词/字符串/注释/数字四类）；流式暂停为真中断（`session.interrupt` RPC，失败自动回退本地暂停渲染并提示）。
-- **LAN 起步、传输可插拔**：自动发现 + 二维码配对 + 最近主机一键重连，也可以手动直连局域网内的 DSH（`host:3080`）；传输层抽象为 `Transport` 接口，中继/公网为预留演进方向，不平滑推翻重来。
+- **LAN 起步、传输可插拔**：自动发现 + 二维码配对 + 最近主机一键重连，也可以手动直连局域网内的 DSH（`host:3080`）；传输层抽象为 `Transport` 接口，连接页 HOST 输入 `relay://` / `ws://` URL 即切换 Relay 模式（M3.1 中继控制面 MVP，仅限开发联调）。
 - **低门槛连接（P2）**：首启 3 步引导 → 扫码电脑上的配对二维码即连（`dshremote://pair` 深链）；同一局域网点「自动发现」列出可用实例；冷启动自动重连最近主机。
 - **协议对齐**：纯 TS 协议包（`packages/protocol`，零 RN 依赖）与 DSH 原生类型零失真对齐；宽容解码，线上层永不因未知数据崩溃。
 - **设计**：UI 设计系统 v7（docs/design/UI-SYSTEM-v7.md）——双主题（浅/深跟随系统）、DeepSeek 官方主按钮蓝（浅 `#3964FE` / 深 `#5686FE`）、官方黑色鲸鱼、Space Grotesk 显示字体；动效克制且尊重系统「减弱动态」。
@@ -46,8 +46,8 @@ dsh-remote/
 ├── mock-harness/          # DSH /api + WS 测试桩（回放 conformance fixtures）
 ├── tools/
 │   └── capture/           # 录制真实 DSH 流量 → conformance fixtures
-├── harness-plugin/        # DSH 宿主配对插件（M2：token 签发/校验/配对围栏）
-├── relay/                 # （预留）中继服务器
+├── harness-plugin/        # DSH 宿主配对插件（M2：token 签发/校验/配对围栏；M3.1 出站中继客户端接线桩）
+├── relay/                 # M3.1 中继控制面服务器（WS + HTTP /healthz；自部署，不托管）
 ├── docs/
 │   ├── ARCHITECTURE.md / PROTOCOL.md / COMPATIBILITY.md / SECURITY.md
 │   └── design/            # UI-SYSTEM.md / BRAND.md / CONNECTION-UX.md

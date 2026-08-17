@@ -167,6 +167,28 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@22.20.1)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0)
 
+  relay:
+    dependencies:
+      '@dsh-remote/protocol':
+        specifier: workspace:^
+        version: link:../packages/protocol
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      '@types/ws':
+        specifier: ^8.5.12
+        version: 8.18.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0)
+
   tools/capture:
     devDependencies:
       '@types/node':

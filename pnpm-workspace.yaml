@@ -3,6 +3,7 @@ packages:
   - "packages/*"
   - "mock-harness"
   - "harness-plugin"
+  - "relay"
   - "tools/*"
 allowBuilds:
   # esbuild postinstall only validates the platform binary (present via
