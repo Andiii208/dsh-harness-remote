@@ -1,40 +1,21 @@
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
-import { font, radius, space, type ThemeColors } from "../src/theme";
+import { font, space, type ThemeColors } from "../src/theme";
 import { useTheme } from "../src/theme-context";
 import { WhaleMark } from "../src/ui/WhaleMark";
 import { useEntering } from "../src/ui/anim";
-import { SectionLabel } from "../src/ui/SectionLabel";
 import { Button } from "../src/ui/Button";
 import { onboardingStore } from "../src/discovery/onboardingStoreAdapter";
-
-const STEPS = [
-  {
-    title: "远程控制 DeepSeek Harness",
-    body: "harness remote 让你的手机成为 DSH 的终端视口：查看会话、流式聊天、审批与提问、暂停 goal。",
-  },
-  {
-    title: "在电脑上安装配对插件",
-    body: "在运行 DSH 的电脑上安装 dsh-remote 插件并生成配对码——二维码会显示在终端里，15 分钟内有效。",
-  },
-  {
-    title: "扫码或自动发现",
-    body: "用手机扫电脑上的二维码即可一键连接；同一局域网内也可以自动发现主机。之后每次打开都会自动重连最近的主机。",
-  },
-] as const;
 
 export default function OnboardingScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState(0);
   const entering = useEntering(10, 220);
-  const current = STEPS[step]!;
-  const last = step === STEPS.length - 1;
 
   const finish = async () => {
     await onboardingStore.markSeen();
@@ -43,68 +24,40 @@ export default function OnboardingScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + space.x7, paddingBottom: insets.bottom + space.x5 }]}>
-      <View style={styles.brand}>
-        <WhaleMark size={44} />
-        <SectionLabel>harness remote</SectionLabel>
-      </View>
-
-      <Animated.View key={step} entering={entering} style={styles.stepCard}>
-        <SectionLabel tone="accent">{`Step ${step + 1} / ${STEPS.length}`}</SectionLabel>
-        <Text style={styles.title}>{current.title}</Text>
-        <Text style={styles.body}>{current.body}</Text>
-        {step === 2 && (
-          <View style={styles.codeBox}>
-            <Text style={styles.code}>dshremote://pair?host=192.168.1.5&port=3080&token=…</Text>
-          </View>
-        )}
-        <View style={styles.dots}>
-          {STEPS.map((_, i) => (
-            <View key={i} style={[styles.dot, i === step && styles.dotActive]} />
-          ))}
+      <Animated.View entering={entering} style={styles.body}>
+        <View style={styles.brand}>
+          <WhaleMark size={44} />
+          <Text style={styles.brandText}>harness remote</Text>
         </View>
+        <Text style={styles.copy}>
+          手机是 DeepSeek Harness 的视口：查看会话、审批请求、继续对话。
+        </Text>
       </Animated.View>
 
-      <View style={styles.actions}>
-        {step > 0 && <Button tone="ghost" label="上一步" onPress={() => setStep((s) => s - 1)} style={styles.flex} />}
-        <Button
-          label={last ? "开始使用" : "下一步"}
-          onPress={() => (last ? void finish() : setStep((s) => s + 1))}
-          style={styles.flex}
-        />
-      </View>
+      <Button label="开始使用" onPress={() => void finish()} full />
     </View>
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: space.x5, justifyContent: "space-between" },
-    brand: { alignItems: "center", gap: space.x2 },
-    stepCard: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.card,
-      padding: space.x6,
-      gap: space.x3,
-    },
-    title: {
+    screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: space.x6, justifyContent: "space-between" },
+    body: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.x5 },
+    brand: { alignItems: "center", gap: space.x3 },
+    brandText: {
       color: colors.text,
       fontFamily: font.display,
-      fontSize: 22,
+      fontSize: 26,
       fontWeight: "600",
-      letterSpacing: -0.5,
-      lineHeight: 28,
+      letterSpacing: -0.6,
+      lineHeight: 30,
     },
-    body: { color: colors.textMuted, fontSize: font.body, lineHeight: 21 },
-    codeBox: {
-      backgroundColor: colors.codeBg,
-      borderRadius: radius.control,
-      padding: space.x3,
+    copy: {
+      color: colors.textMuted,
+      fontSize: font.body + 1,
+      lineHeight: 23,
+      textAlign: "center",
+      maxWidth: 280,
     },
-    code: { color: colors.codeText, fontFamily: font.mono, fontSize: font.transcript - 1, lineHeight: 20 },
-    dots: { flexDirection: "row", gap: space.x2, justifyContent: "center", paddingTop: space.x2 },
-    dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.surface2 },
-    dotActive: { width: 18, backgroundColor: colors.accent },
-    actions: { flexDirection: "row", gap: space.x3 },
-    flex: { flex: 1 },
   });
 }

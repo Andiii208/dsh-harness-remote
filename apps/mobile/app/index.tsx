@@ -25,7 +25,6 @@ import { discoverHosts, type DiscoveredHost } from "../src/discovery/discover";
 import { font, radius, space } from "../src/theme";
 import { WhaleMark } from "../src/ui/WhaleMark";
 import { StatusChip, type StatusTone } from "../src/ui/StatusChip";
-import { SectionLabel } from "../src/ui/SectionLabel";
 import { Field } from "../src/ui/Field";
 import { Button } from "../src/ui/Button";
 import { ConnectingBar } from "../src/ui/ConnectingBar";
@@ -55,6 +54,8 @@ export default function ConnectScreen() {
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState("");
   const [connectError, setConnectError] = useState("");
+  const [showRecent, setShowRecent] = useState(false);
+  const [showToken, setShowToken] = useState(false);
   const justConnected = useRef(false);
   const discoverAbort = useRef<AbortController | null>(null);
   const heroEntering = useEntering(10, 260);
@@ -89,7 +90,10 @@ export default function ConnectScreen() {
 
   useEffect(() => {
     void tokenStore.get().then((t) => {
-      if (t) setToken(t);
+      if (t) {
+        setToken(t);
+        setShowToken(true);
+      }
     });
     void draftStore.get().then((d) => {
       if (d) {
@@ -181,109 +185,65 @@ export default function ConnectScreen() {
       ? `${(describe as { name?: string }).name ?? ""} ${(describe as { version?: string }).version ?? ""}`.trim()
       : "";
 
-  const list = found.length > 0
+  const items = found.length > 0
     ? found.map((f) => ({ key: `found-${f.host}`, host: f.host, port: f.port, name: f.name, version: f.version, token: undefined }))
     : recent.map((r) => ({ key: `recent-${r.host}-${r.port}`, host: r.host, port: r.port, name: r.name, version: undefined, token: r.token }));
 
+  const showList = found.length > 0 || showRecent;
+
   return (
     <KeyboardAvoidingView
-      style={[styles.screen, { paddingTop: insets.top + space.x5 }]}
+      style={[styles.screen, { paddingTop: insets.top + space.x4 }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Animated.View entering={heroEntering} style={styles.hero}>
-          <View style={styles.brandMark}>
-            <WhaleMark size={48} />
+        <Animated.View entering={heroEntering} style={styles.header}>
+          <View style={styles.brand}>
+            <WhaleMark size={34} />
+            <Text style={styles.brandText}>harness remote</Text>
           </View>
-          <View style={styles.heroText}>
-            <Text style={styles.display}>harness remote</Text>
-            <SectionLabel>DeepSeek Harness · LAN</SectionLabel>
-          </View>
+          <StatusChip tone={STATE_TONE[state] ?? "neutral"} label={STATE_LABEL[state] ?? state} />
         </Animated.View>
 
-        <View style={styles.stateRow}>
-          <StatusChip tone={STATE_TONE[state] ?? "neutral"} label={STATE_LABEL[state] ?? state} />
-          {describeName.length > 0 && <Text style={styles.describe} numberOfLines={1}>{describeName}</Text>}
-          {online && relayPeerId && <Text style={styles.pairedConsole} numberOfLines={1}>{relayPeerId} · paired</Text>}
-        </View>
         {state === "connecting" && <ConnectingBar />}
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <SectionLabel>{found.length > 0 ? "Discovered hosts" : "Recent hosts"}</SectionLabel>
-            <Pressable style={({ pressed }) => pressed && styles.textPressed} onPress={() => router.push("/scan" as never)} hitSlop={8} accessibilityRole="button" accessibilityLabel="扫码配对">
-              <Text style={styles.scanLink}>扫码配对 ›</Text>
-            </Pressable>
+        {(describeName.length > 0 || (online && relayPeerId)) && (
+          <View style={styles.stateRow}>
+            {describeName.length > 0 && <Text style={styles.describe} numberOfLines={1}>{describeName}</Text>}
+            {online && relayPeerId && <Text style={styles.pairedConsole} numberOfLines={1}>{relayPeerId} · paired</Text>}
           </View>
-          <View style={styles.hostList}>
-            {list.length === 0 && (
-              <View style={styles.hostEmpty}>
-                <Text style={styles.hostEmptyText}>
-                  {discovering ? "扫描中…" : "没有主机——扫码配对，或点「自动发现」"}
-                </Text>
-              </View>
-            )}
-            {list.map((h) => (
-              <Pressable
-                key={h.key}
-                style={({ pressed }) => [styles.hostRow, pressed && styles.hostRowPressed]}
-                onPress={() => void connectTo(h.host, h.port, h.token)}
-                accessibilityRole="button"
-                accessibilityLabel={`连接 ${h.host}:${h.port}`}
-              >
-                <View style={styles.hostRowText}>
-                  <View style={styles.hostRowTitleRow}>
-                    {h.version !== undefined && <View style={styles.hostDot} />}
-                    <Text style={styles.hostRowTitle} numberOfLines={1}>
-                      {h.name ?? h.host}
-                    </Text>
-                    {h.token && <Text style={styles.pairedBadge}>配对</Text>}
-                  </View>
-                  <Text style={styles.hostRowMeta} numberOfLines={1}>
-                    {`${h.host}:${h.port}${h.version ? ` · ${h.version}` : ""}`}
-                  </Text>
-                </View>
-                <Text style={styles.hostRowArrow}>›</Text>
-              </Pressable>
-            ))}
-            {discoverError.length > 0 && <Text style={styles.discoverError}>{discoverError}</Text>}
-            {found.length > 0 && (
-              <Text style={styles.discoverHint}>发现的实例首次连接可能需要配对 token——请用「扫码配对」获取</Text>
-            )}
-          </View>
-          <View style={styles.discoverRow}>
-            <Button tone="ghost" label={discovering ? "扫描中…" : "自动发现"} onPress={() => void onDiscover()} disabled={discovering} style={styles.flex} />
-            <Button label="扫码配对" onPress={() => router.push("/scan" as never)} style={styles.flex} />
-          </View>
-        </View>
+        )}
 
         <View style={styles.card}>
-          <SectionLabel>Manual connect</SectionLabel>
-          <Field
-            label="HOST"
-            mono
-            placeholder="192.168.1.5"
-            autoCapitalize="none"
-            autoCorrect={false}
-            value={host}
-            onChangeText={setHost}
-            onBlur={() => void draftStore.set(host.trim(), hostRelayMode ? 0 : Number.parseInt(port || "3080", 10))}
-            editable={!online}
-          />
-          <Field
-            label="PORT"
-            mono
-            placeholder="3080"
-            keyboardType="number-pad"
-            value={port}
-            onChangeText={setPort}
-            onBlur={() => void draftStore.set(host.trim(), hostRelayMode ? 0 : Number.parseInt(port || "3080", 10))}
-            editable={!online && !hostRelayMode}
-          />
+          <View style={styles.fieldsRow}>
+            <View style={styles.hostField}>
+              <Field
+                label="主机"
+                placeholder="192.168.1.5"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={host}
+                onChangeText={setHost}
+                onBlur={() => void draftStore.set(host.trim(), hostRelayMode ? 0 : Number.parseInt(port || "3080", 10))}
+                editable={!online}
+              />
+            </View>
+            <View style={styles.portField}>
+              <Field
+                label="端口"
+                placeholder="3080"
+                keyboardType="number-pad"
+                value={port}
+                onChangeText={setPort}
+                onBlur={() => void draftStore.set(host.trim(), hostRelayMode ? 0 : Number.parseInt(port || "3080", 10))}
+                editable={!online && !hostRelayMode}
+              />
+            </View>
+          </View>
+
           {hostRelayMode && (
             <Field
               label="配对码 · 可选"
-              mono
               placeholder="6 位配对码（可选）"
               keyboardType="number-pad"
               maxLength={6}
@@ -292,23 +252,43 @@ export default function ConnectScreen() {
               editable={!online}
             />
           )}
-          <Field
-            label="PAIR TOKEN · OPTIONAL"
-            mono
-            placeholder="配对 token（可选）"
-            autoCapitalize="none"
-            autoCorrect={false}
-            value={token}
-            onChangeText={setToken}
-            editable={!online}
-            secureTextEntry
-          />
+
+          <View style={styles.advancedRow}>
+            <Pressable onPress={() => setShowToken((v) => !v)} hitSlop={8} accessibilityRole="button" accessibilityLabel="展开配对高级设置">
+              <Text style={styles.linkText}>{showToken ? "收起高级" : "高级"}</Text>
+            </Pressable>
+            {token.length > 0 && !showToken && <Text style={styles.savedToken}>已保存配对</Text>}
+          </View>
+
+          {showToken && (
+            <Field
+              label="配对 Token"
+              placeholder="可选"
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={token}
+              onChangeText={setToken}
+              editable={!online}
+              secureTextEntry
+            />
+          )}
+
           <Text style={styles.relayHint}>支持 relay:// 或 ws:// URL（Relay 模式）</Text>
-          {token.length > 0 && (
+          {showToken && token.length > 0 && (
             <Pressable style={({ pressed }) => [styles.clearToken, pressed && styles.textPressed]} onPress={onClearToken} accessibilityRole="button" accessibilityLabel="清除已保存的配对">
               <Text style={styles.clearTokenText}>清除已保存的配对</Text>
             </Pressable>
           )}
+        </View>
+
+        <View style={styles.quickRow}>
+          <Pressable onPress={() => void onDiscover()} hitSlop={8} disabled={discovering} accessibilityRole="button" accessibilityLabel="自动发现主机">
+            <Text style={styles.quickLink}>{discovering ? "扫描中…" : "自动发现"}</Text>
+          </Pressable>
+          <Text style={styles.quickSeparator}>·</Text>
+          <Pressable onPress={() => router.push("/scan" as never)} hitSlop={8} accessibilityRole="button" accessibilityLabel="扫码配对">
+            <Text style={styles.quickLink}>扫码配对</Text>
+          </Pressable>
         </View>
 
         {online ? (
@@ -323,9 +303,49 @@ export default function ConnectScreen() {
         )}
         {connectError.length > 0 && <Text style={styles.connectError}>{connectError}</Text>}
 
+        {showList ? (
+          <View style={styles.listCard}>
+            <View style={styles.listHeader}>
+              <Text style={styles.listTitle}>{found.length > 0 ? "发现的主机" : "历史主机"}</Text>
+              {found.length === 0 && (
+                <Pressable onPress={() => setShowRecent(false)} hitSlop={8} accessibilityRole="button" accessibilityLabel="收起历史主机">
+                  <Text style={styles.linkText}>收起</Text>
+                </Pressable>
+              )}
+            </View>
+            {items.length === 0 ? (
+              <Text style={styles.listEmpty}>暂无历史主机</Text>
+            ) : (
+              items.map((h) => (
+                <Pressable
+                  key={h.key}
+                  style={({ pressed }) => [styles.hostRow, pressed && styles.hostRowPressed]}
+                  onPress={() => void connectTo(h.host, h.port, h.token)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`连接 ${h.host}:${h.port}`}
+                >
+                  <Text style={styles.hostRowText} numberOfLines={1}>
+                    {h.host}:{h.port}
+                  </Text>
+                  <Text style={styles.hostRowArrow}>›</Text>
+                </Pressable>
+              ))
+            )}
+          </View>
+        ) : (
+          <Pressable onPress={() => setShowRecent(true)} style={styles.historyButton} hitSlop={8} accessibilityRole="button" accessibilityLabel="展开历史主机">
+            <Text style={styles.linkText}>历史主机{recent.length > 0 ? ` · ${recent.length}` : ""} ›</Text>
+          </Pressable>
+        )}
+
+        {discoverError.length > 0 && <Text style={styles.discoverError}>{discoverError}</Text>}
+        {found.length > 0 && (
+          <Text style={styles.discoverHint}>发现的实例首次连接可能需要配对 token——请用「扫码配对」获取</Text>
+        )}
+
         {online && (
           <Pressable style={styles.linkRow} onPress={() => router.push("/sessions")} accessibilityRole="link" accessibilityLabel="进入 Sessions">
-            <Text style={styles.link}>进入 Sessions →</Text>
+            <Text style={styles.link}>进入会话 →</Text>
           </Pressable>
         )}
 
@@ -344,83 +364,73 @@ export default function ConnectScreen() {
 function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
-    content: { paddingHorizontal: 20, paddingBottom: space.x7, gap: 20 },
-    hero: { flexDirection: "row", alignItems: "center", gap: space.x4, paddingTop: 6 },
-    brandMark: {
-      width: 52,
-      height: 52,
-      borderRadius: 13,
-      backgroundColor: colors.surface,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    heroText: { gap: 3 },
-    display: {
+    content: { paddingHorizontal: 20, paddingBottom: space.x7, gap: 18 },
+    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: space.x2 },
+    brand: { flexDirection: "row", alignItems: "center", gap: space.x3 },
+    brandText: {
       color: colors.text,
       fontFamily: font.display,
-      fontSize: 30,
+      fontSize: 24,
       fontWeight: "600",
-      letterSpacing: -0.8,
-      lineHeight: 32,
+      letterSpacing: -0.6,
+      lineHeight: 28,
     },
-    stateRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x3, flexWrap: "wrap" },
+    stateRow: { flexDirection: "row", alignItems: "center", gap: space.x3, flexWrap: "wrap" },
     describe: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono, flexShrink: 1 },
     pairedConsole: { color: colors.success, fontSize: 11, fontFamily: font.mono, letterSpacing: 0.2, flexShrink: 1 },
-    section: { gap: space.x2 },
-    sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-    scanLink: { color: colors.accent, fontSize: 13, fontWeight: "500" },
-    hostList: {
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.card,
+      padding: space.x5,
+      gap: 14,
+    },
+    fieldsRow: { flexDirection: "row", gap: space.x3 },
+    hostField: { flex: 1 },
+    portField: { width: 96 },
+    advancedRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    linkText: { color: colors.accent, fontSize: font.body, fontWeight: "500" },
+    savedToken: { color: colors.textMuted, fontSize: font.caption },
+    clearToken: { alignItems: "flex-start" },
+    textPressed: { opacity: 0.6 },
+    clearTokenText: { color: colors.danger, fontSize: font.caption },
+    relayHint: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
+    quickRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.x3 },
+    quickLink: { color: colors.accent, fontSize: font.body, fontWeight: "500" },
+    quickSeparator: { color: colors.textDim, fontSize: font.body },
+    connectError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
+    listCard: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,
       overflow: "hidden",
     },
-    hostEmpty: { padding: space.x4 },
-    hostEmptyText: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
+    listHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: space.x5,
+      paddingTop: space.x4,
+      paddingBottom: space.x2,
+    },
+    listTitle: { color: colors.text, fontSize: font.body, fontWeight: "600" },
+    listEmpty: { color: colors.textMuted, fontSize: font.caption, padding: space.x5, paddingTop: 0 },
     hostRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: space.x5,
       paddingVertical: space.x4,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.separator,
+      borderTopWidth: 1,
+      borderTopColor: colors.separator,
     },
     hostRowPressed: { backgroundColor: colors.surface2 },
-    hostRowText: { flex: 1, gap: 3 },
-    hostRowTitleRow: { flexDirection: "row", alignItems: "center", gap: 9 },
-    hostDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
-    hostRowTitle: { color: colors.text, fontSize: font.body + 2, fontWeight: "500", letterSpacing: -0.1, flexShrink: 1 },
-    pairedBadge: {
-      color: colors.accent,
-      fontSize: 9,
-      fontFamily: font.monoBold,
-      fontWeight: "500",
-      backgroundColor: colors.accentSoft,
-      borderRadius: radius.pill,
-      paddingHorizontal: 9,
-      paddingVertical: 2,
-      overflow: "hidden",
-    },
-    hostRowMeta: { color: colors.textMuted, fontSize: 11, fontFamily: font.mono, letterSpacing: 0.2 },
+    hostRowText: { color: colors.text, fontSize: font.body, fontFamily: font.mono, flexShrink: 1 },
     hostRowArrow: { color: colors.textDim, fontSize: 18, fontWeight: "300" },
-    discoverError: { color: colors.warn, fontSize: font.caption, padding: space.x3 },
-    discoverHint: { color: colors.textMuted, fontSize: font.caption, paddingHorizontal: space.x3, paddingBottom: space.x3, lineHeight: 18 },
-    discoverRow: { flexDirection: "row", gap: space.x3, marginTop: 4 },
-    flex: { flex: 1 },
-    card: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.card,
-      padding: space.x5,
-      gap: 13,
-    },
-    clearToken: { alignItems: "flex-start" },
-    textPressed: { opacity: 0.6 },
-    clearTokenText: { color: colors.danger, fontSize: font.caption },
-    relayHint: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
-    connectError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
+    historyButton: { alignItems: "center", paddingVertical: 2 },
+    discoverError: { color: colors.warn, fontSize: font.caption, textAlign: "center" },
+    discoverHint: { color: colors.textMuted, fontSize: font.caption, textAlign: "center", lineHeight: 18 },
     linkRow: { alignItems: "center", paddingVertical: space.x2 },
     link: { color: colors.accent, fontSize: font.body },
-    hint: { fontSize: font.caption, color: colors.textMuted, lineHeight: 18 },
+    hint: { fontSize: font.caption, color: colors.textMuted, lineHeight: 18, textAlign: "center" },
     version: { color: colors.textDim, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
   });
 }

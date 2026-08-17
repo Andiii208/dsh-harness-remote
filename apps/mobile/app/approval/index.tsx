@@ -3,9 +3,7 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useConnection } from "../../src/transport/ConnectionProvider";
 import { font, radius, space, type ThemeColors } from "../../src/theme";
-import { SectionLabel } from "../../src/ui/SectionLabel";
 import { Button } from "../../src/ui/Button";
-import { EmptyState } from "../../src/ui/EmptyState";
 import { useTheme } from "../../src/theme-context";
 import { haptic } from "../../src/ui/haptics";
 
@@ -53,12 +51,14 @@ export default function ApprovalListScreen() {
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>Approvals</Text>
-          <SectionLabel>{`Pending ${pending.length}`}</SectionLabel>
+          <Text style={styles.title}>待处理</Text>
+          <Text style={styles.subtitle}>{pending.length} 项</Text>
         </View>
 
         {pending.length === 0 ? (
-          <EmptyState eyebrow="ALL CLEAR" text="没有待处理的审批或提问" />
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>没有待处理的审批或提问</Text>
+          </View>
         ) : (
           <View style={styles.list}>
             {pending.map((p) => {
@@ -71,7 +71,6 @@ export default function ApprovalListScreen() {
                   key={p.rpcId}
                   style={({ pressed }) => [
                     styles.row,
-                    { borderLeftColor: isApproval ? colors.warn : colors.accent },
                     checked && styles.rowChecked,
                     pressed && styles.rowPressed,
                   ]}
@@ -85,9 +84,12 @@ export default function ApprovalListScreen() {
                   <View style={styles.check}>{checked && <Text style={styles.checkMark}>✓</Text>}</View>
                   <View style={styles.rowBody}>
                     <View style={styles.rowTop}>
-                      <SectionLabel tone={isApproval ? "muted" : "accent"}>
-                        {isApproval ? "Permission" : "Question"}
-                      </SectionLabel>
+                      <View style={styles.kindWrap}>
+                        <View style={[styles.kindDot, { backgroundColor: isApproval ? colors.warn : colors.accent }]} />
+                        <Text style={[styles.kindTag, { color: isApproval ? colors.warn : colors.accent }]}>
+                          {isApproval ? "审批" : "提问"}
+                        </Text>
+                      </View>
                       <Text style={styles.rpcId}>{p.rpcId}</Text>
                     </View>
                     <Text style={styles.prompt} numberOfLines={2}>{prompt}</Text>
@@ -102,26 +104,35 @@ export default function ApprovalListScreen() {
 
       {pending.length > 0 && (
         <View style={styles.actionBar}>
-          <Button
-            tone="danger"
-            label={`拒绝所选 (${selectedApprovals.length})`}
-            onPress={() => void runBatch(selectedApprovals, { approved: false })}
-            disabled={busy || selectedApprovals.length === 0}
-            full
-          />
-          <Button
-            label={`批准所选 (${selectedApprovals.length})`}
-            onPress={() => void runBatch(selectedApprovals, { approved: true })}
-            disabled={busy || selectedApprovals.length === 0}
-            full
-          />
-          <Button
-            tone="ghost"
-            label={`跳过所选提问 (${selectedQuestions.length})`}
+          <Pressable
             onPress={() => void runBatch(selectedQuestions, { skipped: true })}
             disabled={busy || selectedQuestions.length === 0}
-            full
-          />
+            hitSlop={6}
+            style={({ pressed }) => [
+              styles.skipLink,
+              (busy || selectedQuestions.length === 0) && styles.disabled,
+              pressed && styles.pressedText,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={`跳过所选提问 ${selectedQuestions.length} 项`}
+          >
+            <Text style={styles.skipText}>跳过所选提问 ({selectedQuestions.length})</Text>
+          </Pressable>
+          <View style={styles.buttonRow}>
+            <Button
+              label={`批准所选 (${selectedApprovals.length})`}
+              onPress={() => void runBatch(selectedApprovals, { approved: true })}
+              disabled={busy || selectedApprovals.length === 0}
+              style={styles.flex}
+            />
+            <Button
+              tone="danger"
+              label={`拒绝所选 (${selectedApprovals.length})`}
+              onPress={() => void runBatch(selectedApprovals, { approved: false })}
+              disabled={busy || selectedApprovals.length === 0}
+              style={styles.flex}
+            />
+          </View>
         </View>
       )}
     </View>
@@ -136,10 +147,11 @@ function createStyles(colors: ThemeColors) {
     title: {
       color: colors.text,
       fontFamily: font.display,
-      fontSize: 34,
+      fontSize: 28,
       fontWeight: "600",
-      letterSpacing: -1,
+      letterSpacing: -0.5,
     },
+    subtitle: { color: colors.textMuted, fontSize: font.caption },
     list: { gap: space.x3 },
     row: {
       flexDirection: "row",
@@ -147,7 +159,6 @@ function createStyles(colors: ThemeColors) {
       gap: space.x3,
       backgroundColor: colors.surface,
       borderRadius: radius.card,
-      borderLeftWidth: 3,
       padding: space.x4,
     },
     rowChecked: { backgroundColor: colors.accentSoft },
@@ -164,15 +175,26 @@ function createStyles(colors: ThemeColors) {
     checkMark: { color: colors.accent, fontSize: 13, fontWeight: "700" },
     rowBody: { flex: 1, gap: 6 },
     rowTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x3 },
+    kindWrap: { flexDirection: "row", alignItems: "center", gap: 6 },
+    kindDot: { width: 4, height: 4, borderRadius: 2 },
+    kindTag: { fontSize: font.caption, fontWeight: "600" },
     prompt: { color: colors.text, fontSize: font.body, lineHeight: 20 },
     rpcId: { color: colors.textDim, fontSize: font.eyebrow, fontFamily: font.mono },
+    empty: { alignItems: "center", paddingTop: space.x7 * 2 },
+    emptyText: { color: colors.textMuted, fontSize: font.caption, textAlign: "center" },
     actionBar: {
       padding: space.x4,
-      gap: space.x2,
+      gap: space.x3,
       borderTopWidth: 1,
       borderTopColor: colors.separator,
       backgroundColor: colors.bg,
     },
+    skipLink: { alignSelf: "center", paddingVertical: 2 },
+    skipText: { color: colors.accent, fontSize: font.caption, fontWeight: "500" },
+    disabled: { opacity: 0.4 },
+    pressedText: { opacity: 0.6 },
+    buttonRow: { flexDirection: "row", gap: space.x3 },
+    flex: { flex: 1 },
     error: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
   });
 }

@@ -6,9 +6,7 @@ import { FlashList } from "@shopify/flash-list";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
 import { font, radius, space } from "../src/theme";
 import { useTheme } from "../src/theme-context";
-import { SectionLabel } from "../src/ui/SectionLabel";
 import { StatusChip } from "../src/ui/StatusChip";
-import { EmptyState } from "../src/ui/EmptyState";
 import { SkeletonRow } from "../src/ui/SkeletonRow";
 import { Field } from "../src/ui/Field";
 import { useEntering } from "../src/ui/anim";
@@ -22,15 +20,41 @@ function formatRelative(ms: number): string {
   return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function goalLabel(status?: string): string {
+  switch (status) {
+    case "active":
+      return "进行中";
+    case "paused":
+      return "已暂停";
+    case "complete":
+    case "completed":
+      return "已完成";
+    default:
+      return status ?? "";
+  }
+}
+
 function GoalPill({ status, colors }: { status?: string; colors: ReturnType<typeof useTheme>["colors"] }) {
   if (!status) return null;
-  const done = status === "complete";
+  const done = status === "complete" || status === "completed";
   return (
-    <Text style={[
-      { color: colors.warn, backgroundColor: "rgba(217,130,11,0.08)", fontFamily: font.monoBold, fontSize: 9, fontWeight: "500", letterSpacing: 0.5, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, overflow: "hidden" },
-      done && { color: colors.success, backgroundColor: "rgba(46,158,91,0.08)" },
-    ]}>
-      {status.toUpperCase()}
+    <Text
+      style={[
+        {
+          color: colors.textMuted,
+          backgroundColor: colors.surface2,
+          fontFamily: font.monoMedium,
+          fontSize: 9,
+          fontWeight: "500",
+          borderRadius: radius.pill,
+          paddingHorizontal: 7,
+          paddingVertical: 2,
+          overflow: "hidden",
+        },
+        done && { color: colors.success, backgroundColor: "rgba(46,158,91,0.08)" },
+      ]}
+    >
+      {goalLabel(status)}
     </Text>
   );
 }
@@ -39,13 +63,6 @@ type SessionRow =
   | { kind: "header"; key: string; workspace: string; count: number }
   | { kind: "session"; key: string; session: SessionSummary };
 
-function pressureText(percent: number): string {
-  const tier = pressureTier(percent);
-  if (tier === "danger") return `${percent}% · 告警`;
-  if (tier === "warn") return `${percent}% · 偏高`;
-  return `${percent}%`;
-}
-
 export default function SessionsScreen() {
   const { sessions, pending, state, refreshSessions } = useConnection();
   const { colors } = useTheme();
@@ -53,6 +70,7 @@ export default function SessionsScreen() {
   const router = useRouter();
   const entering = useEntering();
   const [query, setQuery] = useState("");
+  const [searchVisible, setSearchVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
   const autoRefreshed = useRef(false);
@@ -91,6 +109,20 @@ export default function SessionsScreen() {
     }
   };
 
+  const toggleSearch = () => {
+    if (searchVisible) {
+      setQuery("");
+      setSearchVisible(false);
+    } else {
+      setSearchVisible(true);
+    }
+  };
+
+  const onChangeQuery = (text: string) => {
+    setQuery(text);
+    if (text.trim() === "") setSearchVisible(false);
+  };
+
   return (
     <FlashList
       style={styles.screen}
@@ -103,34 +135,38 @@ export default function SessionsScreen() {
       ListHeaderComponent={
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Sessions</Text>
-              <SectionLabel>{`Sessions ${sessions.length}`}</SectionLabel>
-            </View>
-            <View style={styles.headerActions}>
-              <Pressable onPress={() => router.push("/settings" as never)} hitSlop={8}>
-                <Text style={styles.settingsLink}>设置</Text>
-              </Pressable>
+            <View style={styles.titleRow}>
+              <Text style={styles.title}>会话</Text>
               <StatusChip tone={state === "online" ? "success" : state === "offline" ? "danger" : "warn"} label={STATE_LABEL[state] ?? state} />
             </View>
+            <View style={styles.headerActions}>
+              <Pressable onPress={toggleSearch} hitSlop={8} accessibilityRole="button" accessibilityLabel={searchVisible ? "完成搜索" : "搜索"}>
+                <Text style={styles.headerLink}>{searchVisible ? "完成" : "搜索"}</Text>
+              </Pressable>
+              <Pressable onPress={() => router.push("/settings" as never)} hitSlop={8} accessibilityRole="button" accessibilityLabel="设置">
+                <Text style={styles.headerLink}>设置</Text>
+              </Pressable>
+            </View>
           </View>
-          <Field
-            label="SEARCH"
-            placeholder="搜索标题 / workspace / 最近消息"
-            value={query}
-            onChangeText={setQuery}
-          />
+          {searchVisible && (
+            <Field
+              label="搜索"
+              placeholder="搜索标题 / workspace / 最近消息"
+              value={query}
+              onChangeText={onChangeQuery}
+              autoFocus
+            />
+          )}
           {refreshError.length > 0 && <Text style={styles.refreshError}>{refreshError}</Text>}
           {pending.length > 0 && (
             <Pressable
-              style={styles.pendingBanner}
+              style={styles.pendingRow}
               onPress={() => router.push("/approval" as never)}
+              hitSlop={6}
               accessibilityRole="button"
               accessibilityLabel={`${pending.length} 个待处理请求`}
             >
-              <Text style={styles.pendingText}>
-                {pending.length} 个待处理请求（审批 / 提问）›
-              </Text>
+              <Text style={styles.pendingText}>{pending.length} 个待处理请求 ›</Text>
             </Pressable>
           )}
         </View>
@@ -143,12 +179,14 @@ export default function SessionsScreen() {
             <SkeletonRow />
           </View>
         ) : (
-          <EmptyState eyebrow={query.trim() ? "NO MATCH" : "NO SESSIONS"} text={query.trim() ? "没有匹配的会话——换个关键词试试" : "等待注册表 / 投影帧推送（可先连接 mock-harness）"} />
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>{query.trim() ? "没有匹配的会话" : "还没有会话"}</Text>
+          </View>
         )
       }
       renderItem={({ item }) =>
         item.kind === "header" ? (
-          <SectionLabel>{`${item.workspace} · ${item.count}`}</SectionLabel>
+          <Text style={styles.groupHeader}>{item.workspace}</Text>
         ) : (
           <Animated.View entering={entering}>
             <Pressable
@@ -162,49 +200,28 @@ export default function SessionsScreen() {
                   {item.session.title ?? item.session.id}
                 </Text>
                 <GoalPill status={item.session.goalStatus} colors={colors} />
-                <Text style={styles.chevron} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">›</Text>
+                {item.session.contextPercent !== undefined && item.session.contextPercent >= 70 && (
+                  <Text
+                    style={[
+                      styles.pressure,
+                      pressureTier(item.session.contextPercent) === "warn" && { color: colors.warn },
+                      pressureTier(item.session.contextPercent) === "danger" && { color: colors.danger },
+                    ]}
+                  >
+                    {item.session.contextPercent}%
+                  </Text>
+                )}
+                {item.session.lastActiveAt !== undefined && (
+                  <Text style={styles.time} numberOfLines={1}>
+                    {formatRelative(item.session.lastActiveAt)}
+                  </Text>
+                )}
               </View>
               {item.session.lastMessage !== undefined && (
                 <Text style={styles.rowPreview} numberOfLines={1}>
                   {item.session.lastMessage}
                 </Text>
               )}
-              <View style={styles.rowMeta}>
-                {item.session.workspace !== undefined && (
-                  <Text style={styles.metaText} numberOfLines={1}>
-                    {item.session.workspace}
-                  </Text>
-                )}
-                {item.session.tokenUsageTotal !== undefined && (
-                  <Text style={styles.metaText}>{item.session.tokenUsageTotal.toLocaleString()} tok</Text>
-                )}
-                {item.session.lastActiveAt !== undefined && (
-                  <Text style={[styles.metaText, styles.metaTime]}>{formatRelative(item.session.lastActiveAt)}</Text>
-                )}
-                {item.session.contextPercent !== undefined && (
-                  <View style={styles.pressureWrap}>
-                    <View style={styles.miniBar}>
-                      <View
-                        style={[
-                          styles.miniBarFill,
-                          { width: `${Math.min(100, item.session.contextPercent)}%` },
-                          pressureTier(item.session.contextPercent) === "warn" && { backgroundColor: colors.warn },
-                          pressureTier(item.session.contextPercent) === "danger" && { backgroundColor: colors.danger },
-                        ]}
-                      />
-                    </View>
-                    <Text
-                      style={[
-                        styles.pressureText,
-                        pressureTier(item.session.contextPercent) === "warn" && { color: colors.warn },
-                        pressureTier(item.session.contextPercent) === "danger" && { color: colors.danger },
-                      ]}
-                    >
-                      {pressureText(item.session.contextPercent)}
-                    </Text>
-                  </View>
-                )}
-              </View>
             </Pressable>
           </Animated.View>
         )
@@ -217,53 +234,36 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
     content: { padding: space.x5, gap: space.x3, paddingBottom: space.x7 },
-    header: { gap: space.x3, marginBottom: space.x2 },
-    headerRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: space.x3 },
-    headerText: { gap: space.x1 },
+    header: { gap: space.x2, marginBottom: space.x2 },
+    headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x3 },
+    titleRow: { flexDirection: "row", alignItems: "center", gap: space.x2 },
     title: {
       color: colors.text,
       fontFamily: font.display,
-      fontSize: 34,
+      fontSize: 28,
       fontWeight: "600",
-      letterSpacing: -1,
+      letterSpacing: -0.5,
     },
-    headerActions: { flexDirection: "row", alignItems: "center", gap: space.x3 },
-    settingsLink: { color: colors.accent, fontSize: 13, fontWeight: "500" },
-    pendingBanner: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: colors.accentSoft,
-      borderRadius: radius.card,
-      paddingVertical: 13,
-      paddingHorizontal: space.x5,
-    },
-    pendingText: { color: colors.accent, fontSize: 14, fontWeight: "500", letterSpacing: -0.1, flex: 1 },
+    headerActions: { flexDirection: "row", alignItems: "center", gap: space.x4 },
+    headerLink: { color: colors.accent, fontSize: 13, fontWeight: "500" },
+    pendingRow: { paddingVertical: 2 },
+    pendingText: { color: colors.accent, fontSize: 14, fontWeight: "500", letterSpacing: -0.1 },
     refreshError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
     row: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,
-      padding: space.x5,
-      gap: 9,
+      padding: space.x4,
+      gap: 8,
     },
     rowPressed: { backgroundColor: colors.surface2 },
     skeletonStack: { gap: space.x3 },
-    rowHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x2 },
+    rowHeader: { flexDirection: "row", alignItems: "center", gap: space.x2 },
     rowTitle: { color: colors.text, fontSize: font.section + 1, fontWeight: "500", letterSpacing: -0.2, flex: 1 },
-    chevron: { color: colors.textDim, fontSize: 18, fontWeight: "300", fontFamily: font.mono },
     rowPreview: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18, letterSpacing: 0.1 },
-    rowMeta: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 7 },
-    metaText: { color: colors.textMuted, fontSize: 10, fontFamily: font.mono, letterSpacing: 0.2, flexShrink: 1 },
-    miniBar: {
-      flex: 1,
-      height: 3,
-      borderRadius: 2,
-      backgroundColor: colors.surface2,
-      overflow: "hidden",
-      maxWidth: 80,
-    },
-    miniBarFill: { height: 3, backgroundColor: colors.success, borderRadius: 2 },
-    pressureWrap: { flexDirection: "row", alignItems: "center", gap: 5, flex: 1, maxWidth: 150 },
-    pressureText: { color: colors.success, fontSize: 10, fontFamily: font.mono, letterSpacing: 0.2 },
-    metaTime: { marginLeft: "auto" },
+    time: { color: colors.textDim, fontSize: 10, fontFamily: font.mono },
+    pressure: { fontSize: 10, fontFamily: font.mono, letterSpacing: 0.2 },
+    groupHeader: { color: colors.textMuted, fontSize: font.caption, fontWeight: "500", paddingTop: space.x2 },
+    empty: { alignItems: "center", paddingTop: space.x7 * 2 },
+    emptyText: { color: colors.textMuted, fontSize: font.caption, textAlign: "center" },
   });
 }

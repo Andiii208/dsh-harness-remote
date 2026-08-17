@@ -23,13 +23,13 @@ function Group({ eyebrow, children }: { eyebrow: string; children: React.ReactNo
   );
 }
 
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Row({ label, value }: { label: string; value: string }) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, mono && styles.rowValueMono]} numberOfLines={1}>
+      <Text style={styles.rowValue} numberOfLines={1}>
         {value}
       </Text>
     </View>
@@ -56,7 +56,7 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Group eyebrow="Connection">
+      <View style={styles.card}>
         <View style={styles.statusRow}>
           <Text style={styles.rowLabel}>状态</Text>
           <StatusChip
@@ -64,8 +64,8 @@ export default function SettingsScreen() {
             label={STATE_LABEL[state] ?? state}
           />
         </View>
-        <Row label="目标主机" value={lastEndpoint ? `${lastEndpoint.host}:${lastEndpoint.port}` : "未连接"} mono />
-        <Row label="远端实例" value={describeName} mono />
+        <Row label="目标主机" value={lastEndpoint ? `${lastEndpoint.host}:${lastEndpoint.port}` : "未连接"} />
+        <Row label="远端实例" value={describeName} />
         <View style={styles.statusRow}>
           <Text style={styles.rowLabel}>自动重连</Text>
           <Switch
@@ -80,9 +80,9 @@ export default function SettingsScreen() {
             <Button tone="danger" label="断开连接" onPress={disconnect} full />
           </View>
         )}
-      </Group>
 
-      <Group eyebrow="Notifications">
+        <View style={styles.sectionSeparator} />
+
         <View style={styles.statusRow}>
           <Text style={styles.rowLabel}>本地通知</Text>
           <Switch
@@ -93,21 +93,18 @@ export default function SettingsScreen() {
             thumbColor={colors.text}
           />
         </View>
-        <Row label="未读事件" value={notifications.length > 0 ? `${notifications.length} 条` : "无"} mono />
+        <Row label="未读事件" value={notifications.length > 0 ? `${notifications.length} 条` : "无"} />
         <Text style={styles.hint}>
           {isExpoGo() ? "Expo Go 不支持本地通知——此开关在 Expo Go 下不可用，development build 中生效。" : "关闭后仍会在应用内记录事件，只是不弹系统通知。"}
         </Text>
-      </Group>
-
-      <Group eyebrow="Approvals">
         <View style={styles.linkRow}>
           <Button tone="ghost" label="审批 / 提问处理历史" onPress={() => router.push("/approval/history" as never)} full />
         </View>
-      </Group>
+      </View>
 
-      <Group eyebrow="About">
+      <Group eyebrow="关于">
         <Row label="应用" value="harness remote" />
-        <Row label="版本" value={Constants.expoConfig?.version ? `v${Constants.expoConfig.version}` : "v0.1.0"} mono />
+        <Row label="版本" value={Constants.expoConfig?.version ? `v${Constants.expoConfig.version}` : "v0.1.0"} />
         <Row label="项目" value="dsh-remote · DeepSeek Harness 手机视口" />
         <View style={styles.linkRow}>
           <Button tone="ghost" label="GitHub · 使用手册" onPress={() => void Linking.openURL("https://github.com/Andiii208/dsh-remote")} full />
@@ -120,7 +117,7 @@ export default function SettingsScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
-    content: { padding: space.x5, gap: space.x5, paddingBottom: space.x7 },
+    content: { padding: space.x5, gap: space.x4, paddingBottom: space.x7 },
     group: { gap: space.x2 },
     card: {
       backgroundColor: colors.surface,
@@ -147,10 +144,14 @@ function createStyles(colors: ThemeColors) {
       borderBottomColor: colors.separator,
     },
     rowLabel: { color: colors.text, fontSize: font.body },
+    rowValue: { color: colors.textMuted, fontSize: font.caption, flexShrink: 1, textAlign: "right" },
     disconnectRow: { paddingVertical: space.x3 },
     linkRow: { paddingVertical: space.x3 },
     hint: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18, paddingVertical: space.x3 },
-    rowValue: { color: colors.textMuted, fontSize: font.caption, flexShrink: 1, textAlign: "right" },
-    rowValueMono: { fontFamily: font.mono, color: colors.textMuted },
+    sectionSeparator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.separator,
+      marginVertical: space.x3,
+    },
   });
 }

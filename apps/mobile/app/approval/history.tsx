@@ -3,8 +3,6 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { approvalHistoryStore } from "../../src/data/approvalHistoryStoreAdapter";
 import type { ApprovalHistoryEntry } from "../../src/data/approvalHistoryStore";
 import { font, radius, space, type ThemeColors } from "../../src/theme";
-import { SectionLabel } from "../../src/ui/SectionLabel";
-import { EmptyState } from "../../src/ui/EmptyState";
 import { useTheme } from "../../src/theme-context";
 
 function resultLabel(result: unknown): string {
@@ -30,11 +28,14 @@ function HistoryRow({ entry, colors }: { entry: ApprovalHistoryEntry; colors: Th
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isApproval = entry.kind === "approval";
   return (
-    <View style={[styles.card, { borderLeftColor: isApproval ? colors.warn : colors.accent }]}>
+    <View style={styles.card}>
       <View style={styles.rowTop}>
-        <SectionLabel tone={isApproval ? "muted" : "accent"}>
-          {isApproval ? "Permission" : "Question"}
-        </SectionLabel>
+        <View style={styles.kindWrap}>
+          <View style={[styles.kindDot, { backgroundColor: isApproval ? colors.warn : colors.accent }]} />
+          <Text style={[styles.kindTag, { color: isApproval ? colors.warn : colors.accent }]}>
+            {isApproval ? "审批" : "提问"}
+          </Text>
+        </View>
         <Text style={styles.time}>{formatTime(entry.respondedAt)}</Text>
       </View>
       <Text style={styles.prompt} numberOfLines={2}>{entry.prompt || "（无描述）"}</Text>
@@ -58,11 +59,13 @@ export default function ApprovalHistoryScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <Text style={styles.title}>History</Text>
-        <SectionLabel>{`Approvals ${entries.length}`}</SectionLabel>
+        <Text style={styles.title}>历史</Text>
+        <Text style={styles.subtitle}>{entries.length} 条</Text>
       </View>
       {entries.length === 0 ? (
-        <EmptyState eyebrow="NO HISTORY" text="处理过的审批 / 提问会按时间倒序出现在这里" />
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>还没有处理记录</Text>
+        </View>
       ) : (
         <View style={styles.list}>
           {entries.map((e) => (
@@ -82,23 +85,28 @@ function createStyles(colors: ThemeColors) {
     title: {
       color: colors.text,
       fontFamily: font.display,
-      fontSize: 34,
+      fontSize: 28,
       fontWeight: "600",
-      letterSpacing: -1,
+      letterSpacing: -0.5,
     },
+    subtitle: { color: colors.textMuted, fontSize: font.caption },
     list: { gap: space.x3 },
     card: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,
-      borderLeftWidth: 3,
       padding: space.x4,
       gap: space.x2,
     },
     rowTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x3 },
+    kindWrap: { flexDirection: "row", alignItems: "center", gap: 6 },
+    kindDot: { width: 4, height: 4, borderRadius: 2 },
+    kindTag: { fontSize: font.caption, fontWeight: "600" },
     time: { color: colors.textDim, fontSize: font.eyebrow, fontFamily: font.mono },
     prompt: { color: colors.text, fontSize: font.body, lineHeight: 20 },
     rowBottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x3 },
     result: { color: colors.textMuted, fontSize: font.caption },
     rpcId: { color: colors.textDim, fontSize: font.eyebrow, fontFamily: font.mono, flexShrink: 1 },
+    empty: { alignItems: "center", paddingTop: space.x7 * 2 },
+    emptyText: { color: colors.textMuted, fontSize: font.caption, textAlign: "center" },
   });
 }

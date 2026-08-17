@@ -19,7 +19,6 @@ import {
 import { ConnectionProvider } from "../src/transport/ConnectionProvider";
 import { notificationService } from "../src/notify/expoAdapter";
 import { registerNotificationDeepLink } from "../src/notify/deeplink";
-import { font } from "../src/theme";
 import { ThemeProvider, useTheme } from "../src/theme-context";
 
 void SplashScreen.preventAutoHideAsync();
@@ -33,15 +32,15 @@ function RootNavigator() {
         screenOptions={{
           headerStyle: { backgroundColor: colors.bg },
           headerTintColor: colors.text,
-          headerTitleStyle: { fontWeight: "600", fontSize: 15, fontFamily: font.monoBold },
+          headerTitleStyle: { fontWeight: "600", fontSize: 17 },
           contentStyle: { backgroundColor: colors.bg },
           headerShadowVisible: false,
           headerBackTitle: "返回",
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="sessions" options={{ title: "Sessions", headerBackTitle: "连接" }} />
-        <Stack.Screen name="chat/[sessionId]" options={{ title: "Session" }} />
+        <Stack.Screen name="sessions" options={{ title: "会话", headerBackTitle: "连接" }} />
+        <Stack.Screen name="chat/[sessionId]" options={{ title: "对话" }} />
         <Stack.Screen name="approval/[rpcId]" options={{ title: "请求" }} />
         <Stack.Screen name="settings" options={{ title: "设置" }} />
         <Stack.Screen name="scan" options={{ headerShown: false, presentation: "modal" }} />

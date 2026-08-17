@@ -3,7 +3,6 @@ import { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useConnection } from "../../src/transport/ConnectionProvider";
 import { font, radius, space, type ThemeColors } from "../../src/theme";
-import { SectionLabel } from "../../src/ui/SectionLabel";
 import { Field } from "../../src/ui/Field";
 import { Button } from "../../src/ui/Button";
 import { useTheme } from "../../src/theme-context";
@@ -40,8 +39,8 @@ export default function ApprovalScreen() {
   if (!req) {
     return (
       <View style={styles.screen}>
-        <View style={[styles.card, { borderLeftColor: colors.success }]}>
-          <SectionLabel tone="success">Done</SectionLabel>
+        <View style={styles.card}>
+          <Text style={styles.doneTitle}>已处理</Text>
           <Text style={styles.prompt}>该请求已处理或不存在</Text>
           <Button label="返回" onPress={() => router.back()} full />
         </View>
@@ -59,11 +58,12 @@ export default function ApprovalScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={[styles.card, { borderLeftColor: rail }]}>
+        <View style={styles.card}>
           <View style={styles.kindRow}>
-            <SectionLabel tone={isApproval ? "muted" : "accent"}>
-              {isApproval ? "Permission request" : "Question"}
-            </SectionLabel>
+            <View style={styles.kindWrap}>
+              <View style={[styles.kindDot, { backgroundColor: rail }]} />
+              <Text style={[styles.kindTag, { color: rail }]}>{isApproval ? "审批" : "提问"}</Text>
+            </View>
             {id && <Text style={styles.rpcId}>{id}</Text>}
           </View>
           <Text style={styles.prompt}>{String(payload.prompt ?? (isApproval ? "允许执行？" : "请回答"))}</Text>
@@ -76,15 +76,13 @@ export default function ApprovalScreen() {
                 </View>
               )}
               <View style={styles.buttonRow}>
-                <Button tone="danger" label="拒绝" onPress={() => done({ approved: false })} disabled={busy} style={styles.flex} />
                 <Button label="批准" onPress={() => done({ approved: true })} disabled={busy} style={styles.flex} />
+                <Button tone="danger" label="拒绝" onPress={() => done({ approved: false })} disabled={busy} style={styles.flex} />
               </View>
             </>
           ) : (
             <>
               <Field
-                label="ANSWER"
-                mono
                 placeholder="回答…"
                 value={answer}
                 onChangeText={setAnswer}
@@ -113,11 +111,11 @@ function createStyles(colors: ThemeColors) {
     card: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,
-      borderLeftWidth: 3,
       padding: space.x5,
       gap: space.x3,
     },
     flex: { flex: 1 },
+    doneTitle: { color: colors.success, fontSize: font.section + 1, fontWeight: "600" },
     prompt: { color: colors.text, fontSize: font.body + 1, lineHeight: 22 },
     commandBox: {
       backgroundColor: colors.codeBg,
@@ -127,6 +125,9 @@ function createStyles(colors: ThemeColors) {
     command: { color: colors.codeText, fontFamily: font.mono, fontSize: font.transcript },
     buttonRow: { flexDirection: "row", gap: space.x3 },
     kindRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x3 },
+    kindWrap: { flexDirection: "row", alignItems: "center", gap: 6 },
+    kindDot: { width: 4, height: 4, borderRadius: 2 },
+    kindTag: { fontSize: font.caption, fontWeight: "600" },
     rpcId: { color: colors.textDim, fontSize: font.eyebrow, fontFamily: font.mono },
     answerInput: { minHeight: 88, textAlignVertical: "top", height: undefined },
   });

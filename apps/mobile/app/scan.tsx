@@ -8,7 +8,6 @@ import { useConnection } from "../src/transport/ConnectionProvider";
 import { hostStore } from "../src/discovery/hostStoreAdapter";
 import { tokenStore } from "../src/data/secureStoreAdapter";
 import { font, radius, space, type ThemeColors } from "../src/theme";
-import { SectionLabel } from "../src/ui/SectionLabel";
 import { Button } from "../src/ui/Button";
 import { useTheme } from "../src/theme-context";
 import { haptic } from "../src/ui/haptics";
@@ -51,7 +50,7 @@ export default function ScanScreen() {
     return (
       <View style={[styles.screen, { paddingTop: insets.top + space.x5 }]}>
         <View style={styles.card}>
-          <SectionLabel>Camera unavailable</SectionLabel>
+          <Text style={styles.webTitle}>相机不可用</Text>
           <Text style={styles.hint}>Web 预览不支持相机扫码——请在真机上使用。</Text>
           <Button label="返回" onPress={() => router.back()} full />
         </View>
@@ -74,8 +73,8 @@ export default function ScanScreen() {
           <View style={[styles.corner, styles.cornerBR]} />
         </View>
         <View style={styles.overlay}>
-          <Text style={styles.overlayTitle}>对准电脑上的配对二维码</Text>
-          <Text style={styles.overlayHint}>配对码由 dsh-remote 插件生成，15 分钟内有效</Text>
+          <Text style={styles.overlayTitle}>扫描配对二维码</Text>
+          <Text style={styles.overlayHint}>配对码由 dsh-remote 插件生成</Text>
           {error.length > 0 && <Text style={styles.error}>{error}</Text>}
           {!permission?.granted && (
             <Button label="授权相机权限" onPress={() => void requestPermission()} full />
@@ -106,8 +105,8 @@ function createStyles(colors: ThemeColors) {
     cornerBL: { bottom: "38%", left: "22%", borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
     cornerBR: { bottom: "38%", right: "22%", borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
     overlay: { padding: space.x5, paddingBottom: space.x7, gap: space.x3, backgroundColor: "rgba(10,12,16,0.55)" },
-    overlayTitle: { color: colors.text, fontSize: font.body, fontWeight: "600", textAlign: "center" },
-    overlayHint: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
+    overlayTitle: { color: colors.text, fontSize: font.body + 1, fontWeight: "600", textAlign: "center" },
+    overlayHint: { color: colors.textMuted, fontSize: font.caption, textAlign: "center" },
     error: { color: colors.danger, fontSize: font.caption, textAlign: "center" },
     cancel: { alignItems: "center", paddingVertical: space.x3 },
     cancelText: { color: colors.textMuted, fontSize: font.body, fontWeight: "600" },
@@ -118,6 +117,7 @@ function createStyles(colors: ThemeColors) {
       gap: space.x3,
       margin: space.x5,
     },
+    webTitle: { color: colors.text, fontSize: font.body + 1, fontWeight: "600", textAlign: "center" },
     hint: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
   });
 }
