@@ -11,6 +11,7 @@
 
 import {
   deriveRelaySessionKeys,
+  generateRelayKeyPair,
   makeHeartbeat,
   makeHello,
   makeRegister,
@@ -53,6 +54,15 @@ export interface RelayClientOptions {
   crypto?: Crypto;
   /** M3.3：APNs/FCM 推送 token，注册时上报给 relay 用于离线唤醒。 */
   pushToken?: string;
+  /** M3.5：收到 relay.pair.ack 配对通知后回调（deviceId 与对端公钥）。 */
+  onPaired?: (info: { deviceId: string; peerPublicKey: unknown }) => void;
+}
+
+/** 从 EC 私钥 JWK 提取可注册的公钥视图（只含 kty/crv/x/y，绝不外泄 d）。 */
+function publicJwkFromPrivate(privateKeyJwk: JsonWebKey): JsonWebKey | undefined {
+  const { kty, crv, x, y } = privateKeyJwk;
+  if (kty && crv && x && y) return { kty, crv, x, y };
+  return undefined;
 }
 
 /** console 注册负载（M3.1）：server 用 consoleId 推断 kind，platform 仅记录。 */
@@ -61,7 +71,7 @@ interface ConsoleRegisterPayload {
   kind: "console";
   platform: "node";
   protocolVersion: number;
-  publicKey: null;
+  publicKey: JsonWebKey | null;
   pushToken?: string;
 }
 
@@ -88,7 +98,9 @@ export class RelayClient {
   private readonly listeners = new Set<(env: RelayEnvelope) => void>();
   private readonly errorListeners = new Set<(err: unknown) => void>();
   private readonly cryptoImpl: Crypto | null;
-  private readonly encKeyPromise: Promise<CryptoKey> | null;
+  private encKeyPromise: Promise<CryptoKey> | null;
+  private privateKeyValue: JsonWebKey | null;
+  private publicKeyValue: JsonWebKey | null;
   private connectPromise: Promise<void> | null = null;
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private handshakeSettled = false;
@@ -98,6 +110,10 @@ export class RelayClient {
     this.cryptoImpl = opts.crypto
       ?? (globalThis as { crypto?: Crypto }).crypto
       ?? null;
+    this.privateKeyValue = opts.privateKeyJwk ?? null;
+    this.publicKeyValue = opts.privateKeyJwk
+      ? (publicJwkFromPrivate(opts.privateKeyJwk) ?? null)
+      : null;
 
     if (opts.privateKeyJwk && opts.peerPublicKeyJwk) {
       if (!this.cryptoImpl) {
@@ -278,20 +294,41 @@ export class RelayClient {
         /* surfaced via onclose / timeout */
       };
       ws.onopen = () => {
-        try {
-          this.sendEnvelope(makeHello(this.opts.clientId));
-          this.sendEnvelope(
-            makeRegister(this.opts.clientId, this.registerPayload()),
-          );
-        } catch (err) {
-          this.settleHandshake?.(err instanceof Error ? err : new Error(String(err)));
-          this.close();
-        }
+        void (async () => {
+          try {
+            this.sendEnvelope(makeHello(this.opts.clientId));
+            // M3.5：未注入私钥时，注册前自动生成 ECDH P-256 keypair，让
+            // relay 能拿到 console 公钥转交给配对 device。生成失败或无
+            // WebCrypto 时降级为 publicKey null（保持不崩）。
+            if (this.publicKeyValue === null && this.cryptoImpl && this.opts.privateKeyJwk === undefined) {
+              await this.ensurePublicKey();
+            }
+            this.sendEnvelope(
+              makeRegister(this.opts.clientId, this.registerPayload()),
+            );
+          } catch (err) {
+            this.settleHandshake?.(err instanceof Error ? err : new Error(String(err)));
+            this.close();
+          }
+        })();
       };
 
       // 注入的 fake ws 可能在构造器内同步 open。
       if (ws.readyState === OPEN) ws.onopen?.();
     });
+  }
+
+  /** 未注入私钥时生成 ECDH keypair；失败或无 crypto 时静默降级为 null。 */
+  private async ensurePublicKey(): Promise<void> {
+    if (!this.cryptoImpl) return;
+    try {
+      const pair = await generateRelayKeyPair(this.cryptoImpl);
+      this.privateKeyValue = pair.privateKeyJwk;
+      this.publicKeyValue = pair.publicKeyJwk;
+    } catch {
+      this.privateKeyValue = null;
+      this.publicKeyValue = null;
+    }
   }
 
   private registerPayload(): RelayRegistration {
@@ -300,7 +337,7 @@ export class RelayClient {
       kind: this.opts.kind,
       platform: "node",
       protocolVersion: RELAY_ENVELOPE_VERSION,
-      publicKey: null,
+      publicKey: this.publicKeyValue ?? null,
       ...(this.opts.pushToken !== undefined
         ? { pushToken: this.opts.pushToken }
         : {}),
@@ -333,6 +370,9 @@ export class RelayClient {
       this.settleHandshake?.(
         new Error(`RelayClient: relay error ${err.code}: ${err.message}`),
       );
+    } else if (env.type === "relay.pair.ack" && env.from === "relay") {
+      // M3.5：配对通知只安装会话密钥并触发 onPaired，不 settle 控制面握手。
+      void this.handlePairAck(env.payload);
     }
 
     let delivered = env;
@@ -364,6 +404,29 @@ export class RelayClient {
       } catch {
         /* 监听器异常不能打断 socket 收包 */
       }
+    }
+  }
+
+  private async handlePairAck(payload: unknown): Promise<void> {
+    const info = isRecord(payload) ? payload : {};
+    const deviceId = str(info.deviceId);
+    const peerPublicKey = info.peerPublicKey;
+
+    if (deviceId !== undefined && this.privateKeyValue && isRecord(peerPublicKey) && this.cryptoImpl) {
+      try {
+        const keys = await deriveRelaySessionKeys(
+          this.cryptoImpl,
+          this.privateKeyValue,
+          peerPublicKey as unknown as JsonWebKey,
+        );
+        this.encKeyPromise = Promise.resolve(keys.encKey);
+      } catch {
+        // 对端公钥无效/派生失败：保持明文兼容，onPaired 仍要回调。
+      }
+    }
+
+    if (deviceId !== undefined) {
+      this.opts.onPaired?.({ deviceId, peerPublicKey });
     }
   }
 

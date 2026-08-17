@@ -75,6 +75,7 @@ async function connectedClient(): Promise<{ client: RelayClient; ws: FakeWs }> {
   const p = client.connect();
   const ws = FakeWs.instances[0]!;
   ws.open();
+  await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
   const register = JSON.parse(ws.sent[1]!) as { id: string };
   ws.recv(registerAck(register.id, "console-c", { credential: "cred-1", ttlMs: 900_000 }));
   await p;
@@ -127,7 +128,7 @@ describe("RelayClient", () => {
     expect(client.isOnline()).toBe(false);
 
     ws.open();
-    expect(ws.sent).toHaveLength(2);
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
 
     const hello = JSON.parse(ws.sent[0]!) as {
       v: number;
@@ -182,6 +183,7 @@ describe("RelayClient", () => {
     const p = client.connect();
     const ws = FakeWs.instances[0]!;
     ws.open();
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
 
     const register = JSON.parse(ws.sent[1]!) as {
       type: string;
@@ -364,5 +366,126 @@ describe("RelayClient", () => {
 
     await vi.waitFor(() => expect(errors).toHaveLength(1), { timeout: 2000, interval: 10 });
     expect(seen).toHaveLength(1);
+  });
+
+  it("register payload carries EC public JWK when privateKeyJwk is configured", async () => {
+    const consolePair = await generateRelayKeyPair(crypto);
+    const client = new RelayClient({
+      url: "ws://relay.example:4090",
+      clientId: "console-c",
+      kind: "console",
+      wsImpl: FakeWs.fresh(),
+      privateKeyJwk: consolePair.privateKeyJwk,
+      crypto,
+    });
+    const p = client.connect();
+    const ws = await vi.waitFor(() => {
+      const instance = FakeWs.instances[0];
+      expect(instance).toBeDefined();
+      return instance!;
+    });
+    ws.open();
+
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
+    const register = JSON.parse(ws.sent[1]!) as {
+      type: string;
+      id: string;
+      payload: { publicKey?: JsonWebKey | null };
+    };
+    expect(register.type).toBe("relay.register");
+    expect(register.payload.publicKey).not.toBeNull();
+    expect(register.payload.publicKey).toMatchObject({
+      kty: consolePair.publicKeyJwk.kty,
+      crv: consolePair.publicKeyJwk.crv,
+      x: consolePair.publicKeyJwk.x,
+      y: consolePair.publicKeyJwk.y,
+    });
+
+    ws.recv(registerAck(register.id, "console-c", { credential: "cred-1", ttlMs: 900_000 }));
+    await p;
+  });
+
+  it("derives session key from relay.pair.ack and sends encrypted route", async () => {
+    const consolePair = await generateRelayKeyPair(crypto);
+    const devicePair = await generateRelayKeyPair(crypto);
+    const onPaired = vi.fn();
+
+    const client = new RelayClient({
+      url: "ws://relay.example:4090",
+      clientId: "console-c",
+      kind: "console",
+      wsImpl: FakeWs.fresh(),
+      privateKeyJwk: consolePair.privateKeyJwk,
+      crypto,
+      onPaired,
+    });
+    const p = client.connect();
+    const ws = await vi.waitFor(() => {
+      const instance = FakeWs.instances[0];
+      expect(instance).toBeDefined();
+      return instance!;
+    });
+    ws.open();
+
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
+    const register = JSON.parse(ws.sent[1]!) as { id: string };
+    ws.recv(registerAck(register.id, "console-c", { credential: "cred-1", ttlMs: 900_000 }));
+    await p;
+
+    ws.recv(
+      JSON.stringify({
+        v: 1,
+        type: "relay.pair.ack",
+        id: "pair-1",
+        from: "relay",
+        to: "console-c",
+        ts: Date.now(),
+        payload: { deviceId: "device-1", peerPublicKey: devicePair.publicKeyJwk },
+      }),
+    );
+
+    await vi.waitFor(() => expect(onPaired).toHaveBeenCalledTimes(1));
+    expect(onPaired).toHaveBeenCalledWith({
+      deviceId: "device-1",
+      peerPublicKey: devicePair.publicKeyJwk,
+    });
+
+    const original = {
+      to: "device-1",
+      rpcId: "r1",
+      method: "host.describe",
+      payload: {},
+    };
+    await client.send({
+      v: 1,
+      type: "relay.route",
+      id: "r1",
+      from: "console-c",
+      to: "device-1",
+      ts: Date.now(),
+      payload: original,
+    });
+
+    const sent = JSON.parse(ws.sent[ws.sent.length - 1]!) as {
+      type: string;
+      payload: { to?: string; ciphertext?: string; nonce?: string; rpcId?: string; method?: string };
+    };
+    expect(sent.type).toBe("relay.route");
+    expect(sent.payload.to).toBe("device-1");
+    expect(sent.payload.rpcId).toBeUndefined();
+    expect(sent.payload.method).toBeUndefined();
+    expect(Object.keys(sent.payload).sort()).toEqual(["ciphertext", "nonce", "to"]);
+
+    const consoleKeys = await deriveRelaySessionKeys(
+      crypto,
+      consolePair.privateKeyJwk,
+      devicePair.publicKeyJwk,
+    );
+    await expect(
+      openRelayPayload(crypto, consoleKeys.encKey, {
+        ciphertext: sent.payload.ciphertext!,
+        nonce: sent.payload.nonce!,
+      }),
+    ).resolves.toEqual(original);
   });
 });
