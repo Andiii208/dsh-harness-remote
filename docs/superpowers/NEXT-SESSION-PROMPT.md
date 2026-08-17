@@ -1,69 +1,98 @@
-# 继续 dsh-remote 项目（新会话启动提示词 v2）
+# 继续 dsh-remote 项目（新会话启动提示词 v3）
 
-你是 dsh-remote 项目的开发 agent。这是「手机远程控制 DeepSeek Harness（DSH）」的开源 App（React Native + Expo SDK 57，深色终端风，DeepSeek 黑色鲸鱼品牌）。项目已完成 M0–M2 并发布 v0.1.0（GitHub Release + dsh-plugin 话题），Phase B 真机联调基本验证通过；但存在两个明确的产品化短板，本阶段优先解决：**① UI 缺乏设计感（用户反馈"很丑、无设计感"）；② 远程连接方式门槛太高、不符合大众习惯**。本阶段用 **AgentTeams** 组织工作：deepseek-v4-pro 为主模型（captain），deepseek-v4-flash-0731 为成员模型，逐步设定阶段性目标并逐个完成（见 §0.5）。
+你是 dsh-remote 项目的开发 agent。这是「手机远程控制 DeepSeek Harness（DSH）」的开源 App
+（React Native + Expo SDK 57，深色终端风，DeepSeek 黑色鲸鱼品牌，显示名 **harness remote**）。
+项目已完成 M0–M2、P1（UI 重设计 v2）、P2（连接体验：自动发现/二维码配对/最近主机/首启引导/
+自动重连/深链），并累计 26 轮自主优化（31 个提交，main = 5017b5c，工作树干净，已推 origin）。
+**本阶段的目标：把未经真实环境验证的部分闭环——真机联调、真实 DSH 校准、EAS 云构建、
+发布收尾；期间继续用 AgentTeams 组织工作，逐步定阶段目标逐个完成（见 §0.5）。**
 
 ## 0. 交接状态（先按顺序读）
 
-- 工作目录 `D:\dsh-remote`；main = 9d4afbe（已推 origin、工作树干净）；tag v0.1.0；GitHub Release（prerelease）与 dsh-plugin 话题已建；CI 绿。
-- 全仓 `pnpm -r typecheck` 与 `pnpm -r test` = 179/179 绿（protocol 64 / mock-harness 26 / mobile 52 / capture 24 / harness-plugin 13）。
-- 评审与进度 ledger（必读）：`.superpowers/sdd/phase-b/progress.md`（含真机验证记录、Phase C 执行记录、环境怪癖）。
-- 文档：`docs/ARCHITECTURE.md`、`docs/PROTOCOL.md`、`docs/COMPATIBILITY.md`、`docs/SECURITY.md`、`docs/MANUAL.md`；设计规范 `docs/design/UI-SYSTEM.md`（v1）与 `docs/design/BRAND.md`。
+- 工作目录 D:\dsh-remote；main = 5017b5c（已推 origin、工作树干净）。
+- 全仓 `pnpm -r build && pnpm -r typecheck && pnpm -r test` = **219 绿**
+  （protocol 73 / capture 24 / mock 28 / plugin 14 / mobile 85）。
+- 评审与进度 ledger（必读）：`.superpowers/sdd/phase-b/progress.md`（含 R0–R25 执行记录、
+  七轮独立评审结论、环境怪癖、真机记录）。
+- 文档：`docs/ARCHITECTURE.md`、`docs/PROTOCOL.md`、`docs/COMPATIBILITY.md`、
+  `docs/SECURITY.md`、`docs/MANUAL.md`（真机清单 + P2 联调方法）；设计规范
+  `docs/design/UI-SYSTEM.md`（v2）、`docs/design/BRAND.md`、`docs/design/CONNECTION-UX.md`；
+  README 带界面截图（`docs/screenshots/`）。
 
-## 0.5 工作组织方式（AgentTeams，本阶段必须使用）
+## 0.5 工作组织方式（AgentTeams，本阶段继续使用）
 
-- **主模型**：deepseek-v4-pro（本会话默认模型，担任 captain——统筹、拆解阶段目标、主实现与最终把关）。
-- **成员模型**：deepseek-v4-flash-0731（快速子任务、独立评审、并行分支）。
-- **流程**：
-  1. `agent_teams_create` 建团队（如 dsh-remote-p1p2）；
-  2. `agent_teams_add_member` 添加带 `model` 覆盖的成员（例如 engineer=deepseek-v4-flash-0731、reviewer=deepseek-v4-flash-0731）；
-  3. 把 P1/P2/P3 拆成**阶段性目标**（如：阶段1=设计规范 v2、阶段2=P1 逐屏落地、阶段3=P2 连接体验、阶段4=P3 收尾），每个阶段再用 `agent_teams_create_task` 拆任务并设依赖；
-  4. captain 统筹派发（`agent_teams_claim_task` + `agent_teams_send_message`），逐阶段完成；每任务完成后由独立评审（可派 flash 成员）把关，全绿后提交推送；
-  5. 每完成一个阶段更新 `.superpowers/sdd/phase-b/progress.md` 与 GitHub。
-- **回退**：若 deepseek-v4-flash-0731 在当前环境不可用，成员回退为 captain 同模型并在 ledger 记录；模型名以环境实际可用的供应商模型为准。
+- 主模型：本会话默认模型（captain）；成员模型：deepseek-v4-flash-0731（或环境实际可用模型）。
+- 流程：`agent_teams_create` 建团队 → `agent_teams_add_member`（engineer/reviewer/docs，
+  可带 model 覆盖）→ 把本阶段拆成阶段目标（如：阶段1=真机联调、阶段2=真实 DSH 校准、
+  阶段3=EAS/dev build、阶段4=发布收尾）→ `agent_teams_create_task` 拆任务并设依赖 →
+  captain 统筹派发（claim + send_message），每任务完成后独立评审把关，全绿后提交推送。
+- 回退：成员不可用时 captain 直接实现，评审仍派独立子代理；每完成一阶段更新 ledger。
 
-## 1. 本阶段任务（按优先级）
+## 1. 后续任务（按优先级）
 
-### P1 — UI 重设计（当前 UI 丑、无设计感）
-- 目标：产出有设计感的深色终端风 UI（信息密度优先、避免 AI 模板味），以「设计 v2」迭代：
-  1. 先改设计规范 `docs/design/UI-SYSTEM.md`（排版层级、间距节奏、卡片/列表/输入/状态/空态/加载态、动效克制），再逐屏落地 `apps/mobile`（连接页、会话列表、聊天、审批/提问、goal 卡、设置）。
-  2. 可参考 `frontend-design` skill 与 `docs/design/BRAND.md`（黑色鲸鱼、单一强调色 #4D6BFE）。
-  3. 改 UI 后必须走 Web 预览视觉 QA（`expo export web` + playwright 截图，对照 UI-SYSTEM 逐屏检查，流程见 CONTRIBUTING.md）。
-- 验收：截图对照设计规范无 AI 模板味；typecheck/test 绿；真机/Web 预览确认。
+### P4-1 真机联调（需用户设备，最高优先）
+- 设备：Android 真机 + Expo Go 57.0.3 + USB（`adb reverse tcp:3080 tcp:3080` + `tcp:8081`），
+  或同 Wi-Fi（mock-harness 绑 0.0.0.0）。
+- 重点验证 P2 新特性（MANUAL §2.7 已写步骤）：
+  1. 扫码配对：mock 起 `--pair-token demo-token`，`curl http://<IP>:3080/api/pairing/qr`
+     拿 URL → 任意二维码工具生成 QR → App「扫码配对」一键连接；
+  2. 自动发现：同 Wi-Fi 点「自动发现」列出主机；
+  3. 深链：`dshremote://pair?host=…&port=…&token=…` 从浏览器/邮件打开即连；
+  4. 启动屏（白鲸 splash）、触觉、下拉刷新、聊天回到底部 FAB、长按复制。
+- bug 修复走「实现 + 单测 + 全仓绿 + 提交推送」；验证结果更新 MANUAL 勾选 + ledger。
 
-### P2 — 远程连接体验重设计（门槛太高）
-- 现状：手动输入 LAN IP:端口（+ 可选配对 token），还要 adb reverse / Expo Go / 局域网概念，普通用户用不了。
-- 目标：先写 1 页设计小节（放进 `docs/` 或设计文档）说明选型，再实现（可组合）：
-  1. **一键自动发现**：mDNS/Bonjour 扫描局域网 DSH 实例（Transport 加 `discover()`，mock-harness 模拟），连接页自动列出可选主机；
-  2. **二维码配对**：harness-plugin 生成配对码 QR，App 扫码一键连接（M2-T3 曾预留扫码为可选——现在升为必做）；
-  3. **最近主机 + 自动重连**：本地持久化 host/port（可存 SecureStore/AsyncStorage），连接页一键重连；
-  4. **新手指引**：首启引导页，图文降低理解成本。
-- 约束：协议/契约改动先改 mock-harness fixtures 定契约 → 实现 + 单测 → 同步 PROTOCOL.md / COMPATIBILITY.md；UI 遵循 P1 设计规范。
+### P4-2 真实 DSH 校准（需真实 DSH 环境）
+- 校准 harness-plugin 接缝（token 签发/校验/中间件挂接点，当前为自洽契约，见 README 校准说明）；
+- `tools/capture record` 重录 conformance fixtures → diff 协议漂移 → 更新 COMPATIBILITY.md；
+- 真机 + 真实 DSH 全链路复测（连接/聊天/审批/提问/goal/通知）。
 
-### P3 — 原 Phase C 剩余（条件满足时做）
-- 真实 DSH 环境可获取：校准 harness-plugin 接缝、`tools/capture record` 重录 fixtures、更新 COMPATIBILITY.md。
-- EAS 云构建（用户执行）：`npx eas-cli login` + `init`（写 `extra.eas.projectId`——注意不要再写 null，那会触发 @expo/cli codesigning 崩溃）+ 三个 profile build。
-- development build：真机验证通知权限/去重/深链、后台保活、锁屏推送（Expo Go 下按设计禁用）。
+### P4-3 EAS 云构建 + development build（需用户执行登录）
+- `npx eas-cli login` + `eas init`（写 `extra.eas.projectId`，**不要再写 null**——
+  那会触发 @expo/cli codesigning 崩溃）+ 三个 profile build；
+- development build 验证：通知权限/去重/深链、后台保活（>15min）、锁屏推送
+  （Expo Go 下按设计禁用）。
+
+### P4-4 发布收尾（需用户决策/账号）
+- `pnpm audit --prod` 复核（已知 3 个构建期传递漏洞，非运行时）；
+- 版本号决策（0.1.0 → 0.2.0？）；CI 最终绿；Play/TestFlight 上架（用户开发者账号）。
+
+### P4-5 自主可选（无环境依赖，每轮选做 1–2 项）
+- `tools/regenerate-assets`：把 sharp 栅格化流水线（SVG→PNG 1024）固化成可复现脚本；
+- Web bundle 体积优化（当前 ~2.6MB）；发布清单/文档同步；真机验证清单细化。
 
 ## 2. 工作规范（必须遵守）
 
 - 回复精简；文件内容写文件，聊天只放要点/状态。
-- SDD：任务级实现 + 独立评审子代理把关；每任务先 `pnpm -r typecheck && pnpm -r test` 全绿再提交；conventional commits；增量推送 GitHub。
+- 用户说「继续」→ 先 `create_goal`（新目标，max_goal_rounds 建议 8–12），完成后再
+  `update_goal complete`；每轮 end-to-end：实现 → 全仓绿 → 截图/评审 → commit+push →
+  ledger 记录。
+- 每任务先 `pnpm -r build && pnpm -r typecheck && pnpm -r test` 全绿再提交；conventional commits；
+  增量推送 GitHub。
 - 环境怪癖（重要，来自实测）：
-  - bash 工具在 win32 不可用 → 用 `run_code` 里的 `process.getBuiltinModule('node:child_process')` 执行命令；先建好带真实 PATH 的批处理（参考 `.superpowers/sdd/phase-b/run.bat`：node=C:\Program Files\nodejs、pnpm=D:\tools\npm、git=E:\Git\cmd、adb=D:\tools\Android\Sdk\platform-tools）。
-  - `spawnSync` 直连 adb/node 时 `>` 不是 shell 重定向（截图必须经 `cmd /c`，参考 `.superpowers/sdd/phase-b/shot.bat`）；netstat 管道同样要经 cmd。
-  - gh CLI **未登录**；GitHub API 可经 `git credential fill` 拿 token（输出必须掩码，勿打印明文）。
+  - bash 工具在 win32 不可用 → 用 `run_code` 里 `process.getBuiltinModule('node:child_process')`
+    执行；先建好带真实 PATH 的批处理（参考 `.superpowers/sdd/phase-b/run.bat`：
+    node=C:\Program Files\nodejs、pnpm=D:\tools\npm、git=E:\Git\cmd、adb=D:\tools\Android\Sdk\platform-tools）。
+  - spawnSync 直连 adb/node 时 `>` 不是 shell 重定向（截图/日志必须经 `cmd /c` 批处理）；
+  - gh CLI **未登录**；GitHub API 可经 `git credential fill` 拿 token（输出必须掩码）。
   - 子代理实现器在大任务上可能卡死（0 产出）→ 控制器直接实现，评审仍派独立子代理；评审包 ≤100KB。
-  - esbuild postinstall 被禁（`pnpm-workspace.yaml` allowBuilds.esbuild:false，勿改）；CI 里 `pnpm -r build` 必须先于 typecheck。
-  - `apps/mobile/dist-web/` 与 `.shots/` 已 gitignore。
-- 真机（如仍在）：UANVB20827000887，Expo Go 57.0.3 + USB；`adb reverse tcp:3080 tcp:3080` + `tcp:8081`；mock-harness 0.0.0.0:3080。
+  - esbuild postinstall 被禁（`pnpm-workspace.yaml` allowBuilds.esbuild:false，勿改）；
+    `pnpm -r build` 必须先于 typecheck；改 protocol 后依赖包测试必须先用新 dist（`pnpm --filter @dsh-remote/protocol build`）。
+  - 截图/浏览器 QA：`npx --package @playwright/cli playwright-cli`（open/resize/snapshot/screenshot
+    --filename；进程退出码带 libuv 崩溃码属正常）；截图存 `.shots/`（已 gitignore）。
+  - 资产栅格化：`npx -y sharp-cli -i <svg> -o <png> resize 1024 1024`（playwright 直开 SVG 会产出空白，勿用）。
+  - Web QA 骨架：`p1p2-export.bat`（expo export web → dist-web）+ `p1p2-static.bat`
+    （serve-dist.cjs，127.0.0.1:8099，SPA 回退）+ `p1p2-mock.bat`（mock-harness 0.0.0.0:3080
+    --pair-token demo-token）；均位于 `.superpowers/sdd/phase-b/`（已 gitignore）。
+  - `apps/mobile/dist-web/`、`.shots/`、`.agent-teams/`、`.playwright-cli/` 已 gitignore。
 
 ## 3. 常用验证命令
 
 ```bash
-pnpm -r typecheck && pnpm -r test   # 全仓
-pnpm --filter mock-harness build && node mock-harness/dist/cli.js --port 3080 --host 0.0.0.0  # 联调桩
+pnpm -r build && pnpm -r typecheck && pnpm -r test   # 全仓（build 必须先于 typecheck）
+pnpm --filter mock-harness build && node mock-harness/dist/cli.js --port 3080 --host 0.0.0.0 --pair-token demo-token  # 联调桩（带配对围栏）
 cd apps/mobile && npx expo export --platform web --output-dir dist-web   # web 预览（视觉 QA）
 npx expo config --type public       # 配置校验
+npx -y sharp-cli -i assets/xxx.svg -o assets/xxx.png resize 1024 1024    # 资产栅格化
 pnpm audit --prod                   # 发布前审计
 ```
 
