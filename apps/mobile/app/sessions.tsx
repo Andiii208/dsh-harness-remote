@@ -95,9 +95,7 @@ export default function SessionsScreen() {
           {pending.length > 0 && (
             <Pressable
               style={styles.pendingBanner}
-              onPress={() =>
-                pending[0] && router.push(`/approval/${encodeURIComponent(pending[0].rpcId)}`)
-              }
+              onPress={() => router.push("/approval" as never)}
               accessibilityRole="button"
               accessibilityLabel={`${pending.length} 个待处理请求`}
             >

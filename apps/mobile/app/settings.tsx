@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import * as Linking from "expo-linking";
 import Constants from "expo-constants";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
@@ -39,6 +40,7 @@ export default function SettingsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { state, describe, lastEndpoint, notifications, disconnect, notificationsEnabled, setNotificationsEnabled } = useConnection();
+  const router = useRouter();
   const [autoReconnect, setAutoReconnect] = useState(true);
   useEffect(() => {
     void autoReconnectStore.enabled().then(setAutoReconnect);
@@ -95,6 +97,12 @@ export default function SettingsScreen() {
         <Text style={styles.hint}>
           {isExpoGo() ? "Expo Go 不支持本地通知——此开关在 Expo Go 下不可用，development build 中生效。" : "关闭后仍会在应用内记录事件，只是不弹系统通知。"}
         </Text>
+      </Group>
+
+      <Group eyebrow="Approvals">
+        <View style={styles.linkRow}>
+          <Button tone="ghost" label="审批 / 提问处理历史" onPress={() => router.push("/approval/history" as never)} full />
+        </View>
       </Group>
 
       <Group eyebrow="About">

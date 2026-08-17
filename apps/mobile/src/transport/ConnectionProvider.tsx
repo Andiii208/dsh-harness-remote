@@ -23,6 +23,7 @@ import { notificationPrefsStore } from "../notify/notificationPrefsStoreAdapter"
 import { hostStore } from "../discovery/hostStoreAdapter";
 import { autoReconnectStore } from "../discovery/autoReconnectStoreAdapter";
 import { tokenStore } from "../data/secureStoreAdapter";
+import { approvalHistoryStore } from "../data/approvalHistoryStoreAdapter";
 import { KeepaliveScheduler } from "../notify/keepalive";
 import { backgroundTaskApi, KEEPALIVE_TASK } from "../notify/keepaliveAdapter";
 import { GoalsClient, type GoalsApi } from "../data/goals";
@@ -184,8 +185,20 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const respond = useCallback(async (rpcId: string, result: unknown) => {
     const c = pipelineRef.current?.loop.connection;
     if (!c) return;
+    const req = pipelineRef.current?.store.getPendingRequest(rpcId);
     await c.respond(rpcId, result);
     pipelineRef.current?.store.resolvePending(rpcId);
+    if (req) {
+      const payload = (req.payload ?? {}) as Record<string, unknown>;
+      const prompt = String(payload.prompt ?? payload.question ?? payload.command ?? "");
+      void approvalHistoryStore.record({
+        rpcId,
+        kind: req.kind,
+        prompt,
+        result,
+        respondedAt: Date.now(),
+      });
+    }
     // 消除对应的系统通知（M1-T4：响应后清理）
     void notificationService.dismissByRoute(`approval/${rpcId}`);
   }, []);
