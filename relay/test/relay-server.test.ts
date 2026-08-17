@@ -10,7 +10,9 @@ import { WebSocket, type RawData } from "ws";
 import {
   createCredentialService,
   createRelayServer,
+  MockPushProvider,
   verify,
+  type PushProvider,
   type RelayServer,
 } from "../src/index.js";
 import type { RelayEnvelope } from "@dsh-remote/protocol";
@@ -92,6 +94,34 @@ class TestClient {
   close(): void {
     this.ws.close();
   }
+}
+
+async function registerAndPair(
+  relay: RelayServer,
+  deviceId: string,
+  consoleId: string,
+  consoleExtra: Record<string, unknown> = {},
+): Promise<{ device: TestClient; consoleClient: TestClient; consoleAck: RelayEnvelope }> {
+  const device = await TestClient.connect(relay.port);
+  device.send(registerEnvelope(`reg-${deviceId}`, deviceId, { deviceId }));
+  await device.next("relay.register.ack");
+
+  const consoleClient = await TestClient.connect(relay.port);
+  consoleClient.send(
+    registerEnvelope(`reg-${consoleId}`, consoleId, { consoleId, ...consoleExtra }),
+  );
+  const consoleAck = await consoleClient.next("relay.register.ack");
+
+  const code = relay.store.createPairingCode(consoleId);
+  device.send(
+    makeEnvelope("relay.pair", `pair-${deviceId}-${consoleId}`, deviceId, {
+      code,
+      deviceId,
+    }),
+  );
+  await device.next("relay.pair.ack");
+
+  return { device, consoleClient, consoleAck };
 }
 
 function makeEnvelope(
@@ -314,6 +344,118 @@ describe("relay server", () => {
 
     device.close();
     consoleClient.close();
+  });
+
+  it("queues route and calls push provider when target is offline", async () => {
+    const push = new MockPushProvider();
+    const relay = await startRelay({ push });
+    const { device, consoleClient } = await registerAndPair(
+      relay,
+      "device-1",
+      "console-1",
+      { pushToken: "push-tok-1" },
+    );
+
+    consoleClient.close();
+    await new Promise((r) => setTimeout(r, 30));
+
+    device.send({
+      v: 1,
+      type: "relay.route",
+      id: "r-offline",
+      from: "device-1",
+      to: "console-1",
+      ts: Date.now(),
+      payload: { to: "console-1", ciphertext: "abc", nonce: "xyz" },
+    });
+
+    const err = await device.next("relay.error");
+    expect((err.payload as { code: string }).code).toBe("E_ROUTE");
+    expect(push.calls).toEqual([{ clientId: "console-1", pushToken: "push-tok-1" }]);
+
+    device.close();
+  });
+
+  it("delivers queued envelopes after target re-registers", async () => {
+    const relay = await startRelay();
+    const { device, consoleClient } = await registerAndPair(
+      relay,
+      "device-1",
+      "console-1",
+      { pushToken: "push-tok-1" },
+    );
+
+    consoleClient.close();
+    await new Promise((r) => setTimeout(r, 30));
+
+    device.send({
+      v: 1,
+      type: "relay.route",
+      id: "r-queued",
+      from: "device-1",
+      to: "console-1",
+      ts: Date.now(),
+      payload: { to: "console-1", ciphertext: "abc", nonce: "xyz" },
+    });
+    const err = await device.next("relay.error");
+    expect((err.payload as { code: string }).code).toBe("E_ROUTE");
+
+    const consoleAgain = await TestClient.connect(relay.port);
+    consoleAgain.send(
+      registerEnvelope("reg-c-again", "console-1", { consoleId: "console-1" }),
+    );
+    await consoleAgain.next("relay.register.ack");
+
+    const routed = await consoleAgain.next("relay.route");
+    expect(routed.id).toBe("r-queued");
+    expect(routed.payload).toEqual({ to: "console-1", ciphertext: "abc", nonce: "xyz" });
+
+    device.close();
+    consoleAgain.close();
+  });
+
+  it("push provider failure does not break queueing or route error", async () => {
+    const boom: PushProvider = {
+      async wake(): Promise<"failed"> {
+        throw new Error("push boom");
+      },
+    };
+    const relay = await startRelay({ push: boom });
+    const { device, consoleClient } = await registerAndPair(
+      relay,
+      "device-1",
+      "console-1",
+      { pushToken: "push-tok-1" },
+    );
+
+    consoleClient.close();
+    await new Promise((r) => setTimeout(r, 30));
+
+    device.send({
+      v: 1,
+      type: "relay.route",
+      id: "r-boom",
+      from: "device-1",
+      to: "console-1",
+      ts: Date.now(),
+      payload: { to: "console-1", ciphertext: "abc", nonce: "xyz" },
+    });
+
+    const err = await device.next("relay.error");
+    expect((err.payload as { code: string }).code).toBe("E_ROUTE");
+
+    const consoleAgain = await TestClient.connect(relay.port);
+    consoleAgain.send(
+      registerEnvelope("reg-c-again", "console-1", { consoleId: "console-1" }),
+    );
+    await consoleAgain.next("relay.register.ack");
+
+    const routed = await consoleAgain.next("relay.route");
+    expect(routed.id).toBe("r-boom");
+    expect(routed.payload).toEqual({ to: "console-1", ciphertext: "abc", nonce: "xyz" });
+
+    device.close();
+    consoleAgain.close();
   });
 
   it("rejects invalid envelopes with E_BAD_ENVELOPE", async () => {

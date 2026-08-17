@@ -171,6 +171,35 @@ describe("RelayClient", () => {
     expect(client.isOnline()).toBe(true);
   });
 
+  it("includes pushToken in register payload when configured", async () => {
+    const client = new RelayClient({
+      url: "ws://relay.example:4090",
+      clientId: "console-c",
+      kind: "console",
+      wsImpl: FakeWs.fresh(),
+      pushToken: "ExponentPushToken[test-token-1]",
+    });
+    const p = client.connect();
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+
+    const register = JSON.parse(ws.sent[1]!) as {
+      type: string;
+      payload: { consoleId: string; pushToken?: string };
+      id: string;
+    };
+    expect(register).toMatchObject({
+      type: "relay.register",
+      payload: {
+        consoleId: "console-c",
+        pushToken: "ExponentPushToken[test-token-1]",
+      },
+    });
+
+    ws.recv(registerAck(register.id, "console-c", { credential: "cred-1", ttlMs: 900_000 }));
+    await p;
+  });
+
   it("heartbeat sends relay.heartbeat from clientId to relay", async () => {
     const { client, ws } = await connectedClient();
 

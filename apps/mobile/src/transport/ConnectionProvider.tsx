@@ -24,6 +24,7 @@ import {
 } from "./pipeline";
 import { isRelayUrl, toRelayWsUrl } from "./relayMode";
 import { requestInterrupt } from "./interrupt";
+import { getExpoPushToken } from "../notify/pushToken";
 import { notificationService } from "../notify/expoAdapter";
 import { notificationPrefsStore } from "../notify/notificationPrefsStoreAdapter";
 import { hostStore } from "../discovery/hostStoreAdapter";
@@ -172,8 +173,12 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     void hostStore.add(host, relayMode ? 0 : port, undefined, token);
     void autoReconnectStore.setEnabled(true); // 手动连接即恢复自动重连
 
+    // M3.3：relay 模式上报 Expo push token（LAN 模式不调用）。
+    // 获取失败/超时降级为 undefined，不阻塞连接。
+    const pushToken = relayMode ? ((await getExpoPushToken()) ?? undefined) : undefined;
+
     const transport = relayMode
-      ? new RelayTransport({ deviceId: getRelayDeviceId() })
+      ? new RelayTransport({ deviceId: getRelayDeviceId(), pushToken })
       : new LanTransport({
           onDescribe: (d) => {
             setDescribe(d);

@@ -51,6 +51,8 @@ export interface RelayClientOptions {
   peerPublicKeyJwk?: JsonWebKey;
   /** 注入 WebCrypto（缺省 globalThis.crypto）。 */
   crypto?: Crypto;
+  /** M3.3：APNs/FCM 推送 token，注册时上报给 relay 用于离线唤醒。 */
+  pushToken?: string;
 }
 
 /** console 注册负载（M3.1）：server 用 consoleId 推断 kind，platform 仅记录。 */
@@ -60,6 +62,7 @@ interface ConsoleRegisterPayload {
   platform: "node";
   protocolVersion: number;
   publicKey: null;
+  pushToken?: string;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -298,6 +301,9 @@ export class RelayClient {
       platform: "node",
       protocolVersion: RELAY_ENVELOPE_VERSION,
       publicKey: null,
+      ...(this.opts.pushToken !== undefined
+        ? { pushToken: this.opts.pushToken }
+        : {}),
     };
     // 运行期 server 兼容 consoleId/kind/"node" platform；RelayRegistration 的
     // 静态类型以 device 视角为主，这里按 M3.1 console 接线桩负载透传。

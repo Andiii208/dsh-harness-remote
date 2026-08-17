@@ -233,3 +233,12 @@ export class RelayTransport implements Transport {
 - `harness-plugin/src/relay-client.ts` 同步接入 `seal/open`（配置密钥时）。
 - relay 服务器只读 `payload.to`，`ciphertext/nonce` 透明转发，日志仅元数据（`relay-server.test.ts` 增补 2 用例）。
 - `docs/SECURITY.md` 已更新 M3 状态为「E2E 已实现」。
+
+### M3.3 推送与离线队列（2026-08-17 已实现）
+
+- `relay/src/push.ts`：`PushProvider` 接口 + `MockPushProvider`（可编排成功/失败）+ `NoopPushProvider`；真实 APNs/FCM 另开设备/账号窗口。
+- `relay/src/queue.ts`：`createOfflineQueue`（TTL 默认 2 分钟，每 peer 上限 50，满丢最旧；`drain`/`expire` 纯函数）。
+- relay 服务器：目标离线时 route 入队 + 有 pushToken 则调用 push provider（失败降级不抛），仍回 E_ROUTE；目标重新 register 后 drain FIFO 投递。
+- `RelayTransportOptions.pushToken` / `RelayClientOptions.pushToken`：注册时上报 push token。
+- `apps/mobile/src/notify/pushToken.ts`：Expo push token 守卫获取（Expo Go/Web/模块不可用/超时 2s 一律降级 null）；relay 模式连接时传入 RelayTransport。
+- 测试：relay 18（push-queue 6 + server 12）、protocol 97、mobile 106、harness-plugin 21；全仓 build/typecheck/test 全绿。

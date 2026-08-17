@@ -279,6 +279,37 @@ describe("RelayTransport.connect", () => {
     });
   });
 
+  it("includes pushToken in relay.register payload when configured", async () => {
+    const transport = new RelayTransport({
+      wsImpl: FakeWs.fresh(),
+      deviceId: "device-a",
+      pushToken: "push-tok-1",
+    });
+    const p = transport.connect({ host: "relay.example", port: 4090 }, {});
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+
+    expect(ws.sent).toHaveLength(2);
+    const hello = JSON.parse(ws.sent[0]!) as { id: string };
+    const register = JSON.parse(ws.sent[1]!) as {
+      id: string;
+      payload: { deviceId: string; pushToken?: string };
+    };
+    expect(register.payload).toMatchObject({
+      deviceId: "device-a",
+      pushToken: "push-tok-1",
+    });
+
+    ws.recv(relayAck("relay.hello.ack", hello.id, "device-a"));
+    ws.recv(
+      relayAck("relay.register.ack", register.id, "device-a", {
+        credential: "cred-1",
+        ttlMs: 900_000,
+      }),
+    );
+    await p;
+  });
+
   it("appends auth.token as credential query parameter", async () => {
     const transport = new RelayTransport({
       wsImpl: FakeWs.fresh(),

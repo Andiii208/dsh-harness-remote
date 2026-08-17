@@ -102,6 +102,8 @@ export interface RelayTransportOptions {
   /** Optional default relay base URL (ws://host:port or wss://host[:port]). */
   relayUrl?: string;
   deviceId?: string;
+  /** M3.3: APNs/FCM push token reported to the relay during register. */
+  pushToken?: string;
   /** M3.1 dev target: peer id used as the relay.route `to` for data-plane traffic. */
   peerId?: string;
   /** M3.2: local ECDH private JWK (kept by the client, never sent to relay). */
@@ -630,6 +632,7 @@ export class RelayTransport implements Transport {
               deviceId: from,
               publicKey: null,
               protocolVersion: RELAY_ENVELOPE_VERSION,
+              ...(this.opts.pushToken ? { pushToken: this.opts.pushToken } : {}),
             }),
           );
         } catch (err) {

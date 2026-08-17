@@ -23,6 +23,8 @@ import {
   type RelayErrorCode,
 } from "@dsh-remote/protocol";
 import { createCredentialService } from "./credential.js";
+import { createOfflineQueue, type OfflineQueue } from "./queue.js";
+import type { PushProvider } from "./push.js";
 import { createRelayStore, type ClientKind, type RelayStore } from "./store.js";
 
 export interface RelayServerOptions {
@@ -30,11 +32,16 @@ export interface RelayServerOptions {
   credentialSecret?: string;
   /** TTL for credentials issued by `relay.register`. Defaults to 12h. */
   credentialTtlMs?: number;
+  /** Optional push provider used to wake offline peers. */
+  push?: PushProvider;
+  /** Offline queue TTL in ms. Defaults to 2 minutes. */
+  queueTtlMs?: number;
 }
 
 export interface RelayServer {
   server: Server;
   store: RelayStore;
+  queue: OfflineQueue;
   host: string;
   readonly port: number;
   start(port?: number): Promise<void>;
@@ -89,6 +96,8 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
   const credentialTtlMs = options.credentialTtlMs ?? 12 * 60 * 60 * 1000;
   const credentials = createCredentialService(options.credentialSecret);
   const store = createRelayStore();
+  const queue = createOfflineQueue({ ttlMs: options.queueTtlMs ?? 2 * 60 * 1000 });
+  const pushProvider = options.push;
 
   const socketAuth = new Map<WebSocket, string>();
   const onlineSockets = new Map<string, Set<WebSocket>>();
@@ -202,6 +211,13 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
         });
         logLine("tx", ack);
         sendTo(ws, ack);
+
+        // M3.3: after authentication deliver any envelopes that were queued
+        // for this client while it was offline (FIFO per peer).
+        for (const queued of queue.drain(clientId)) {
+          logLine("tx", queued);
+          sendTo(ws, queued);
+        }
         break;
       }
 
@@ -274,6 +290,20 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
           }
         }
         if (!delivered) {
+          // M3.3: queue the original envelope for the offline peer and fire
+          // the push provider (if any) without blocking or throwing.
+          queue.enqueue(to, env);
+          const target = store.getClient(to);
+          if (pushProvider && target?.pushToken) {
+            try {
+              void pushProvider.wake(to, target.pushToken).catch(() => {
+                // Push failures are intentionally swallowed — routing/queue
+                // behavior must not change when the pusher misbehaves.
+              });
+            } catch {
+              // Synchronous throw from a misbehaving provider: degrade silently.
+            }
+          }
           sendError(ws, env.id, "E_ROUTE", "target offline", authClientId);
         }
         break;
@@ -344,6 +374,7 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
   const relay: RelayServer = {
     server,
     store,
+    queue,
     host,
     get port() {
       return actualPort;
