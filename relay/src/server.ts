@@ -58,6 +58,8 @@ export interface RelayServerOptions {
   rateLimit?: RelayRateLimitOptions;
   /** Audit sink. Defaults to a one-line JSON console.log (metadata only). */
   audit?: (entry: RelayAuditEntry) => void;
+  /** Optional persistent store (e.g. createSqliteRelayStore). Defaults to in-memory. */
+  store?: RelayStore;
 }
 
 export interface RelayServer {
@@ -117,7 +119,7 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
   const host = options.host ?? "127.0.0.1";
   const credentialTtlMs = options.credentialTtlMs ?? 12 * 60 * 60 * 1000;
   const credentials = createCredentialService(options.credentialSecret);
-  const store = createRelayStore();
+  const store = options.store ?? createRelayStore();
   const queue = createOfflineQueue({ ttlMs: options.queueTtlMs ?? 2 * 60 * 1000 });
   const pushProvider = options.push;
   const rateLimiter = createRateLimiter({

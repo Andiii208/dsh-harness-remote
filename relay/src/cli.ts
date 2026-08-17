@@ -9,21 +9,23 @@ import { createRelayServer } from "./server.js";
 const HELP = `relay — DSH relay control plane (M3.1 MVP)
 
 Usage:
-  relay [--port <n>] [--host <h>]
+  relay [--port <n>] [--host <h>] [--store <sqlite-path>]
 
 Options:
-  --port <n>  listen port (default 4090)
-  --host <h>  bind host (default 127.0.0.1)
-  --help      show this help
+  --port <n>     listen port (default 4090)
+  --host <h>     bind host (default 127.0.0.1)
+  --store <path> persist registry/pairings to a SQLite file (default: in-memory)
+  --help         show this help
 `;
 
-function parse(argv: string[]): { port: number; host: string; help: boolean } {
-  const out = { port: 4090, host: "127.0.0.1", help: false };
+function parse(argv: string[]): { port: number; host: string; help: boolean; store?: string } {
+  const out = { port: 4090, host: "127.0.0.1", help: false, store: undefined as string | undefined };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--help" || a === "-h") out.help = true;
     else if (a === "--port") out.port = Number.parseInt(argv[++i] ?? "", 10);
     else if (a === "--host") out.host = argv[++i] ?? "127.0.0.1";
+    else if (a === "--store") out.store = argv[++i];
   }
   return out;
 }
@@ -39,7 +41,12 @@ async function main(argv: string[]): Promise<number> {
     return 2;
   }
 
-  const relay = createRelayServer({ host: opts.host });
+  const serverOpts: Parameters<typeof createRelayServer>[0] = { host: opts.host };
+  if (opts.store) {
+    const { createSqliteRelayStore } = await import("./sqlite-store.js");
+    serverOpts.store = createSqliteRelayStore(opts.store);
+  }
+  const relay = createRelayServer(serverOpts);
   await relay.start(opts.port);
   console.log(`relay listening on http://${opts.host}:${relay.port}`);
   console.log("logging: metadata only (no payload)");
