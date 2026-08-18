@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ChildProcess } from "node:child_process";
 import {
@@ -45,8 +46,9 @@ describe("cloudflaredAsset", () => {
 describe("candidateBinPaths", () => {
   it("searches PATH then plugin bin dir", () => {
     const paths = candidateBinPaths("C:\\Users\\me\\.dsh", "win32", "C:\\bin;D:\\tools", ";");
-    expect(paths[0]).toBe("C:\\bin\\cloudflared.exe");
-    expect(paths.some((p) => p.includes("dsh-harness-remote\\bin\\cloudflared.exe"))).toBe(true);
+    // 实现用 node:path.join 拼接，Windows/Linux 的路径分隔符不同；用同一个 join 生成期望值。
+    expect(paths[0]).toBe(join("C:\\bin", "cloudflared.exe"));
+    expect(paths.some((p) => p.includes(join("dsh-harness-remote", "bin", "cloudflared.exe")))).toBe(true);
   });
 });
 
