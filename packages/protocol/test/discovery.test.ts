@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildPairPayload, parsePairPayload, probeHost } from "../src/discovery.js";
+import {
+  buildPairPayload,
+  buildRemotePairPayload,
+  parsePairPayload,
+  parseRemotePairPayload,
+  probeHost,
+} from "../src/discovery.js";
 
 function fakeFetch(ok: boolean, body: unknown): typeof fetch {
   return (async () => ({ ok, json: async () => body } as unknown as Response)) as unknown as typeof fetch;
@@ -61,5 +67,27 @@ describe("pair payload", () => {
     expect(parsePairPayload("dshremote://pair?port=1")).toBeNull();
     expect(parsePairPayload("dshremote://pair?host=h&port=0")).toBeNull();
     expect(parsePairPayload("not a url")).toBeNull();
+  });
+});
+
+describe("remote pair payload", () => {
+  it("round-trips addr and 6-digit code", () => {
+    const url = buildRemotePairPayload({ addr: "relay.example.com", code: "483920" });
+    expect(parseRemotePairPayload(url)).toEqual({ addr: "relay.example.com", code: "483920" });
+  });
+
+  it("omits empty or non-6-digit code", () => {
+    expect(parseRemotePairPayload(buildRemotePairPayload({ addr: "relay.example.com" }))).toEqual({
+      addr: "relay.example.com",
+    });
+    expect(parseRemotePairPayload("dshremote://remote?addr=h&code=123")).toEqual({ addr: "h" });
+    expect(parseRemotePairPayload("dshremote://remote?addr=h&code=abcdef")).toEqual({ addr: "h" });
+  });
+
+  it("rejects invalid urls", () => {
+    expect(parseRemotePairPayload("https://remote?addr=h")).toBeNull();
+    expect(parseRemotePairPayload("dshremote://pair?addr=h")).toBeNull();
+    expect(parseRemotePairPayload("dshremote://remote")).toBeNull();
+    expect(parseRemotePairPayload("not a url")).toBeNull();
   });
 });

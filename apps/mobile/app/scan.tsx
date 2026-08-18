@@ -3,8 +3,9 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { parsePairPayload } from "@dsh-remote/protocol";
+import { parsePairPayload, parseRemotePairPayload } from "@dsh-remote/protocol";
 import { useConnection } from "../src/transport/ConnectionProvider";
+import { toRelayWsUrl } from "../src/transport/relayMode";
 import { hostStore } from "../src/discovery/hostStoreAdapter";
 import { tokenStore } from "../src/data/secureStoreAdapter";
 import { font, radius, space, type ThemeColors } from "../src/theme";
@@ -30,14 +31,27 @@ export default function ScanScreen() {
 
   const onScanned = async (data: string) => {
     if (!scanning) return;
+    setScanning(false);
+
+    // R4：远程连接二维码（dshremote://remote?addr=...&code=...）优先。
+    const remote = parseRemotePairPayload(data);
+    if (remote) {
+      void haptic("success");
+      setError("");
+      void (async () => {
+        await connect(toRelayWsUrl(remote.addr), 0, undefined, remote.code);
+        router.replace("/sessions");
+      })();
+      return;
+    }
+
+    // P2：同一 Wi-Fi 的配对二维码（dshremote://pair?host&port&token）。
     const payload = parsePairPayload(data);
     if (!payload) {
-      setError("无法识别的配对码——需要 dshremote://pair 格式");
-      setScanning(false);
+      setError("无法识别的二维码——需要 dshremote://remote 或 dshremote://pair 格式");
       setTimeout(() => setScanning(true), 1500);
       return;
     }
-    setScanning(false);
     void haptic("success");
     if (payload.token) await tokenStore.set(payload.token);
     await hostStore.add(payload.host, payload.port, undefined, payload.token);
@@ -73,8 +87,8 @@ export default function ScanScreen() {
           <View style={[styles.corner, styles.cornerBR]} />
         </View>
         <View style={styles.overlay}>
-          <Text style={styles.overlayTitle}>扫描配对二维码</Text>
-          <Text style={styles.overlayHint}>配对码由 dsh-remote 插件生成</Text>
+          <Text style={styles.overlayTitle}>扫描连接二维码</Text>
+          <Text style={styles.overlayHint}>对准电脑上 dsh-remote 显示的二维码</Text>
           {error.length > 0 && <Text style={styles.error}>{error}</Text>}
           {!permission?.granted && (
             <Button label="授权相机权限" onPress={() => void requestPermission()} full />

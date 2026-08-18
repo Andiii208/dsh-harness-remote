@@ -16,6 +16,12 @@ export interface PairPayload {
   token?: string;
 }
 
+/** R1/R4 远程连接扫码载荷：dshremote://remote?addr=...&code=... */
+export interface RemotePairPayload {
+  addr: string;
+  code?: string;
+}
+
 export interface ProbeOptions {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
@@ -75,6 +81,31 @@ export function parsePairPayload(url: string): PairPayload | null {
     if (!host || !Number.isInteger(port) || port <= 0 || port > 65535) return null;
     const token = u.searchParams.get("token") ?? undefined;
     return { host, port, token: token && token.length > 0 ? token : undefined };
+  } catch {
+    return null;
+  }
+}
+
+/** 构造远程连接二维码/深链：dshremote://remote?addr=...&code=... */
+export function buildRemotePairPayload(p: RemotePairPayload): string {
+  const q = new URLSearchParams();
+  q.set("addr", p.addr);
+  if (p.code) q.set("code", p.code);
+  return `dshremote://remote?${q.toString()}`;
+}
+
+/** 解析远程连接二维码/深链；格式不合法返回 null。 */
+export function parseRemotePairPayload(url: string): RemotePairPayload | null {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "dshremote:" || u.hostname !== "remote") return null;
+    const addr = u.searchParams.get("addr");
+    if (!addr || addr.trim().length === 0) return null;
+    const code = u.searchParams.get("code") ?? undefined;
+    return {
+      addr: addr.trim(),
+      ...(code && /^\d{6}$/.test(code) ? { code } : {}),
+    };
   } catch {
     return null;
   }

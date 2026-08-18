@@ -9,6 +9,8 @@
 import { networkInterfaces } from "node:os";
 import { pathToFileURL } from "node:url";
 import { createRelayServer } from "relay";
+import qrcode from "qrcode-terminal";
+import { buildRemotePairPayload } from "@dsh-remote/protocol";
 import { RelayClient } from "./relay-client.js";
 
 const HELP = `dsh-remote — DeepSeek Harness 手机视口（电脑端插件）
@@ -28,15 +30,16 @@ function lanIp(): string | undefined {
   return undefined;
 }
 
-function card(relayUrl: string, code: string, via: "lan" | "loopback"): string {
-  const line = "─".repeat(38);
+function card(relayHost: string, code: string, via: "lan" | "loopback"): string {
+  const line = "─".repeat(36);
   return [
     "",
     `┌${line}┐`,
-    `│  🐋 harness remote 远程模式已开启       │`,
-    `│  relay:  ${relayUrl.padEnd(30)}│`,
-    `│  配对码: ${code.padEnd(33)}│`,
-    `│  手机打开 App 输入以上地址和码            │`,
+    `│  ✅ 远程连接已开启                    │`,
+    `│  地址：  ${relayHost.padEnd(26)}│`,
+    `│  6 位码： ${code.padEnd(29)}│`,
+    `│  手机打开 App 扫下面的二维码          │`,
+    `│  或选择「远程连接」手动输入            │`,
     `└${line}┘`,
     via === "loopback" ? "⚠ 未检测到局域网 IP，请在同一电脑上的模拟器/浏览器使用" : "",
   ].filter(Boolean).join("\n");
@@ -67,7 +70,6 @@ async function main(argv: string[]): Promise<number> {
 
   const ip = lanIp();
   const relayHost = ip ?? "127.0.0.1";
-  const relayUrl = `ws://${relayHost}:${port}`;
 
   const clientId = `console-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   const client = new RelayClient({
@@ -94,8 +96,11 @@ async function main(argv: string[]): Promise<number> {
   await client.connect();
   const code = await client.requestPairCode();
 
-  console.log(card(relayUrl, code, ip ? "lan" : "loopback"));
-  console.log("Ctrl+C 关闭远程访问。");
+  console.log(card(relayHost, code, ip ? "lan" : "loopback"));
+  const payload = buildRemotePairPayload({ addr: relayHost, code });
+  console.log("\n📱 手机扫码连接：\n");
+  qrcode.generate(payload, { small: true });
+  console.log("\nCtrl+C 关闭远程访问。");
 
   return 0;
 }
