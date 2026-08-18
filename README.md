@@ -1,11 +1,11 @@
-# dsh-remote — 手机远程连接 DeepSeek Harness
+# dsh-harness-remote — 手机远程连接 DeepSeek Harness
 
-[![CI](https://github.com/Andiii208/dsh-remote/actions/workflows/ci.yml/badge.svg)](https://github.com/Andiii208/dsh-remote/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/Andiii208/dsh-remote)](https://github.com/Andiii208/dsh-remote/releases)
+[![CI](https://github.com/Andiii208/dsh-harness-remote/actions/workflows/ci.yml/badge.svg)](https://github.com/Andiii208/dsh-harness-remote/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Andiii208/dsh-harness-remote)](https://github.com/Andiii208/dsh-harness-remote/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![DeepSeek Harness](https://img.shields.io/badge/DSH%20baseline-0.1.0--rc.5-black.svg)](docs/COMPATIBILITY.md)
 
-dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness（DSH），离开电脑后也能盯住 agent、接收通知、一键审批、回答提问、继续对话。对标 Claude Code Remote Control 的定位，但面向 DSH 开源生态，代码与数据都留在用户本机，手机只是视口。
+dsh-harness-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness（DSH），离开电脑后也能盯住 agent、接收通知、一键审批、回答提问、继续对话。对标 Claude Code Remote Control 的定位，但面向 DSH 开源生态，代码与数据都留在用户本机，手机只是视口。
 
 - **跨端**：React Native + Expo（TypeScript），iOS + Android 一套代码，EAS 云构建无需 Mac 即可出 iOS 包。
 - **审批流程**：会话列表待办横幅直达审批列表页，多选批量批准/拒绝、提问批量跳过；处理历史按时间倒序可查；通知点击深链直达 `approval/:rpcId`。
@@ -14,7 +14,7 @@ dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness�
 - **远程优先首屏（R1）**：App 首屏就是「远程连接我的电脑」，只填电脑上显示的连接地址（自动补全 `ws://…:4090`）+ 可选 6 位码；同一 Wi-Fi/扫码等低频能力收进「更多连接方式」，不做专业术语展示。
 - **电脑端一键远程（R4）**：`dsh-remote remote` 自动启动内置 relay（4090 被占用自动选空闲端口）→ 自动探测并桥接本机 DSH API（`DSH_WEB_URL` / `127.0.0.1:56734` / `127.0.0.1:3080`）→ 注册 console → 取一次性 6 位配对码 → 打印小白卡片 + 远程二维码（含端口）+ 扫码载荷；手机配对后即可看到 DSH 会话、发消息、审批。Windows 用户可直接双击 `dsh-remote-remote.bat`，不用敲命令。
 - **LAN 起步、传输可插拔**：自动发现 + 二维码配对 + 最近主机一键重连，也可以手动直连局域网内的 DSH（`host:3080`）；传输层抽象为 `Transport` 接口，连接页输入 `relay://` / `ws://` URL 即切换 Relay 模式（M3 中继：控制面 + E2E 加密 + 离线队列，自部署不托管）。
-- **插件能力面（R2）**：协议新增 `plugin.list` / `plugin.exec` 契约；App 会话长按菜单动态展示用户 DSH 插件指令，设置页插件入口进入插件列表（命令 + 设置，单屏克制）。dsh-remote 自身不做插件宿主——用户 DIY 插件通过 DSH 插件系统 + R2 能力面在手机端呈现。
+- **插件能力面（R2）**：协议新增 `plugin.list` / `plugin.exec` 契约；App 会话长按菜单动态展示用户 DSH 插件指令，设置页插件入口进入插件列表（命令 + 设置，单屏克制）。dsh-harness-remote 自身不做插件宿主——用户 DIY 插件通过 DSH 插件系统 + R2 能力面在手机端呈现。
 - **设置迁移（R3）**：设置页分「连接 / 模型与权限 / 插件 / 显示 / 关于」；`host.settings.get/set` 能力可探测（读不到自动隐藏）；模型选择、思考强度、上下文容量、审批权限状态；App 本地字体大小；**外观：浅色（默认）/ 深色 / 跟随系统**；检查更新走 GitHub Releases 对比。
 - **低门槛连接（P2）**：首启 3 步引导 → 扫码电脑上的配对二维码即连（`dshremote://pair` 深链）；同一局域网点「自动发现」列出可用实例；冷启动自动重连最近主机。
 - **协议对齐**：纯 TS 协议包（`packages/protocol`，零 RN 依赖）与 DSH 原生类型零失真对齐；宽容解码，线上层永不因未知数据崩溃。
@@ -31,7 +31,7 @@ dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness�
 ## 仓库结构
 
 ```
-dsh-remote/
+dsh-harness-remote/
 ├── apps/
 │   └── mobile/            # Expo RN App（iOS + Android）
 │       ├── app/           # expo-router 页面：连接、会话列表、聊天、审批列表/详情/历史、设置
