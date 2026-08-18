@@ -1,5 +1,8 @@
 # PROGRESS
 
+## 仓库更名（2026-08-18）
+- GitHub 仓库由 `Andiii208/dsh-remote` 更名为 **`Andiii208/dsh-harness-remote`**；README 标题/badge/产品名与 App 更新检查、设置页手册链接、插件设置页下载链接已同步新 URL；本地 git remote 已更新。
+
 ## Phase 4（v0.3 远程优先）：i18n 与发布质量（2026-08-18）
 - i18n 基础设施：`src/i18n/`（translations.ts / index.tsx / languagePreferenceStore(+Adapter)）。默认 zh-CN，支持 en，Provider 挂 root；第一批覆盖 onboarding + 连接页文案，key 集合 parity 单测保证。
 - 更新闭环：设置页「检查更新」解析 GitHub Release 资产，优先跳转 APK 下载；新增电脑端插件更新提示（`dsh plugin --profile web update dsh-harness-remote --latest -w`）。
