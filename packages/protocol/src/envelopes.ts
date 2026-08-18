@@ -3,8 +3,9 @@
  * Pure TS, zero platform APIs (works in browser / RN / node).
  */
 
-/** POST /api/<method> unary call. */
+/** POST /api/<method> unary call. Real DSH carries `type: "client-request"`. */
 export interface ClientRequest {
+  type?: "client-request";
   rpcId: string;
   method: string;
   payload: unknown;
@@ -18,12 +19,14 @@ export interface RpcErrorInfo {
 }
 
 export interface ServerResponseOk {
+  type?: "server-response";
   rpcId: string;
   ok: true;
   result: unknown;
 }
 
 export interface ServerResponseErr {
+  type?: "server-response";
   rpcId: string;
   ok: false;
   error: RpcErrorInfo;
@@ -34,13 +37,15 @@ export type ServerResponse = ServerResponseOk | ServerResponseErr;
 
 /** Server-initiated request (approval / question); answered via /api/respond. */
 export interface ServerRequest {
+  type?: "server-request";
   rpcId: string;
   kind: string;
   payload: unknown;
 }
 
-/** Answer to a server-request. */
+/** Answer to a server-request. Real DSH carries `type: "client-response"`. */
 export interface ClientResponse {
+  type?: "client-response";
   rpcId: string;
   result: unknown;
 }

@@ -36,6 +36,10 @@ export interface RpcClientOptions {
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 export class RpcClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
@@ -55,29 +59,75 @@ export class RpcClient {
   /** POST /api/<method> — unary call. */
   async unary(method: string, payload: unknown): Promise<RpcResult> {
     const rpcId = makeRpcId();
-    const envelope: ClientRequest = { rpcId, method, payload };
+    const envelope: ClientRequest = { type: "client-request", rpcId, method, payload };
     return this.post(`/api/${method}`, envelope);
   }
 
-  /** POST /api/session.interrupt — request the host to interrupt a live stream. */
+  /**
+   * POST /api/session.cancel — request the host to interrupt a live stream.
+   * DSH rc.7 implements `session.cancel`; older fixtures used `session.interrupt`.
+   * We target the real host method and keep legacy mock fixtures working by
+   * falling back when the first call reports a missing method.
+   */
   async interrupt(sessionId: string): Promise<RpcResult> {
-    return this.unary("session.interrupt", { sessionId });
+    try {
+      return await this.unary("session.cancel", { sessionId });
+    } catch (err) {
+      if (err instanceof RpcError && (err.code === "HTTP_404" || err.code === "NOT_FOUND")) {
+        return this.unary("session.interrupt", { sessionId });
+      }
+      throw err;
+    }
   }
 
   /** POST /api/respond — answer a server-request (approval / question). */
   async respond(rpcId: string, result: unknown): Promise<void> {
-    const body = { rpcId, result };
-    await this.post("/api/respond", body);
+    const body = { type: "client-response" as const, rpcId, result };
+    const data = await this.postRaw("/api/respond", body);
+    const env = decodeEnvelope(data);
+    if ("ok" in env && typeof env.ok === "boolean") {
+      // Legacy mock response ({ rpcId, ok: true, result: null }).
+      if (env.ok) return;
+      const err = env.error ?? { code: "UnknownError", message: "unknown error" };
+      throw new RpcError(err.code, err.message, err.details);
+    }
+    if (isRecord(data) && data.accepted === false) {
+      const reason = typeof data.reason === "string" ? data.reason : "bad-response";
+      throw new RpcError(
+        reason.replace(/-/g, "_").toUpperCase(),
+        `respond rejected: ${reason}`,
+      );
+    }
+    if (isRecord(data) && data.accepted === true) return;
+    throw new RpcError("BAD_RESPONSE", "response was not a respond receipt", data);
   }
 
   /** POST /api/<namespace>/<method> — typert gateway (commands/*, goals/*, …). */
   async call(namespace: string, method: string, payload: unknown): Promise<RpcResult> {
     const rpcId = makeRpcId();
-    const body = { rpcId, method, payload };
+    const body = { type: "client-request" as const, rpcId, method, payload };
     return this.post(`/api/${namespace}/${method}`, body);
   }
 
   private async post(path: string, body: { rpcId: string }): Promise<RpcResult> {
+    const data = await this.postRaw(path, body);
+    const env = decodeEnvelope(data);
+    if ("ok" in env && typeof env.ok === "boolean") {
+      if (env.rpcId !== body.rpcId) {
+        throw new RpcError("RPC_ID_MISMATCH", "response rpcId does not echo the request rpcId", {
+          expected: body.rpcId,
+          got: env.rpcId,
+        });
+      }
+      if (env.ok) return { rpcId: env.rpcId, ok: true, result: env.result };
+      const err = env.error ?? { code: "UnknownError", message: "unknown error" };
+      throw new RpcError(err.code, err.message, err.details);
+    }
+    // No server-response envelope — tolerate and degrade.
+    throw new RpcError("BAD_RESPONSE", "response was not a server-response envelope", data);
+  }
+
+  private async postRaw(path: string, body: unknown): Promise<unknown> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
     let res: Response;
@@ -100,27 +150,11 @@ export class RpcClient {
       clearTimeout(timer);
     }
 
-    let data: unknown;
     try {
-      data = await res.json();
+      return await res.json();
     } catch {
       // Non-JSON body: HTTP status is only a carrier — surface as typed error.
       throw new RpcError(`HTTP_${res.status}`, `unexpected response (status ${res.status})`);
     }
-
-    const env = decodeEnvelope(data);
-    if ("ok" in env && typeof env.ok === "boolean") {
-      if (env.rpcId !== body.rpcId) {
-        throw new RpcError("RPC_ID_MISMATCH", "response rpcId does not echo the request rpcId", {
-          expected: body.rpcId,
-          got: env.rpcId,
-        });
-      }
-      if (env.ok) return { rpcId: env.rpcId, ok: true, result: env.result };
-      const err = env.error ?? { code: "UnknownError", message: "unknown error" };
-      throw new RpcError(err.code, err.message, err.details);
-    }
-    // No server-response envelope — tolerate and degrade.
-    throw new RpcError("BAD_RESPONSE", "response was not a server-response envelope", data);
   }
 }

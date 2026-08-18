@@ -33,6 +33,11 @@ describe("RpcClient.unary", () => {
     expect(res.ok).toBe(true);
     expect(res.result).toEqual({ name: "dsh" });
     expect(calls[0]?.url).toBe("http://h:3080/api/host.describe");
+    expect(calls[0]?.body).toMatchObject({
+      type: "client-request",
+      method: "host.describe",
+      payload: {},
+    });
   });
 
   it("throws RpcError with typed code on ok:false", async () => {
@@ -115,7 +120,11 @@ describe("RpcClient.respond & call", () => {
     });
     await client.respond("req-1", { approved: true });
     expect(calls[0]?.url).toBe("http://h:3080/api/respond");
-    expect(calls[0]?.body).toMatchObject({ rpcId: "req-1", result: { approved: true } });
+    expect(calls[0]?.body).toMatchObject({
+      type: "client-response",
+      rpcId: "req-1",
+      result: { approved: true },
+    });
   });
 
   it("posts to typert gateway path", async () => {
@@ -134,24 +143,46 @@ describe("RpcClient.respond & call", () => {
 });
 
 describe("RpcClient.interrupt", () => {
-  it("posts session.interrupt to /api/session.interrupt with the sessionId payload", async () => {
+  it("posts session.cancel to /api/session.cancel with the sessionId payload", async () => {
     const calls: Array<{ url: string; body: unknown }> = [];
     const client = new RpcClient({
       baseUrl: "http://h:3080",
       fetchImpl: (async (url, init) => {
         calls.push({ url: String(url), body: JSON.parse(String(init?.body)) });
         const req = JSON.parse(String(init?.body)) as { rpcId: string };
+        return jsonResponse({ rpcId: req.rpcId, ok: true, result: { accepted: true } });
+      }) as typeof fetch,
+    });
+    const res = await client.interrupt("s1");
+    expect(res.ok).toBe(true);
+    expect(res.result).toEqual({ accepted: true });
+    expect(calls[0]?.url).toBe("http://h:3080/api/session.cancel");
+    expect(calls[0]?.body).toMatchObject({
+      type: "client-request",
+      method: "session.cancel",
+      payload: { sessionId: "s1" },
+    });
+  });
+
+  it("falls back to session.interrupt when session.cancel is missing", async () => {
+    const calls: Array<{ url: string }> = [];
+    const client = new RpcClient({
+      baseUrl: "http://h:3080",
+      fetchImpl: (async (url, init) => {
+        calls.push({ url: String(url) });
+        if (String(url).includes("/api/session.cancel")) {
+          return new Response("not found", { status: 404 });
+        }
+        const req = JSON.parse(String(init?.body)) as { rpcId: string };
         return jsonResponse({ rpcId: req.rpcId, ok: true, result: { interrupted: true } });
       }) as typeof fetch,
     });
     const res = await client.interrupt("s1");
     expect(res.ok).toBe(true);
-    expect(res.result).toEqual({ interrupted: true });
-    expect(calls[0]?.url).toBe("http://h:3080/api/session.interrupt");
-    expect(calls[0]?.body).toMatchObject({
-      method: "session.interrupt",
-      payload: { sessionId: "s1" },
-    });
+    expect(calls.map((c) => c.url)).toEqual([
+      "http://h:3080/api/session.cancel",
+      "http://h:3080/api/session.interrupt",
+    ]);
   });
 
   it("throws RpcError with typed code when the host rejects the interrupt", async () => {
@@ -166,6 +197,59 @@ describe("RpcClient.interrupt", () => {
     await expect(client.interrupt("ghost")).rejects.toMatchObject({
       name: "RpcError",
       code: "SESSION_BUSY",
+    });
+  });
+});
+
+describe("RpcClient real DSH envelope compatibility", () => {
+  it("parses a real DSH server-response envelope (type + result.value)", async () => {
+    const client = new RpcClient({
+      baseUrl: "http://h:3080",
+      fetchImpl: echoFetch((req) => ({
+        type: "server-response",
+        rpcId: req.rpcId,
+        result: { ok: true, value: { name: "dsh", version: "0.1.0-rc.7" } },
+      })),
+    });
+    const res = await client.unary("host.describe", {});
+    expect(res.ok).toBe(true);
+    expect(res.result).toEqual({ name: "dsh", version: "0.1.0-rc.7" });
+  });
+
+  it("parses a real DSH error envelope (type + result.error)", async () => {
+    const client = new RpcClient({
+      baseUrl: "http://h:3080",
+      fetchImpl: echoFetch((req) => ({
+        type: "server-response",
+        rpcId: req.rpcId,
+        result: { ok: false, error: { code: "SESSION_NOT_FOUND", message: "nope" } },
+      })),
+    });
+    await expect(client.unary("session.get", {})).rejects.toMatchObject({
+      name: "RpcError",
+      code: "SESSION_NOT_FOUND",
+    });
+  });
+
+  it("accepts a real DSH respond receipt ({accepted:true})", async () => {
+    const client = new RpcClient({
+      baseUrl: "http://h:3080",
+      fetchImpl: async (_url, init) => {
+        const req = JSON.parse(String(init?.body)) as { rpcId: string };
+        return jsonResponse({ accepted: true });
+      },
+    });
+    await expect(client.respond("req-1", { approved: true })).resolves.toBeUndefined();
+  });
+
+  it("throws BAD_RESPONSE when DSH rejects a respond receipt", async () => {
+    const client = new RpcClient({
+      baseUrl: "http://h:3080",
+      fetchImpl: async () => jsonResponse({ accepted: false, reason: "bad-response" }),
+    });
+    await expect(client.respond("req-1", { approved: true })).rejects.toMatchObject({
+      name: "RpcError",
+      code: "BAD_RESPONSE",
     });
   });
 });

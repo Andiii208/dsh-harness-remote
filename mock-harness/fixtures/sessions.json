@@ -23,6 +23,10 @@
       }
     },
     {
+      "method": "session.cancel",
+      "response": { "ok": true, "result": { "accepted": true } }
+    },
+    {
       "method": "session.interrupt",
       "response": { "ok": true, "result": { "interrupted": true } }
     }

@@ -75,6 +75,43 @@ describe("SessionStore", () => {
     expect(s.getPendingRequests()).toHaveLength(0);
   });
 
+  it("tracks real DSH approval/requested frames as pending approvals", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("approval/requested", {
+      rpcId: "rpc-approve-1",
+      sessionId: "s1",
+      approvalId: "approval-1",
+      toolName: "run_code",
+      reason: "allow command",
+    }) as never);
+    const p = s.getPendingRequest("rpc-approve-1");
+    expect(p?.kind).toBe("approval");
+    expect(p?.payload).toMatchObject({ approvalId: "approval-1", sessionId: "s1", prompt: "allow command", command: "run_code" });
+  });
+
+  it("tracks real DSH question/requested frames as pending questions", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("question/requested", {
+      rpcId: "rpc-q-1",
+      sessionId: "s1",
+      questions: [{ id: "q1", question: "部署？", options: [{ label: "yes" }, { label: "no" }] }],
+    }) as never);
+    const p = s.getPendingRequest("rpc-q-1");
+    expect(p?.kind).toBe("question");
+    expect(p?.payload).toMatchObject({ sessionId: "s1", question: "部署？" });
+    expect(Array.isArray((p?.payload as { questions?: unknown[] })?.questions)).toBe(true);
+  });
+
+  it("resolves real DSH approval/question resolved frames by rpcId", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("approval/requested", { rpcId: "r1", sessionId: "s1", approvalId: "a1" }) as never);
+    s.applyFrame(frame("question/requested", { rpcId: "r2", sessionId: "s1", questions: [{ id: "q1" }] }) as never);
+    expect(s.getPendingRequests()).toHaveLength(2);
+    s.applyFrame(frame("approval/resolved", { rpcId: "r1", sessionId: "s1", approvalId: "a1", outcome: "allowed-once" }) as never);
+    s.applyFrame(frame("question/resolved", { rpcId: "r2", sessionId: "s1", questionRpcId: "r2", outcome: "answered" }) as never);
+    expect(s.getPendingRequests()).toHaveLength(0);
+  });
+
   it("ignores unknown frames without crashing", () => {
     const s = new SessionStore();
     for (const bad of [null, 42, "x", {}, { type: "brand/new" }, { type: "unknown" }]) {
@@ -117,6 +154,32 @@ describe("SessionStore", () => {
     const list = s.getSessions();
     expect(list.map((x) => x.id)).toEqual(["s2", "s1"]); // 按 updatedAt 倒序
     expect(list.find((x) => x.id === "s1")).toMatchObject({ title: "deploy", goalStatus: "active", tokenUsageTotal: 100 });
+  });
+
+  it("applySessionList understands real DSH rc.7 session.list items (sessionId/projections/cwd)", () => {
+    const s = new SessionStore();
+    s.applySessionList([
+      {
+        sessionId: "s1",
+        updatedAt: 1787000000000,
+        running: false,
+        blank: false,
+        cwd: "D:\\app",
+        projections: { asOfSeq: 1, values: { title: "deploy checklist", goal: { status: "active" } } },
+      },
+      {
+        sessionId: "s2",
+        updatedAt: 1787000001000,
+        running: true,
+        blank: false,
+        cwd: "D:\\app",
+        projections: { asOfSeq: 2, values: { title: "debug e2e" } },
+      },
+    ] as never);
+    const list = s.getSessions();
+    expect(list.map((x) => x.id)).toEqual(["s2", "s1"]);
+    expect(list[1]).toMatchObject({ title: "deploy checklist", workspace: "D:\\app", goalStatus: "active" });
+    expect(list[1]?.updatedAt).toBe(1787000000000);
   });
 
   it("applySessionList drops sessions missing from the list", () => {

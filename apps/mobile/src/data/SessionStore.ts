@@ -45,6 +45,10 @@ export interface PendingRequest {
 
 type Frame = DownlinkFrame & Record<string, unknown>;
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 function str(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
@@ -76,6 +80,16 @@ export class SessionStore {
         break;
       case "server/request":
         this.applyServerRequest(f);
+        break;
+      case "approval/requested":
+        this.applyApprovalRequested(f);
+        break;
+      case "approval/resolved":
+      case "question/resolved":
+        if (str(f.rpcId)) this.pending.delete(str(f.rpcId)!);
+        break;
+      case "question/requested":
+        this.applyQuestionRequested(f);
         break;
       default:
         return; // unknown / queue / task / host — 忽略
@@ -123,21 +137,31 @@ export class SessionStore {
   }
 
   /** 用 session.list 的结果全量替换会话列表（保留已存在会话的派生字段）。 */
-  applySessionList(list: Array<{ id?: unknown; title?: unknown; workspace?: unknown }>): void {
+  applySessionList(list: Array<Record<string, unknown>>): void {
     if (!Array.isArray(list)) return;
     const seen = new Set<string>();
     for (const item of list) {
       if (!item || typeof item !== "object") continue;
-      const id = str((item as Record<string, unknown>).id);
+      const rec = item as Record<string, unknown>;
+      const id = str(rec.id) ?? str(rec.sessionId);
       if (!id) continue;
-      const title = str((item as Record<string, unknown>).title);
-      const workspace = str((item as Record<string, unknown>).workspace);
+      // 兼容真实 DSH rc.7：title 在 projections.values.title，工作区在 cwd。
+      const projections = isRecord(rec.projections) ? rec.projections as Record<string, unknown> : undefined;
+      const values = projections && isRecord(projections.values) ? projections.values as Record<string, unknown> : undefined;
+      const title = str(rec.title) ?? (values ? str(values.title) : undefined);
+      const workspace = str(rec.workspace) ?? str(rec.cwd);
+      const updatedAt = num(rec.updatedAt);
       const existing = this.sessions.get(id);
       // 仅新增或字段变化时 touchSession（刷新不改变排序/时间，评审 #4）。
       const changed = !existing || existing.title !== title || existing.workspace !== workspace;
       const s = changed ? this.touchSession(id) : existing!;
       if (title !== undefined) s.title = title;
       if (workspace !== undefined) s.workspace = workspace;
+      if (updatedAt !== undefined) s.updatedAt = updatedAt;
+      if (values && isRecord(values.goal)) {
+        const goalStatus = str((values.goal as Record<string, unknown>).status);
+        if (goalStatus !== undefined) s.goalStatus = goalStatus;
+      }
       seen.add(id);
     }
     for (const id of [...this.sessions.keys()]) {
@@ -303,6 +327,42 @@ export class SessionStore {
     const kind = str(f.kind);
     if (!rpcId || !kind) return;
     this.pending.set(rpcId, { rpcId, kind, payload: f.payload, receivedAt: Date.now() });
+  }
+
+  private applyApprovalRequested(f: Frame): void {
+    const rpcId = str(f.rpcId);
+    const approvalId = str(f.approvalId);
+    const sessionId = str(f.sessionId);
+    if (!rpcId || !approvalId || !sessionId) return;
+    this.pending.set(rpcId, {
+      rpcId,
+      kind: "approval",
+      payload: {
+        approvalId,
+        sessionId,
+        prompt: str(f.reason) ?? str(f.toolName) ?? "允许执行？",
+        command: str(f.toolName) ?? undefined,
+      },
+      receivedAt: Date.now(),
+    });
+  }
+
+  private applyQuestionRequested(f: Frame): void {
+    const rpcId = str(f.rpcId);
+    const sessionId = str(f.sessionId);
+    const questions = Array.isArray(f.questions) ? f.questions : [];
+    if (!rpcId || !sessionId || questions.length === 0) return;
+    const first = isRecord(questions[0]) ? questions[0] as Record<string, unknown> : {};
+    this.pending.set(rpcId, {
+      rpcId,
+      kind: "question",
+      payload: {
+        sessionId,
+        questions,
+        question: str(first.question) ?? str(first.id) ?? "请回答",
+      },
+      receivedAt: Date.now(),
+    });
   }
 
   private pushMessage(sessionId: string, m: TranscriptMessage): void {

@@ -68,6 +68,32 @@ describe("WsDownlink", () => {
     ]);
   });
 
+  it("unwraps real DSH server-request envelopes before decoding frames", async () => {
+    const ws = new WsDownlink("ws://h/mux", "ws://h/host", fakeCtor());
+    const frames = collect(ws.events, 2);
+    FakeWs.instances[0]?.onmessage?.({
+      data: JSON.stringify({
+        type: "server-request",
+        rpcId: "r1",
+        method: "events.mux",
+        payload: { type: "session/event", sessionId: "s1" },
+      }),
+    });
+    FakeWs.instances[1]?.onmessage?.({
+      data: JSON.stringify({
+        type: "server-request",
+        rpcId: "r2",
+        method: "events.host",
+        payload: { type: "host/session-added", sessionId: "s2", blank: false },
+      }),
+    });
+    const got = await frames;
+    expect(got).toMatchObject([
+      { type: "session/event", sessionId: "s1", rpcId: "r1" },
+      { type: "host/session-added", sessionId: "s2", blank: false, rpcId: "r2" },
+    ]);
+  });
+
   it("degrades unknown frame types", async () => {
     const ws = new WsDownlink("ws://h/mux", "ws://h/host", fakeCtor());
     const frames = collect(ws.events, 1);

@@ -18,6 +18,49 @@ describe("decodeEnvelope", () => {
     expect(e).toMatchObject({ ok: false, error: { code: "NOT_FOUND", message: "x" } });
   });
 
+  it("decodes real DSH client-request with type", () => {
+    const e = decodeEnvelope({
+      type: "client-request",
+      rpcId: "abc",
+      method: "session.list",
+      payload: {},
+    });
+    expect(e).toMatchObject({
+      type: "client-request",
+      rpcId: "abc",
+      method: "session.list",
+      payload: {},
+    });
+  });
+
+  it("decodes real DSH server-response with nested result.value", () => {
+    const e = decodeEnvelope({
+      type: "server-response",
+      rpcId: "abc",
+      result: { ok: true, value: { items: [] } },
+    });
+    expect(e).toMatchObject({ type: "server-response", rpcId: "abc", ok: true, result: { items: [] } });
+  });
+
+  it("decodes real DSH server-response error with nested result.error", () => {
+    const e = decodeEnvelope({
+      type: "server-response",
+      rpcId: "abc",
+      result: { ok: false, error: { code: "NOT_FOUND", message: "x" } },
+    });
+    expect(e).toMatchObject({ type: "server-response", rpcId: "abc", ok: false, error: { code: "NOT_FOUND", message: "x" } });
+  });
+
+  it("decodes real DSH client-response with type", () => {
+    const e = decodeEnvelope({ type: "client-response", rpcId: "abc", result: { approved: true } });
+    expect(e).toMatchObject({ type: "client-response", rpcId: "abc", result: { approved: true } });
+  });
+
+  it("decodes real DSH server-request mapping method to kind", () => {
+    const e = decodeEnvelope({ type: "server-request", rpcId: "abc", method: "approval/requested", payload: {} });
+    expect(e).toMatchObject({ type: "server-request", rpcId: "abc", kind: "approval/requested", payload: {} });
+  });
+
   it("degrades unknown error code to UnknownError, preserving original", () => {
     const e = decodeEnvelope({ rpcId: "abc", ok: false, error: { code: "WEIRD_CODE", message: "?" } });
     expect(e).toMatchObject({ ok: false, error: { code: "UnknownError", message: "?" } });

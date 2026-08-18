@@ -20,6 +20,28 @@ export type WsCtor = new (url: string) => WsLike;
 
 const OPEN = 1;
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Real DSH wraps every downlink frame in a `server-request` envelope whose
+ * `payload` slot is the actual frame. Legacy mock-harness fixtures send the
+ * frame directly. Unwrap the real shape without breaking the legacy one.
+ */
+function unwrapServerRequest(data: unknown): unknown {
+  if (isRecord(data) && data.type === "server-request" && isRecord(data.payload)) {
+    const frame = data.payload;
+    // Real DSH routes approval/question responses by the server-request rpcId;
+    // the inner frame does not carry it, so attach the envelope id when absent.
+    if (typeof data.rpcId === "string" && typeof frame.rpcId !== "string") {
+      return { ...frame, rpcId: data.rpcId };
+    }
+    return frame;
+  }
+  return data;
+}
+
 export class WsDownlink {
   readonly events: AsyncIterable<DownlinkFrame>;
   /** Resolves when both streams are open; rejects if either closes pre-open. */
@@ -66,11 +88,11 @@ export class WsDownlink {
     ws.onmessage = (ev) => {
       const data = ev.data;
       if (typeof data === "string") {
-        this.queue.push(decodeFrame(parseJson(data)));
+        this.queue.push(decodeFrame(unwrapServerRequest(parseJson(data))));
       } else if (typeof Blob !== "undefined" && data instanceof Blob) {
-        void data.text().then((t) => this.queue.push(decodeFrame(parseJson(t))));
+        void data.text().then((t) => this.queue.push(decodeFrame(unwrapServerRequest(parseJson(t)))));
       } else {
-        this.queue.push(decodeFrame(data));
+        this.queue.push(decodeFrame(unwrapServerRequest(data)));
       }
     };
     ws.onopen = onOpen;

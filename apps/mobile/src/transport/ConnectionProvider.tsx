@@ -228,17 +228,56 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const sendMessage = useCallback(async (sessionId: string, text: string) => {
     const c = pipelineRef.current?.loop.connection;
     if (!c) throw new Error("OFFLINE: not connected"); // 离线反馈（评审 #15）
-    await c.unary("session.prompt", { sessionId, prompt: text });
+    // 真实 DSH rc.7 的 session.prompt 契约：mode + content 数组（text part）。
+    await c.unary("session.prompt", {
+      sessionId,
+      mode: "steer",
+      content: [{ type: "text", text }],
+    });
   }, []);
 
   const respond = useCallback(async (rpcId: string, result: unknown) => {
     const c = pipelineRef.current?.loop.connection;
     if (!c) return;
     const req = pipelineRef.current?.store.getPendingRequest(rpcId);
-    await c.respond(rpcId, result);
+    const payload = (req?.payload ?? {}) as Record<string, unknown>;
+    // 真实 DSH rc.7 的 client-response 要求 result 槽为 {ok, value}，且
+    // approval/question 的 value 是结构化 payload；旧 mock 直接透传原结果。
+    let wireResult: unknown = result;
+    const hasRealApproval = typeof payload.approvalId === "string" && typeof payload.sessionId === "string";
+    const hasRealQuestion = req?.kind === "question" && Array.isArray(payload.questions);
+    if (hasRealApproval) {
+      const approved = (result as { approved?: boolean })?.approved === true;
+      wireResult = {
+        ok: true,
+        value: {
+          sessionId: String(payload.sessionId),
+          approvalId: String(payload.approvalId),
+          outcome: approved ? "allowed-once" : "rejected",
+        },
+      };
+    } else if (hasRealQuestion) {
+      if ((result as { skipped?: boolean })?.skipped === true) {
+        wireResult = { ok: false, error: { code: "cancelled" } };
+      } else {
+        const answer = String((result as { answer?: unknown })?.answer ?? "");
+        wireResult = {
+          ok: true,
+          value: {
+            sessionId: String(payload.sessionId),
+            answer: {
+              answers: (payload.questions as Array<Record<string, unknown>>).map((q) => ({
+                id: String(q.id ?? ""),
+                selected: [answer],
+              })),
+            },
+          },
+        };
+      }
+    }
+    await c.respond(rpcId, wireResult);
     pipelineRef.current?.store.resolvePending(rpcId);
     if (req) {
-      const payload = (req.payload ?? {}) as Record<string, unknown>;
       const prompt = String(payload.prompt ?? payload.question ?? payload.command ?? "");
       void approvalHistoryStore.record({
         rpcId,
@@ -353,8 +392,16 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     if (!c || !store) return;
     try {
       const r = await c.unary("session.list", {});
-      if (r.ok && r.result && Array.isArray((r.result as { sessions?: unknown }).sessions)) {
-        store.applySessionList((r.result as { sessions: Array<{ id?: unknown; title?: unknown; workspace?: unknown }> }).sessions);
+      if (!r.ok) throw new Error("session.list failed");
+      const result = (r.result ?? {}) as Record<string, unknown>;
+      // 兼容真实 DSH rc.7（value.items）与旧 mock（sessions）两种形状。
+      const items = Array.isArray(result.items)
+        ? (result.items as Array<Record<string, unknown>>)
+        : Array.isArray(result.sessions)
+          ? (result.sessions as Array<Record<string, unknown>>)
+          : null;
+      if (items) {
+        store.applySessionList(items);
         return;
       }
       throw new Error("session.list failed");

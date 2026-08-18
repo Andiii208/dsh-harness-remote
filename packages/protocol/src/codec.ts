@@ -6,6 +6,7 @@
 
 import type {
   ClientRequest,
+  ClientResponse,
   Envelope,
   RpcErrorInfo,
   ServerResponse,
@@ -23,6 +24,24 @@ export const KNOWN_FRAME_TYPES = [
   "queue/event",
   "task/event",
   "host/event",
+  // Real DSH rc.7 mux/host frame types (kept as typed passthrough).
+  "session/subscribed",
+  "approval/requested",
+  "approval/resolved",
+  "question/requested",
+  "question/resolved",
+  "session/queue",
+  "session/jobs",
+  "host/session-added",
+  "host/session-removed",
+  "host/session-status",
+  "host/agent-error",
+  "host/workspace-changed",
+  "host/workspace-removed",
+  "host/workspace-order-changed",
+  "host/archived-sessions-changed",
+  "host/remote-event",
+  "stream/error",
 ] as const;
 
 export type KnownFrameType = (typeof KNOWN_FRAME_TYPES)[number];
@@ -72,15 +91,63 @@ function toUnknownEnvelope(v: Record<string, unknown>): UnknownEnvelope {
   };
 }
 
+/** Decode a real-DSH `server-response` envelope into the shared ServerResponse shape. */
+function decodeDshServerResponse(
+  input: Record<string, unknown>,
+  rpcId: string,
+): ServerResponse | null {
+  const inner = isRecord(input.result) ? input.result : null;
+  if (!inner) return null;
+  if (inner.ok === true) {
+    return { type: "server-response", rpcId, ok: true, result: inner.value };
+  }
+  if (inner.ok === false) {
+    return {
+      type: "server-response",
+      rpcId,
+      ok: false,
+      error: normalizeError(inner.error),
+    };
+  }
+  return null;
+}
+
 /**
  * Classify an arbitrary JSON value into an Envelope.
- * Discrimination order: method → client-request; ok → server-response;
- * kind → server-request; result → client-response; else UnknownEnvelope.
+ * Discrimination order: explicit wire type → legacy (no-type) shapes.
+ * Real DSH envelopes carry `type`; mock-harness fixtures historically omit it,
+ * so both paths stay supported.
  */
 export function decodeEnvelope(input: unknown): Envelope {
   if (!isRecord(input)) return toUnknownEnvelope({ raw: input });
   const rpcId = typeof input.rpcId === "string" ? input.rpcId : "";
+  const type = typeof input.type === "string" ? input.type : undefined;
 
+  if (type === "client-request" && typeof input.method === "string") {
+    const e: ClientRequest = { type, rpcId, method: input.method, payload: input.payload };
+    return e;
+  }
+  if (type === "server-response") {
+    const d = decodeDshServerResponse(input, rpcId);
+    if (d) return d;
+  }
+  if (type === "server-request") {
+    const s: ServerRequest = {
+      type,
+      rpcId,
+      // Real DSH uses `method` in the server-request slot; our legacy type uses
+      // `kind`. Keep both available by mirroring method into kind when present.
+      kind: typeof input.method === "string" ? input.method : (typeof input.kind === "string" ? input.kind : ""),
+      payload: input.payload,
+    };
+    return s;
+  }
+  if (type === "client-response") {
+    const c: ClientResponse = { type, rpcId, result: input.result };
+    return c;
+  }
+
+  // Legacy envelopes without an explicit `type` (mock-harness / earlier fixtures).
   if (typeof input.method === "string") {
     const e: ClientRequest = { rpcId, method: input.method, payload: input.payload };
     return e;
