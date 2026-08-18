@@ -7,3 +7,7 @@ export * from "./plugin-catalog.js";
 export * from "./host-adapter.js";
 export * from "./remote-access.js";
 export * from "./dsh-bridge.js";
+export * from "./tunnel.js";
+export * from "./remote-service.js";
+export * from "./web-rpc.js";
+export * from "./apply.js";

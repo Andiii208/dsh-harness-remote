@@ -18,20 +18,21 @@ Usage:
   dsh-remote --help    显示帮助
 `;
 
-function card(relayHost: string, port: number, code: string, via: "lan" | "loopback", dshUrl: string | null): string {
-  const line = "─".repeat(40);
+function card(handle: { mode: string; host: string; port: number; url: string; code: string; dshUrl: string | null }): string {
+  const line = "─".repeat(46);
+  const modeLabel = handle.mode === "lan" ? "局域网模式" : "公网模式（任何网络可连）";
+  const addrLine = handle.mode === "lan" ? `地址：  ${handle.host}:${handle.port}` : `地址：  ${handle.url}`;
   return [
     "",
     `┌${line}┐`,
-    `│  ✅ 远程连接已开启                  │`,
-    `│  地址：  ${relayHost.padEnd(28)}│`,
-    `│  端口：  ${String(port).padEnd(31)}│`,
-    `│  6 位码： ${code.padEnd(30)}│`,
-    `│  DSH：   ${(dshUrl ?? "未检测到（会话列表将为空）").padEnd(28)}│`,
+    `│  ✅ 远程连接已开启（${modeLabel.padEnd(22)}）│`,
+    `│  ${addrLine.padEnd(40)}│`,
+    `│  6 位码： ${handle.code.padEnd(34)}│`,
+    `│  DSH：   ${(handle.dshUrl ?? "未检测到（会话列表将为空）").padEnd(32)}│`,
     `│  手机打开 App 扫下面的二维码        │`,
     `│  或选择「远程连接」手动输入          │`,
     `└${line}┘`,
-    via === "loopback" ? "⚠ 未检测到局域网 IP，请在同一电脑上的模拟器/浏览器使用" : "",
+    handle.mode === "lan" && handle.host === "127.0.0.1" ? "⚠ 未检测到局域网 IP，请在同一电脑上的模拟器/浏览器使用" : "",
   ].filter(Boolean).join("\n");
 }
 
@@ -62,7 +63,7 @@ async function main(argv: string[]): Promise<number> {
   process.on("SIGINT", () => void shutdown());
   process.on("SIGTERM", () => void shutdown());
 
-  console.log(card(handle.host, handle.port, handle.code, handle.host === "127.0.0.1" ? "loopback" : "lan", handle.dshUrl));
+  console.log(card(handle));
   console.log("\n📱 手机扫码连接：\n");
   try {
     qrcode.generate(handle.qrPayload, { small: true });

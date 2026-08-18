@@ -3,14 +3,21 @@ import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
-import { font, space, type ThemeColors } from "../src/theme";
+import { font, radius, space, type ThemeColors } from "../src/theme";
 import { useTheme } from "../src/theme-context";
 import { WhaleMark } from "../src/ui/WhaleMark";
 import { useEntering } from "../src/ui/anim";
 import { Button } from "../src/ui/Button";
 import { onboardingStore } from "../src/discovery/onboardingStoreAdapter";
+import { useI18n } from "../src/i18n";
 
 export default function OnboardingScreen() {
+  const { t } = useI18n();
+  const STEPS = [
+    { title: t.onboarding.step1Title, body: t.onboarding.step1Body },
+    { title: t.onboarding.step2Title, body: t.onboarding.step2Body },
+    { title: t.onboarding.step3Title, body: t.onboarding.step3Body },
+  ];
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
@@ -29,12 +36,24 @@ export default function OnboardingScreen() {
           <WhaleMark size={44} />
           <Text style={styles.brandText}>harness remote</Text>
         </View>
-        <Text style={styles.copy}>
-          手机是 DeepSeek Harness 的视口：查看会话、审批请求、继续对话。
-        </Text>
+        <Text style={styles.copy}>{t.onboarding.tagline}</Text>
+
+        <View style={styles.steps}>
+          {STEPS.map((step, i) => (
+            <View key={step.title} style={styles.stepRow}>
+              <View style={styles.stepBadge}>
+                <Text style={styles.stepBadgeText}>{i + 1}</Text>
+              </View>
+              <View style={styles.stepBody}>
+                <Text style={styles.stepTitle}>{step.title}</Text>
+                <Text style={styles.stepText}>{step.body}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
       </Animated.View>
 
-      <Button label="开始使用" onPress={() => void finish()} full />
+      <Button label={t.onboarding.start} onPress={() => void finish()} full />
     </View>
   );
 }
@@ -42,7 +61,7 @@ export default function OnboardingScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: space.x6, justifyContent: "space-between" },
-    body: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.x5 },
+    body: { flex: 1, justifyContent: "center", gap: space.x6 },
     brand: { alignItems: "center", gap: space.x3 },
     brandText: {
       color: colors.text,
@@ -57,7 +76,36 @@ function createStyles(colors: ThemeColors) {
       fontSize: font.body + 1,
       lineHeight: 23,
       textAlign: "center",
-      maxWidth: 280,
+      alignSelf: "center",
+      maxWidth: 300,
     },
+    steps: {
+      gap: space.x3,
+      marginTop: space.x3,
+    },
+    stepRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: space.x3,
+      backgroundColor: colors.surface,
+      borderRadius: radius.card,
+      padding: space.x4,
+    },
+    stepBadge: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: colors.accent,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    stepBadgeText: {
+      color: "#FFFFFF",
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    stepBody: { flex: 1, gap: 4 },
+    stepTitle: { color: colors.text, fontSize: font.body + 1, fontWeight: "600" },
+    stepText: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
   });
 }

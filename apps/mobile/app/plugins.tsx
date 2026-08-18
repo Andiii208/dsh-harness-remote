@@ -6,6 +6,7 @@ import { font, radius, space, type ThemeColors } from "../src/theme";
 import { useTheme } from "../src/theme-context";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { StatusChip } from "../src/ui/StatusChip";
+import { EmptyState } from "../src/ui/EmptyState";
 import { haptic } from "../src/ui/haptics";
 
 function riskLabel(risk?: PluginCommand["risk"]): string | null {
@@ -94,10 +95,10 @@ export default function PluginsScreen() {
       {loading && <Text style={styles.empty}>正在读取插件能力…</Text>}
 
       {!loading && plugins.length === 0 && (
-        <View style={styles.emptyWrap}>
-          <Text style={styles.empty}>当前宿主未暴露插件能力</Text>
-          <Text style={styles.emptyHint}>在电脑端 DSH 安装插件后，手机会自动展示其指令与设置</Text>
-        </View>
+        <EmptyState
+          eyebrow="NO PLUGINS"
+          text="当前宿主未暴露插件能力——在电脑端 DSH 安装插件后，手机会自动展示其指令与设置"
+        />
       )}
 
       {commands.length > 0 && (

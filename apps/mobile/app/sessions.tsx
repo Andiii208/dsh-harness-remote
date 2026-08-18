@@ -11,16 +11,11 @@ import { useTheme } from "../src/theme-context";
 import { StatusChip } from "../src/ui/StatusChip";
 import { SkeletonRow } from "../src/ui/SkeletonRow";
 import { Field } from "../src/ui/Field";
+import { EmptyState } from "../src/ui/EmptyState";
+import { Button } from "../src/ui/Button";
 import { useEntering } from "../src/ui/anim";
 import type { SessionSummary } from "../src/data/SessionStore";
-import { filterSessions, groupByWorkspace, pressureTier } from "../src/data/sessionViews";
-
-function formatRelative(ms: number): string {
-  const diff = Date.now() - ms;
-  if (diff < 60_000) return "刚刚";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
+import { filterSessions, formatSessionTime, groupByWorkspace, pressureTier } from "../src/data/sessionViews";
 
 function goalLabel(status?: string): string {
   switch (status) {
@@ -46,7 +41,7 @@ function GoalPill({ status, colors }: { status?: string; colors: ReturnType<type
           color: colors.textMuted,
           backgroundColor: colors.surface2,
           fontFamily: font.monoMedium,
-          fontSize: 9,
+          fontSize: font.eyebrow,
           fontWeight: "500",
           borderRadius: radius.pill,
           paddingHorizontal: 7,
@@ -206,10 +201,20 @@ export default function SessionsScreen() {
             <SkeletonRow />
             <SkeletonRow />
           </View>
+        ) : query.trim() ? (
+          <EmptyState eyebrow="NO MATCH" text="没有匹配的会话，换个关键词试试" />
+        ) : state === "offline" ? (
+          <EmptyState
+            eyebrow="OFFLINE"
+            text="还没有连接到电脑，先去连接才能看到会话"
+            action={<Button label="去连接" onPress={() => router.push("/")} full />}
+          />
         ) : (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>{query.trim() ? "没有匹配的会话" : "还没有会话"}</Text>
-          </View>
+          <EmptyState
+            eyebrow="EMPTY"
+            text="还没有会话——在电脑上新建一个，或直接在手机上创建"
+            action={<Button label="＋ 新建会话" onPress={() => void onCreate()} full />}
+          />
         )
       }
       renderItem={({ item }) =>
@@ -241,7 +246,7 @@ export default function SessionsScreen() {
                 )}
                 {item.session.lastActiveAt !== undefined && (
                   <Text style={styles.time} numberOfLines={1}>
-                    {formatRelative(item.session.lastActiveAt)}
+                    {formatSessionTime(item.session.lastActiveAt)}
                   </Text>
                 )}
               </View>
@@ -281,10 +286,10 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
       paddingHorizontal: 12,
       paddingVertical: 6,
     },
-    newChatText: { color: "#FFFFFF", fontSize: 13, fontWeight: "600", letterSpacing: -0.1 },
-    headerLink: { color: colors.accent, fontSize: 13, fontWeight: "500" },
+    newChatText: { color: "#FFFFFF", fontSize: font.transcript, fontWeight: "600", letterSpacing: -0.1 },
+    headerLink: { color: colors.accent, fontSize: font.transcript, fontWeight: "500" },
     pendingRow: { paddingVertical: 2 },
-    pendingText: { color: colors.accent, fontSize: 14, fontWeight: "500", letterSpacing: -0.1 },
+    pendingText: { color: colors.accent, fontSize: font.body, fontWeight: "500", letterSpacing: -0.1 },
     refreshError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
     row: {
       backgroundColor: colors.surface,
@@ -297,8 +302,8 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
     rowHeader: { flexDirection: "row", alignItems: "center", gap: space.x2 },
     rowTitle: { color: colors.text, fontSize: (font.section + 1) * scale, fontWeight: "500", letterSpacing: -0.2, flex: 1 },
     rowPreview: { color: colors.textMuted, fontSize: font.caption * scale, lineHeight: 18 * scale, letterSpacing: 0.1 },
-    time: { color: colors.textDim, fontSize: 10, fontFamily: font.mono },
-    pressure: { fontSize: 10, fontFamily: font.mono, letterSpacing: 0.2 },
+    time: { color: colors.textDim, fontSize: font.eyebrow, fontFamily: font.mono },
+    pressure: { fontSize: font.eyebrow, fontFamily: font.mono, letterSpacing: 0.2 },
     groupHeader: { color: colors.textMuted, fontSize: font.caption, fontWeight: "500", paddingTop: space.x2 },
     empty: { alignItems: "center", paddingTop: space.x7 * 2 },
     emptyText: { color: colors.textMuted, fontSize: font.caption, textAlign: "center" },

@@ -22,6 +22,9 @@ export interface ConnectionPipelineOptions {
   onStateChange?: (s: ConnectionState) => void;
   onError?: (err: unknown) => void;
   onNotification?: (n: NotificationEvent) => void;
+  /** 连续连接失败达到该次数后放弃（默认 8；移动端不再无限重试）。 */
+  maxAttempts?: number;
+  onGiveUp?: (lastError: unknown) => void;
 }
 
 export interface ConnectionPipeline {
@@ -42,6 +45,8 @@ export function createConnectionPipeline(opts: ConnectionPipelineOptions): Conne
     auth: opts.auth,
     onStateChange: opts.onStateChange,
     onError: opts.onError,
+    maxAttempts: opts.maxAttempts,
+    onGiveUp: opts.onGiveUp,
   });
 
   const pump = async (): Promise<void> => {

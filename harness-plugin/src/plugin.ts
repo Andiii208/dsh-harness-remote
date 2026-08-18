@@ -6,7 +6,7 @@
  * 校验/访问决策），并标注了与宿主挂接的假设点，真机校准后修正。
  *
  * 安装（user patch 层，设计 §9：不改宿主源码）：
- *   1. 构建本包（pnpm --filter @dsh-remote/harness-plugin build）
+ *   1. 构建本包（pnpm --filter dsh-harness-remote build）
  *   2. 在 <harness-home>/profiles/<profile>/cordis.patch.yml 中按宿主插件
  *      约定声明本插件入口（见 README.md 详细步骤）
  *   3. 重启 DSH；插件对外暴露两个宿主命令：

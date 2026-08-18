@@ -21,6 +21,7 @@ import { AppSettingsProvider } from "../src/data/appSettingsContext";
 import { notificationService } from "../src/notify/expoAdapter";
 import { registerNotificationDeepLink } from "../src/notify/deeplink";
 import { ThemeProvider, useTheme } from "../src/theme-context";
+import { I18nProvider } from "../src/i18n";
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -88,11 +89,13 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <AppSettingsProvider>
-            <ConnectionProvider>
-              <RootNavigator />
-            </ConnectionProvider>
-          </AppSettingsProvider>
+          <I18nProvider>
+            <AppSettingsProvider>
+              <ConnectionProvider>
+                <RootNavigator />
+              </ConnectionProvider>
+            </AppSettingsProvider>
+          </I18nProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
@@ -100,5 +103,5 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, backgroundColor: "#F7F7FA" },
 });

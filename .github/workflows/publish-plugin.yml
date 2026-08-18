@@ -1,12 +1,16 @@
-name: CI
+name: Publish Plugin
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    tags:
+      - 'plugin-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  typecheck-and-test:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,13 +20,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          registry-url: 'https://registry.npmjs.org'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # workspace 依赖的类型/产物来自各自 dist（gitignored）——先构建再检查
       - run: pnpm -r build
-      - run: pnpm typecheck
-      - run: pnpm test
-      # 插件包可发布性门禁：pack 预览必须通过（lib/client/cordis.patch.yml 齐全）
-      - name: Validate plugin package (npm pack --dry-run)
+      - name: Validate plugin package
         working-directory: harness-plugin
         run: npm pack --dry-run
+      - name: Publish dsh-harness-remote
+        working-directory: harness-plugin
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public

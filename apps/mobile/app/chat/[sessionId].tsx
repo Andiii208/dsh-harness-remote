@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -17,6 +17,8 @@ import { font, radius, space } from "../../src/theme";
 import { useEntering } from "../../src/ui/anim";
 import { MessageBubble } from "../../src/ui/chat/MessageBubble";
 import { SkeletonRow } from "../../src/ui/SkeletonRow";
+import { EmptyState } from "../../src/ui/EmptyState";
+import { Button } from "../../src/ui/Button";
 import { useTheme } from "../../src/theme-context";
 import { haptic } from "../../src/ui/haptics";
 
@@ -26,8 +28,10 @@ export default function ChatScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { sessions, transcript, liveMessage, sendMessage, state, interruptStream } = useConnection();
+  const router = useRouter();
   const [draft, setDraft] = useState("");
   const [sendError, setSendError] = useState("");
+  const [failedDraft, setFailedDraft] = useState("");
   const [showJump, setShowJump] = useState(false);
   const [streamPaused, setStreamPaused] = useState(false);
   const [pauseHint, setPauseHint] = useState("");
@@ -71,18 +75,29 @@ export default function ChatScreen() {
     }
   };
 
-  const send = async () => {
-    const text = draft.trim();
+  const sendText = async (raw: string) => {
+    const text = raw.trim();
     if (!text || !id || !online) return;
     setDraft("");
     setSendError("");
+    setFailedDraft("");
     void haptic("light");
     try {
       await sendMessage(id, text);
     } catch (err) {
       setDraft(text);
+      setFailedDraft(text);
       setSendError(err instanceof Error ? err.message : "发送失败");
     }
+  };
+
+  const send = async () => {
+    await sendText(draft);
+  };
+
+  const retrySend = async () => {
+    if (!failedDraft) return;
+    await sendText(failedDraft);
   };
 
   // Phase 1：暂停流式 = 先发 session.interrupt，失败才回退本地暂停。
@@ -144,10 +159,14 @@ export default function ChatScreen() {
               <SkeletonRow />
               <SkeletonRow />
             </View>
+          ) : online ? (
+            <EmptyState eyebrow="NO MESSAGES" text="还没有消息——发一条试试" />
           ) : (
-            <View style={styles.emptyWrap}>
-              <Text style={styles.emptyText}>{online ? "还没有消息" : "离线，请先连接"}</Text>
-            </View>
+            <EmptyState
+              eyebrow="OFFLINE"
+              text="离线，请先连接电脑"
+              action={<Button label="去连接" onPress={() => router.push("/")} full />}
+            />
           )
         }
       />
@@ -172,7 +191,18 @@ export default function ChatScreen() {
             {streamPaused && <Text style={styles.pauseHint}>{pauseHint}</Text>}
           </View>
         )}
-        {sendError.length > 0 && <Text style={styles.sendError}>{sendError}</Text>}
+        {sendError.length > 0 && (
+          <View style={styles.sendErrorRow}>
+            <Text style={styles.sendError} numberOfLines={2}>
+              {sendError}
+            </Text>
+            {failedDraft.length > 0 && (
+              <Pressable onPress={() => void retrySend()} hitSlop={8} accessibilityRole="button" accessibilityLabel="重新发送">
+                <Text style={styles.retryLink}>重发</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
@@ -261,7 +291,9 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     },
     sendDisabled: { opacity: 0.4 },
     sendText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600", lineHeight: 22, marginTop: -1 },
-    sendError: { color: colors.danger, fontSize: font.caption },
+    sendError: { color: colors.danger, fontSize: font.caption, flexShrink: 1 },
+    sendErrorRow: { flexDirection: "row", alignItems: "center", gap: space.x3 },
+    retryLink: { color: colors.accent, fontSize: font.caption, fontWeight: "600" },
     jumpFabWrap: {
       position: "absolute",
       right: space.x5,

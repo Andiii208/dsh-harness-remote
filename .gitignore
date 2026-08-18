@@ -4,6 +4,8 @@ node_modules/
 # builds
 dist/
 build/
+harness-plugin/lib/
+harness-plugin/client/client.js
 
 # expo
 .expo/

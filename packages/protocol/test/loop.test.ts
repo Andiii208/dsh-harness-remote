@@ -305,3 +305,55 @@ describe("ConnectionLoop state accessor", () => {
     await expect(loop.stop()).resolves.toBeUndefined(); // 二次 stop 不挂起
   });
 });
+
+describe("ConnectionLoop give-up", () => {
+  it("stops retrying after maxAttempts and calls onGiveUp with the last error", async () => {
+    let gaveUp = 0;
+    let lastErr: unknown = null;
+    const states: ConnectionState[] = [];
+    const loop = new ConnectionLoop({
+      endpoint: { host: "h", port: 3080 },
+      transport: alwaysFailingTransport(),
+      maxAttempts: 3,
+      random: () => 0.5,
+      onStateChange: (s) => states.push(s),
+      onGiveUp: (err) => {
+        gaveUp += 1;
+        lastErr = err;
+      },
+      sleep: async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      },
+    });
+    loop.start();
+    await vi.waitFor(() => expect(gaveUp).toBe(1), { timeout: 3000 });
+    expect(lastErr).toBeInstanceOf(Error);
+    expect(loop.connectionState).toBe("offline");
+    expect(loop.lastErrorResult()).toBe(lastErr);
+    // give-up 后 stop() 立即结算，不挂起。
+    await expect(loop.stop()).resolves.toBeUndefined();
+  });
+
+  it("start() can be called again after give-up", async () => {
+    let gaveUp = 0;
+    const transport = flakyTransport(3);
+    const loop = new ConnectionLoop({
+      endpoint: { host: "h", port: 3080 },
+      transport,
+      maxAttempts: 2,
+      random: () => 0.5,
+      onGiveUp: () => {
+        gaveUp += 1;
+      },
+      sleep: async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      },
+    });
+    loop.start();
+    await vi.waitFor(() => expect(gaveUp).toBe(1), { timeout: 3000 });
+    loop.start(); // 再次 start 应重新跑（flaky transport 第 3 次失败、第 4 次成功）
+    await vi.waitFor(() => expect(transport.connects).toBeGreaterThanOrEqual(4), { timeout: 3000 });
+    expect(loop.lastErrorResult()).toBeNull();
+    loop.stop();
+  });
+});

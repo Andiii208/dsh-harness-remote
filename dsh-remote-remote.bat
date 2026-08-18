@@ -11,7 +11,7 @@ if errorlevel 1 (
 
 if not exist "harness-plugin\dist\cli.js" (
   echo Building dsh-remote...
-  call pnpm --filter @dsh-remote/harness-plugin build
+  call pnpm --filter dsh-harness-remote build
   if errorlevel 1 (
     echo Build failed. Please run "pnpm install" first.
     pause

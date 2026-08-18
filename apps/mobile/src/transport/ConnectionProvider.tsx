@@ -27,6 +27,7 @@ import {
   type ConnectionPipeline,
 } from "./pipeline";
 import { isRelayUrl, toRelayWsUrl } from "./relayMode";
+import { classifyConnectionError, type ConnectionErrorInfo } from "./connectionErrors";
 import { requestInterrupt } from "./interrupt";
 import { getExpoPushToken } from "../notify/pushToken";
 import { notificationService } from "../notify/expoAdapter";
@@ -47,6 +48,14 @@ export interface ConnectionApi {
   describe: unknown;
   /** 最近一次连接的端点（自动重连/设置页用）。 */
   lastEndpoint: { host: string; port: number } | null;
+  /** 连接失败分类信息（give-up 后供 UI 展示；连接中为 null）。 */
+  lastError: ConnectionErrorInfo | null;
+  /** 是否已放弃重试（停在离线态，等待用户手动重试）。 */
+  givenUp: boolean;
+  /** 放弃后手动重试（用最近一次连接参数重新开始）。 */
+  retry(): void;
+  /** 停止当前连接/重试（放弃重试，停在离线态）。 */
+  stopRetrying(): void;
   sessions: SessionSummary[];
   pending: PendingRequest[];
   notifications: NotificationEvent[];
@@ -91,7 +100,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ConnectionState>("offline");
   const [describe, setDescribe] = useState<unknown>(null);
   const [relayPeerId, setRelayPeerId] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<ConnectionErrorInfo | null>(null);
+  const [givenUp, setGivenUp] = useState(false);
   const [version, setVersion] = useState(0);
+  const lastConnectParamsRef = useRef<{ host: string; port: number; token?: string; pairCode?: string } | null>(null);
   const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
   const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
   const notificationsEnabledRef = useRef(true);
@@ -157,6 +169,9 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     pipelineRef.current = null;
     setNotifications([]);
     setRelayPeerId(null);
+    setLastError(null);
+    setGivenUp(false);
+    lastConnectParamsRef.current = { host, port, token, pairCode };
 
     // M3.1 连接模式选择：relay:// / ws:// / wss:// → RelayTransport；
     // 其余 host 走既有 LAN 路径（行为不变）。
@@ -193,9 +208,14 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       endpoint,
       auth: token ? { token } : {},
       transport,
+      maxAttempts: 8,
       onStateChange: (s) => setStateBoth(s),
       onError: (err) => {
         console.warn("[conn]", err);
+      },
+      onGiveUp: (err) => {
+        setLastError(classifyConnectionError(err));
+        setGivenUp(true);
       },
       onNotification: (n) => {
         setNotifications((prev) => [...prev.slice(-49), n]);
@@ -222,10 +242,27 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       if (pipelineRef.current === prev) pipelineRef.current = null;
     }
     lastEndpointRef.current = null;
+    lastConnectParamsRef.current = null;
     setRelayPeerId(null);
+    setLastError(null);
+    setGivenUp(false);
     setStateBoth("offline");
     void autoReconnectStore.setEnabled(false); // 用户主动断开：关掉自动重连
   }, [setStateBoth, setRelayPeerId]);
+
+  const stopRetrying = useCallback(async () => {
+    const prev = pipelineRef.current;
+    if (prev) {
+      await prev.stop();
+      if (pipelineRef.current === prev) pipelineRef.current = null;
+    }
+    setStateBoth("offline");
+  }, [setStateBoth]);
+
+  const retry = useCallback(() => {
+    const p = lastConnectParamsRef.current;
+    if (p) void connect(p.host, p.port, p.token, p.pairCode);
+  }, [connect]);
 
   const sendMessage = useCallback(async (sessionId: string, text: string) => {
     const c = pipelineRef.current?.loop.connection;
@@ -437,6 +474,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       describe,
       relayPeerId,
       lastEndpoint: lastEndpointRef.current,
+      lastError,
+      givenUp,
+      retry,
+      stopRetrying,
       sessions: pipelineRef.current?.store.getSessions() ?? [],
       pending: pipelineRef.current?.store.getPendingRequests() ?? [],
       notifications,
@@ -458,7 +499,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       hostSettingsGet,
       hostSettingsSet,
     }),
-    [state, describe, relayPeerId, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, createSession, connect, disconnect, sendMessage, respond, interruptStream, transcript, liveMessage, setNotificationsEnabled, pluginList, pluginExec, hostSettingsGet, hostSettingsSet],
+    [state, describe, relayPeerId, lastError, givenUp, retry, stopRetrying, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, createSession, connect, disconnect, sendMessage, respond, interruptStream, transcript, liveMessage, setNotificationsEnabled, pluginList, pluginExec, hostSettingsGet, hostSettingsSet],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;

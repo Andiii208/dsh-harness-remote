@@ -13,7 +13,13 @@ export interface ThemeColors {
   bg: string;
   surface: string;
   surface2: string;
+  /** v8 别名：Card = surface。 */
+  card: string;
+  /** v8 别名：Chip = surface2。 */
+  chip: string;
   separator: string;
+  /** v8 别名：Board = separator（1px 分隔线/描边）。 */
+  board: string;
   text: string;
   textMuted: string;
   textDim: string;
@@ -43,7 +49,10 @@ const light: ThemeColors = {
   bg: "#F7F7FA",
   surface: "#FFFFFF",
   surface2: "#F2F2F6",
+  card: "#FFFFFF",
+  chip: "#F2F2F6",
   separator: "rgba(20,20,40,0.08)",
+  board: "rgba(20,20,40,0.08)",
   text: "#101016",
   textMuted: "#6E6E7A",
   textDim: "#B4B4C0",
@@ -62,7 +71,10 @@ const dark: ThemeColors = {
   bg: "#0B0B0F",
   surface: "#141419",
   surface2: "#1D1D24",
+  card: "#141419",
+  chip: "#1D1D24",
   separator: "rgba(255,255,255,0.07)",
+  board: "rgba(255,255,255,0.07)",
   text: "#F2F2F6",
   textMuted: "#8E8E9C",
   textDim: "#555560",

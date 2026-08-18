@@ -1,0 +1,5 @@
+# dsh-harness-remote bundle patch（dsh.bundle manifest 要求的加载配置）
+# 单包单插件：安装一次，设置页「手机远程」全部功能到位。
+- insert:
+    - id: dsh-harness-remote
+      name: dsh-harness-remote

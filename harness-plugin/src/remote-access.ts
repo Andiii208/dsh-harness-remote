@@ -7,14 +7,20 @@
  * 不弹终端的面板实现只需 import 本模块。
  */
 
+import type { ChildProcess } from "node:child_process";
 import { networkInterfaces } from "node:os";
 import { createRelayServer } from "relay";
 import { buildRemotePairPayload } from "@dsh-remote/protocol";
 import { RelayClient } from "./relay-client.js";
 import { DshBridge, detectDshApiUrl } from "./dsh-bridge.js";
+import { startCloudflaredTunnel, type TunnelHandle } from "./tunnel.js";
+
+export type RemoteAccessMode = "tunnel" | "lan";
 
 export interface RemoteAccessOptions {
-  /** 手机可达的展示地址；缺省自动选择局域网 IPv4，找不到时回退 127.0.0.1。 */
+  /** 连接模式。默认 `tunnel`（公网，cloudflared quick tunnel）；`lan` = 局域网直连。 */
+  mode?: RemoteAccessMode;
+  /** 手机可达的展示地址（LAN 模式）；缺省自动选择局域网 IPv4，找不到时回退 127.0.0.1。 */
   host?: string;
   /** 首选 relay 端口；默认 4090，被占用自动选空闲端口。 */
   port?: number;
@@ -24,16 +30,24 @@ export interface RemoteAccessOptions {
   dshBaseUrl?: string | null;
   /** 未显式指定 baseUrl 时，是否自动探测 DSH_WEB_URL / 默认端口。CLI 默认开启。 */
   autoDetectDsh?: boolean;
-  /** DSH 桥接状态日志（CLI 打印用）。 */
+  /** DSH 桥接状态日志（CLI/设置页日志用）。 */
   onStatus?: (line: string) => void;
+  /** cloudflared 二进制路径（测试/离线注入用）。 */
+  cloudflaredBin?: string;
+  /** cloudflared 下载目录（缺省 $DSH_HOME/dsh-harness-remote/bin）。 */
+  cloudflaredBinDir?: string;
+  /** 隧道建立超时（毫秒），默认 30s。 */
+  tunnelTimeoutMs?: number;
+  /** 注入 cloudflared spawn（测试用）。 */
+  tunnelSpawnImpl?: (cmd: string, args: string[]) => ChildProcess;
 }
 
 export interface RemoteAccessHandle {
-  /** 展示给手机填写的地址（不含 ws:// 前缀，如 192.168.1.13）。 */
+  /** 展示给手机填写的地址：LAN 模式为裸 IP（如 192.168.1.13），tunnel 模式为 https://xxx.trycloudflare.com。 */
   host: string;
   /** 实际 relay 监听端口。 */
   port: number;
-  /** 手机可填写的完整 relay URL（ws://<host>:<port>）。 */
+  /** 手机可填写的完整 relay URL（LAN：ws://<host>:<port>；tunnel：wss://xxx.trycloudflare.com）。 */
   url: string;
   /** 一次性 6 位配对码。 */
   code: string;
@@ -41,7 +55,11 @@ export interface RemoteAccessHandle {
   qrPayload: string;
   /** 已连接的 DSH API baseUrl；未连接为 null。 */
   dshUrl: string | null;
-  /** 关闭远程访问并释放 relay/console/DSH 桥接资源。 */
+  /** 连接模式。 */
+  mode: RemoteAccessMode;
+  /** tunnel 模式下的公网访问 URL（https://xxx.trycloudflare.com）；LAN 模式为 null。 */
+  publicUrl: string | null;
+  /** 关闭远程访问并释放 tunnel/relay/console/DSH 桥接资源。 */
   stop(): Promise<void>;
 }
 
@@ -76,7 +94,10 @@ export function lanIp(): string | undefined {
 export async function startRemoteAccess(
   opts: RemoteAccessOptions = {},
 ): Promise<RemoteAccessHandle> {
-  const relay = createRelayServer({ host: "0.0.0.0" });
+  const mode = opts.mode ?? "tunnel";
+  // tunnel 模式只监听回环（公网入口由 cloudflared 承担）；LAN 模式监听所有网卡。
+  const relayHost = mode === "tunnel" ? "127.0.0.1" : "0.0.0.0";
+  const relay = createRelayServer({ host: relayHost });
   let port = opts.port ?? 4090;
   try {
     await relay.start(port);
@@ -90,7 +111,6 @@ export async function startRemoteAccess(
   // 实际监听端口（port 0 / 被占用自动分配后以 relay.port 为准）。
   if (relay.port > 0) port = relay.port;
 
-  const host = opts.host ?? lanIp() ?? "127.0.0.1";
   const clientId = `console-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   let peerId: string | undefined;
   const client = new RelayClient({
@@ -104,11 +124,34 @@ export async function startRemoteAccess(
   });
 
   let bridge: DshBridge | null = null;
+  let tunnel: TunnelHandle | null = null;
   try {
     await client.connect();
     const code = await client.requestPairCode();
-    const url = `ws://${host}:${port}`;
-    const qrPayload = buildRemotePairPayload({ addr: host, code, port });
+
+    // 计算手机侧地址/二维码载荷。
+    let host: string;
+    let url: string;
+    let publicUrl: string | null = null;
+    if (mode === "tunnel") {
+      opts.onStatus?.("正在开启公网隧道…");
+      tunnel = await startCloudflaredTunnel({
+        localPort: port,
+        binPath: opts.cloudflaredBin,
+        binDir: opts.cloudflaredBinDir,
+        timeoutMs: opts.tunnelTimeoutMs,
+        spawnImpl: opts.tunnelSpawnImpl,
+        logger: (line) => opts.onStatus?.(line),
+      });
+      publicUrl = tunnel.publicUrl;
+      host = publicUrl;
+      url = publicUrl.replace(/^https:/, "wss:");
+      opts.onStatus?.(`公网隧道已开启：${publicUrl}`);
+    } else {
+      host = opts.host ?? lanIp() ?? "127.0.0.1";
+      url = `ws://${host}:${port}`;
+    }
+    const qrPayload = buildRemotePairPayload({ addr: url, code, ...(mode === "lan" ? { port } : {}) });
 
     // DSH API 桥接：显式 baseUrl 优先；否则按选项自动探测。
     const baseUrl = opts.dshBaseUrl ?? (opts.autoDetectDsh ? await detectDshApiUrl(undefined, opts.onStatus) : null);
@@ -132,15 +175,31 @@ export async function startRemoteAccess(
       code,
       qrPayload,
       dshUrl: baseUrl,
+      mode,
+      publicUrl,
       stop: async () => {
         bridge?.stop();
         client.close();
+        if (tunnel) {
+          try {
+            await tunnel.stop();
+          } catch {
+            /* ignore */
+          }
+        }
         await relay.stop();
       },
     };
   } catch (err) {
     bridge?.stop();
     client.close();
+    if (tunnel) {
+      try {
+        await tunnel.stop();
+      } catch {
+        /* ignore */
+      }
+    }
     await relay.stop();
     throw err;
   }

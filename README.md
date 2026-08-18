@@ -58,7 +58,21 @@ dsh-remote/
 └── package.json / pnpm-workspace.yaml / tsconfig 等
 ```
 
-## 快速开始
+## 快速开始（用户）
+
+```bash
+# 1. 电脑安装插件（DSH 设置页会出现「手机远程」）
+dsh plugin --profile web add dsh-harness-remote -w
+
+# 2. 重启 dsh web
+npx @deepseek-ai/dsh web
+
+# 3. 打开 DSH 设置页 → 手机远程 → 开启公网访问 → 手机 App 扫码
+```
+
+> 电脑端需要 Node.js 与 DSH；手机 App 从 GitHub Releases 下载 `app-release.apk`。公网模式走 cloudflared 免费隧道，无需账号/服务器/公网 IP。
+
+## 开发快速开始
 
 ```bash
 pnpm install
@@ -70,10 +84,9 @@ pnpm audit --prod   # 发布前依赖审计
 pnpm --filter mock-harness build
 node mock-harness/dist/cli.js --port 3080
 
-# 一键开启远程访问（启动 relay + 自动桥接本机 DSH + 打印 6 位配对码与二维码）
+# 开发调试用 CLI（启动 relay + 自动桥接本机 DSH + 打印 6 位配对码与二维码）
 # DSH API 探测顺序：$env:DSH_API_URL / $env:DSH_WEB_URL → 127.0.0.1:56734 → 127.0.0.1:3080。
-# Windows 用户也可以直接双击仓库根目录的 dsh-remote-remote.bat，免敲命令。
-pnpm --filter @dsh-remote/harness-plugin build
+pnpm --filter dsh-harness-remote build
 node harness-plugin/dist/cli.js remote
 
 # 录制真实 DSH 流量 → conformance fixtures（需要可达的 DSH）
@@ -123,7 +136,7 @@ npx eas-cli build --profile production    # 商店版（自动递增 build numbe
 | M3 中继 | 配对闭环已实现（relay 服务器、RelayTransport、E2E 加密、配对码闭环、设备密钥持久化、离线队列/推送桩、硬化文档）；真机推送与真机回归留待设备/账号窗口 |
 | R1–R5 远程优先窗口 | ✅ 已交付（远程优先首屏、`relay.pair.code` 取码协议、插件能力面、设置迁移、`dsh-remote remote` 一键远程、动效与联调证据） |
 
-> 状态：M0–M2 已通过评审；M3 中继（M3.1–M3.4）已实现并全仓回归绿；R1–R5 远程优先窗口已实现并全仓回归绿；P0–P2（真实 DSH rc.7 接缝、一键远程复用、Expo 推送准备、TLS 实测、配对安全加固）已实现并全仓回归绿（protocol 124 / mobile 117 / harness-plugin 37 / relay 39 / mock-harness 29 / capture 24）。Phase B 真机联调已在 Android 真机（Expo Go）验证通过（连接/会话/流式聊天/发消息/审批/提问/goal 暂停/断线重连），通知/后台保活/真机推送/relay 真机回归需 development build 与设备/账号窗口验证（Expo Go SDK 53+ 限制，见 [docs/MANUAL.md](docs/MANUAL.md)）。Android APK 由 GitHub Actions 自动构建并上传 Release；**iOS App 构建暂未完成**（需 Expo/Apple 开发者账号）。v0.2.0 发布流程见 PROGRESS。
+> 状态：M0–M2 已通过评审；M3 中继（M3.1–M3.4）已实现并全仓回归绿；R1–R5 远程优先窗口已实现并全仓回归绿；P0–P2（真实 DSH rc.7 接缝、一键远程复用、Expo 推送准备、TLS 实测、配对安全加固）已实现并全仓回归绿（protocol 124 / mobile 117 / harness-plugin 37 / relay 39 / mock-harness 29 / capture 24）。Phase B 真机联调已在 Android 真机（Expo Go）验证通过（连接/会话/流式聊天/发消息/审批/提问/goal 暂停/断线重连），通知/后台保活/真机推送/relay 真机回归需 development build 与设备/账号窗口验证（Expo Go SDK 53+ 限制，见 [docs/MANUAL.md](docs/MANUAL.md)）。Android APK 由 GitHub Actions 自动构建并上传 Release；电脑端插件 `dsh-harness-remote` 由 npm 发布（`dsh plugin --profile web add dsh-harness-remote -w` 安装）；**iOS App 构建暂未完成**（需 Expo/Apple 开发者账号）。v0.3.0 发布流程见 PROGRESS。
 
 ## 贡献
 

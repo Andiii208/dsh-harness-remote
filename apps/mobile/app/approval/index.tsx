@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useConnection } from "../../src/transport/ConnectionProvider";
 import { font, radius, space, type ThemeColors } from "../../src/theme";
 import { Button } from "../../src/ui/Button";
+import { EmptyState } from "../../src/ui/EmptyState";
 import { useTheme } from "../../src/theme-context";
 import { haptic } from "../../src/ui/haptics";
 
@@ -15,6 +16,7 @@ export default function ApprovalListScreen() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [done, setDone] = useState("");
 
   const selectedApprovals = pending.filter((p) => selected.has(p.rpcId) && p.kind === "approval");
   const selectedQuestions = pending.filter((p) => selected.has(p.rpcId) && p.kind === "question");
@@ -32,10 +34,14 @@ export default function ApprovalListScreen() {
     if (busy || items.length === 0) return;
     setBusy(true);
     setError("");
+    setDone("");
     try {
       for (const p of items) {
         await respond(p.rpcId, result);
       }
+      const approved = (result as { approved?: boolean })?.approved === true;
+      const skipped = (result as { skipped?: boolean })?.skipped === true;
+      setDone(skipped ? `已跳过 ${items.length} 项提问` : approved ? `已批准 ${items.length} 项` : `已拒绝 ${items.length} 项`);
       void haptic("success");
       setSelected(new Set());
     } catch (err) {
@@ -56,9 +62,7 @@ export default function ApprovalListScreen() {
         </View>
 
         {pending.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>没有待处理的审批或提问</Text>
-          </View>
+          <EmptyState eyebrow="ALL CLEAR" text="没有待处理的审批或提问" />
         ) : (
           <View style={styles.list}>
             {pending.map((p) => {
@@ -100,6 +104,7 @@ export default function ApprovalListScreen() {
           </View>
         )}
         {error.length > 0 && <Text style={styles.error}>{error}</Text>}
+        {done.length > 0 && <Text style={styles.done}>{done}</Text>}
       </ScrollView>
 
       {pending.length > 0 && (
@@ -121,6 +126,7 @@ export default function ApprovalListScreen() {
           <View style={styles.buttonRow}>
             <Button
               label={`批准所选 (${selectedApprovals.length})`}
+              loading={busy}
               onPress={() => void runBatch(selectedApprovals, { approved: true })}
               disabled={busy || selectedApprovals.length === 0}
               style={styles.flex}
@@ -128,6 +134,7 @@ export default function ApprovalListScreen() {
             <Button
               tone="danger"
               label={`拒绝所选 (${selectedApprovals.length})`}
+              loading={busy}
               onPress={() => void runBatch(selectedApprovals, { approved: false })}
               disabled={busy || selectedApprovals.length === 0}
               style={styles.flex}
@@ -196,5 +203,6 @@ function createStyles(colors: ThemeColors) {
     buttonRow: { flexDirection: "row", gap: space.x3 },
     flex: { flex: 1 },
     error: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
+    done: { color: colors.success, fontSize: font.caption, textAlign: "center", fontFamily: font.mono },
   });
 }

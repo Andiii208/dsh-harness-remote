@@ -5,6 +5,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { parsePairPayload, parseRemotePairPayload } from "@dsh-remote/protocol";
 import { useConnection } from "../src/transport/ConnectionProvider";
+import { classifyConnectionError } from "../src/transport/connectionErrors";
 import { toRelayWsUrl } from "../src/transport/relayMode";
 import { hostStore } from "../src/discovery/hostStoreAdapter";
 import { tokenStore } from "../src/data/secureStoreAdapter";
@@ -18,9 +19,10 @@ export default function ScanScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { connect } = useConnection();
+  const { connect, disconnect, state, givenUp, lastError } = useConnection();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(true);
+  const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -28,6 +30,19 @@ export default function ScanScreen() {
       void requestPermission();
     }
   }, [permission, requestPermission]);
+
+  // 连接成功/失败后跳转（不直接跳 /sessions，避免落到空列表）。
+  useEffect(() => {
+    if (!connecting) return;
+    if (state === "online") {
+      setConnecting(false);
+      router.replace("/sessions");
+    } else if (givenUp || (state === "offline" && lastError)) {
+      setConnecting(false);
+      setError(lastError?.hint ?? "连接失败，请返回重试");
+      setTimeout(() => setScanning(true), 1200);
+    }
+  }, [connecting, state, givenUp, lastError, router]);
 
   const onScanned = async (data: string) => {
     if (!scanning) return;
@@ -38,11 +53,15 @@ export default function ScanScreen() {
     if (remote) {
       void haptic("success");
       setError("");
-      void (async () => {
+      setConnecting(true);
+      try {
         const addr = remote.port !== undefined ? `${remote.addr}:${remote.port}` : remote.addr;
         await connect(toRelayWsUrl(addr), 0, undefined, remote.code);
-        router.replace("/sessions");
-      })();
+      } catch (err) {
+        setConnecting(false);
+        setError(classifyConnectionError(err).hint);
+        setTimeout(() => setScanning(true), 1200);
+      }
       return;
     }
 
@@ -54,11 +73,17 @@ export default function ScanScreen() {
       return;
     }
     void haptic("success");
-    if (payload.token) await tokenStore.set(payload.token);
-    await hostStore.add(payload.host, payload.port, undefined, payload.token);
     setError("");
-    await connect(payload.host, payload.port, payload.token);
-    router.replace("/sessions");
+    setConnecting(true);
+    try {
+      if (payload.token) await tokenStore.set(payload.token);
+      await hostStore.add(payload.host, payload.port, undefined, payload.token);
+      await connect(payload.host, payload.port, payload.token);
+    } catch (err) {
+      setConnecting(false);
+      setError(classifyConnectionError(err).hint);
+      setTimeout(() => setScanning(true), 1200);
+    }
   };
 
   if (Platform.OS === "web") {
@@ -88,15 +113,36 @@ export default function ScanScreen() {
           <View style={[styles.corner, styles.cornerBR]} />
         </View>
         <View style={styles.overlay}>
-          <Text style={styles.overlayTitle}>扫描连接二维码</Text>
-          <Text style={styles.overlayHint}>对准电脑上 dsh-remote 显示的二维码</Text>
-          {error.length > 0 && <Text style={styles.error}>{error}</Text>}
-          {!permission?.granted && (
-            <Button label="授权相机权限" onPress={() => void requestPermission()} full />
+          {connecting ? (
+            <>
+              <Text style={styles.overlayTitle}>正在连接…</Text>
+              <Text style={styles.overlayHint}>连接成功会自动进入会话列表</Text>
+              {error.length > 0 && <Text style={styles.error}>{error}</Text>}
+              <Pressable
+                style={styles.cancel}
+                onPress={() => {
+                  setConnecting(false);
+                  setScanning(true);
+                  void disconnect();
+                }}
+                hitSlop={12}
+              >
+                <Text style={styles.cancelText}>取消</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text style={styles.overlayTitle}>扫描连接二维码</Text>
+              <Text style={styles.overlayHint}>对准电脑上 dsh-remote 显示的二维码</Text>
+              {error.length > 0 && <Text style={styles.error}>{error}</Text>}
+              {!permission?.granted && (
+                <Button label="授权相机权限" onPress={() => void requestPermission()} full />
+              )}
+              <Pressable style={styles.cancel} onPress={() => router.back()} hitSlop={12}>
+                <Text style={styles.cancelText}>取消</Text>
+              </Pressable>
+            </>
           )}
-          <Pressable style={styles.cancel} onPress={() => router.back()} hitSlop={12}>
-            <Text style={styles.cancelText}>取消</Text>
-          </Pressable>
         </View>
       </CameraView>
     </View>

@@ -1,5 +1,53 @@
 # PROGRESS
 
+## Phase 4（v0.3 远程优先）：i18n 与发布质量（2026-08-18）
+- i18n 基础设施：`src/i18n/`（translations.ts / index.tsx / languagePreferenceStore(+Adapter)）。默认 zh-CN，支持 en，Provider 挂 root；第一批覆盖 onboarding + 连接页文案，key 集合 parity 单测保证。
+- 更新闭环：设置页「检查更新」解析 GitHub Release 资产，优先跳转 APK 下载；新增电脑端插件更新提示（`dsh plugin --profile web update dsh-harness-remote --latest -w`）。
+- 真机回归清单：`docs/MANUAL.md` 新增 2.9「远程优先真机回归清单」（电脑端设置页 + 手机 4G 扫码全链路）。
+- 版本：`harness-plugin` / `apps/mobile` 统一升到 `0.3.0`；连接页版本文案同步 `v0.3.0`。
+- 发布门禁：`plugin_check` 对 `harness-plugin/` 判定 **pass**；`npm pack --dry-run` 产出 `dsh-harness-remote-0.3.0.tgz`（434.5 kB）。
+- 回归：全仓 build/typecheck/test 全绿；capture 24 / protocol 127 / mobile 130（+2 i18n parity）/ mock 29 / relay 39 / harness-plugin 53。
+
+## Phase 3（v0.3 远程优先）：设计系统精修（2026-08-18，基础设施已落地）
+- 新增 `docs/design/UI-SYSTEM-v8.md`：Surface/Card/Board 三层、语义色注册表、字号白名单（10/12/13/14/15/20/24/28）、组件契约。
+- `theme.ts` 增加 v8 别名：`card`（=surface）、`chip`（=surface2）、`board`（=separator），保持旧 key 兼容。
+- 新增 `src/ui/AppText.tsx`：统一文字组件（display/title/body/caption/eyebrow/mono/monoBold + tone），只消费 token；`EmptyState` / `ConnectionBanner` 已接入。
+- `Button` 新增 `loading` 态（ActivityIndicator + 禁用）；连接页「连接」、审批批量按钮已接 loading。
+- 启动连续性：`_layout.tsx` 根视图背景设为 `#F7F7FA`，与 splash/浅色 Surface 一致，避免白闪。
+- 字号 token 清理：sessions/settings 中散落的 9/10/13/14 改回 token（font.eyebrow / font.transcript / font.body）。
+- 回归：全仓 build/typecheck/test 全绿；capture 24 / protocol 127 / mobile 128 / mock 29 / relay 39 / harness-plugin 53。
+- 遗留（下一轮可继续）：全量 `fontSize:` 扫描仍有部分白名单内原始值（display 24/28、emoji/图标字形等）；AppText 尚未覆盖所有页面（当前先覆盖基础组件）。
+
+## Phase 2（v0.3 远程优先）：会话/聊天/审批细节（2026-08-18）
+- 空态统一：`EmptyState` 增加可选 `action`；sessions/chat/approval/plugins 四页全部改为「眉标 + 一句说明 + 行动按钮」。会话离线空态给「去连接」，在线无会话给「＋ 新建会话」；聊天空态给「去连接」；插件/审批空态给说明。
+- 会话时间格式：新增 `formatSessionTime()`（今天 HH:mm / 昨天 / 一周内周X / 更早 M/D）并单测；sessions.tsx 改为消费该纯函数。
+- 聊天：发送失败恢复草稿 + 错误行「重发」按钮；代码块头部新增「复制」按钮（与折叠并列）。
+- 审批：批量处理后显示「已批准/已拒绝/已跳过 N 项」；审批详情页补充 `tool` 字段展示。
+- 回归：全仓 build/typecheck/test 全绿；capture 24 / protocol 127 / mobile 128（+1）/ mock 29 / relay 39 / harness-plugin 53。
+
+## Phase 1（v0.3 远程优先）：连接体验（2026-08-18）
+- `ConnectionLoop` 新增 `maxAttempts` / `onGiveUp` / `lastErrorResult()`：连续失败达到阈值后停在 offline 并回调，不再无限重试；`start()` 可重新开始，`stop()` 在 run 已退出时立即结算不挂起。protocol 测试 127（原 125，+2 give-up）。
+- 移动端新增 `src/transport/connectionErrors.ts`：连接错误分类（auth/pair/rate/timeout/refused/dns/tls/protocol/tunnel/unknown），每类给中文标题 + 建议；单测覆盖。
+- `ConnectionProvider` 暴露 `lastError` / `givenUp` / `retry()` / `stopRetrying()`；pipeline 装配 `maxAttempts: 8` 并接 `onGiveUp` 分类。
+- 新增 `src/ui/ConnectionBanner.tsx`（迁移 Cindy 结构）：1.2s 静默窗口防闪烁；错误/连接中/重连中三态；停止重试 / 重试按钮；`index.tsx` 已接入。
+- 扫码流程不再直接跳 `/sessions`：`scan.tsx` 先显示「正在连接…」可取消，等 state=online 才进会话列表，失败给分类提示并恢复扫码。
+- 连接页远程模式展示最近 relay 主机（过滤 port=0 / ws(s):// / relay://），一键重连。
+- CLI 卡片按模式展示：公网模式打印 `wss://xxx.trycloudflare.com`，不再误导性打印本地端口。
+- 回归：全仓 build/typecheck/test 全绿；capture 24 / protocol 127 / mobile 127 / mock 29 / relay 39 / harness-plugin 53。
+
+## Phase 0（v0.3 远程优先）：DSH 设置页插件化 + cloudflared 公网（2026-08-18）
+- 包重命名：`@dsh-remote/harness-plugin` → **`dsh-harness-remote`**（符合 `dsh-*` 规范，npm 已确认空闲）；README/CI/bat 引用同步。
+- 单包化发布：`cordis.patch.yml` + `package.json` 的 `dsh.bundle.patch` / `dsh.client.inject`（web）声明；`scripts/build.mjs` 用 esbuild 把 `relay` + `@dsh-remote/protocol` + `qrcode` 打进 `lib/index.js`，CLI 打进 `dist/cli.js`（单包零 workspace 运行时依赖）；`npm pack --dry-run` 通过；`plugin_check` 对 `harness-plugin/` 判定 **pass**。
+- 新增 `src/tunnel.ts`：cloudflared 二进制查找/下载（PATH → 插件 bin 目录 → 官方构建）、quick tunnel 启动/超时/URL 解析/停止；纯函数可测。
+- `src/remote-access.ts` 支持 `mode: "tunnel" | "lan"`（默认 tunnel）：tunnel 模式 relay 只监听回环，公网入口由 cloudflared 承担，QR/地址返回 `wss://xxx.trycloudflare.com`；LAN 模式行为不变。
+- 新增 `src/remote-service.ts`（状态快照 + 启停 + QR dataURL）与 `src/web-rpc.ts`（loopback RPC：`status/start/stop`，对齐 rpcErrorSchema）。
+- 新增 `src/apply.ts`：DSH bundle 插件入口——加载即自动开启远程（默认公网）、注册 RPC、`ctx.effect` 清理。
+- 新增设置页 `client/`（api.js / index.jsx / build.mjs）：DSH 设置一级入口「手机远程」，公网为主路径，显示二维码/地址/6位码/DSH 桥接状态/启停按钮；esbuild + `window.__ModuleLoader__.load` 打包（对齐 dsh-pocket）。
+- App 远程优先：onboarding 改为三步卡（装插件→开设置页→扫码）；连接页远程模式主按钮改「扫码连接」，手动输入折叠；新增「电脑端怎么开？」内联说明；LAN 继续藏在「更多连接方式」。
+- CI：`ci.yml` 增插件 `npm pack --dry-run` 门禁；新增 `publish-plugin.yml`（tag `plugin-v*` 发布 npm）。
+- 回归：全仓 build/typecheck/test 全绿；测试数 capture 24 / protocol 125 / mobile 125 / mock-harness 29 / relay 39 / harness-plugin 53（新增 tunnel 6、remote-service 3、web-rpc 3、remote-access +1）。
+- 待真机/真实 DSH 验证：`dsh plugin --profile web add dsh-harness-remote -w` 后设置页「手机远程」出码、手机 4G 扫码连上（当前环境无真实 DSH Web 与 cloudflared）。
+
 ## v0.2.0 之后：可用性修复 + UI 对齐 DeepSeek（2026-08-18）
 - 图标：`icon.png` 黑鲸墨迹 bbox 对齐 DeepSeek 官方 App 图标实测尺寸（1024 画布宽约 780，居中）；`adaptive-icon.png` 缩小到宽约 533（约 52%），完整落在 Android 66% 安全圈内；`splash` 改浅色底 + 黑鲸。
 - 主题：`app.json` 改 `userInterfaceStyle: automatic` + 浅色 splash/背景；新增 `themePreferenceStore`（默认 `light`，持久化）；设置页「显示 → 外观」支持 浅色 / 深色 / 跟随系统；连接页右上角新增「设置」入口。

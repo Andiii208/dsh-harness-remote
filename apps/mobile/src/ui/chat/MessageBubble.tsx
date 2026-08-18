@@ -142,14 +142,24 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
               <View key={i} style={[styles.codeBlock, isTool && styles.codeBlockTool]}>
                 <View style={styles.codeHeader}>
                   <Text style={styles.codeLang}>{seg.lang ?? "code"}</Text>
-                  <Pressable
-                    onPress={() => toggleCollapsed(i)}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel={collapsed.has(i) ? "展开代码块" : "折叠代码块"}
-                  >
-                    <Text style={styles.codeToggle}>{collapsed.has(i) ? "▸ 展开" : "▾ 折叠"}</Text>
-                  </Pressable>
+                  <View style={styles.codeActions}>
+                    <Pressable
+                      onPress={() => void copy(seg.text)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel="复制代码块"
+                    >
+                      <Text style={styles.codeToggle}>复制</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => toggleCollapsed(i)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={collapsed.has(i) ? "展开代码块" : "折叠代码块"}
+                    >
+                      <Text style={styles.codeToggle}>{collapsed.has(i) ? "▸ 展开" : "▾ 折叠"}</Text>
+                    </Pressable>
+                  </View>
                 </View>
                 {!collapsed.has(i) && (
                   <Text style={styles.codeText} selectable>
@@ -254,6 +264,7 @@ function createStyles(colors: ThemeColors, scale: number) {
     },
     codeBlockTool: { borderLeftWidth: 2, borderLeftColor: colors.warn },
     codeHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+    codeActions: { flexDirection: "row", alignItems: "center", gap: 12 },
     codeLang: { color: colors.textDim, fontSize: 9, fontFamily: font.monoBold, letterSpacing: 1, textTransform: "uppercase" },
     codeToggle: { color: colors.accent, fontSize: 11, fontFamily: font.mono, fontWeight: "500" },
     codeText: { color: colors.codeText, fontSize: 12 * scale, lineHeight: 19 * scale, fontFamily: font.mono },

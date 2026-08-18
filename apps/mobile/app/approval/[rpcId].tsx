@@ -75,6 +75,11 @@ export default function ApprovalScreen() {
                   <Text style={styles.command}>{String(payload.command)}</Text>
                 </View>
               )}
+              {payload.tool !== undefined && (
+                <View style={styles.commandBox}>
+                  <Text style={styles.command}>tool · {String(payload.tool)}</Text>
+                </View>
+              )}
               <View style={styles.buttonRow}>
                 <Button label="批准" onPress={() => done({ approved: true })} disabled={busy} style={styles.flex} />
                 <Button tone="danger" label="拒绝" onPress={() => done({ approved: false })} disabled={busy} style={styles.flex} />

@@ -27,8 +27,9 @@ import { WhaleMark } from "../src/ui/WhaleMark";
 import { StatusChip, type StatusTone } from "../src/ui/StatusChip";
 import { Field } from "../src/ui/Field";
 import { Button } from "../src/ui/Button";
-import { ConnectingBar } from "../src/ui/ConnectingBar";
+import { ConnectionBanner } from "../src/ui/ConnectionBanner";
 import { useTheme } from "../src/theme-context";
+import { useI18n } from "../src/i18n";
 import { haptic } from "../src/ui/haptics";
 
 const STATE_TONE: Record<string, StatusTone> = {
@@ -42,6 +43,7 @@ type ConnectMode = "remote" | "lan";
 
 export default function ConnectScreen() {
   const { state, describe, relayPeerId, connect, disconnect } = useConnection();
+  const { t } = useI18n();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
@@ -62,6 +64,8 @@ export default function ConnectScreen() {
   const [connectError, setConnectError] = useState("");
   const [showRecent, setShowRecent] = useState(false);
   const [showToken, setShowToken] = useState(false);
+  const [showManual, setShowManual] = useState(false);
+  const [showPcHelp, setShowPcHelp] = useState(false);
   const justConnected = useRef(false);
   const discoverAbort = useRef<AbortController | null>(null);
   const heroEntering = useEntering(10, 240);
@@ -224,11 +228,28 @@ export default function ConnectScreen() {
       ? `${(describe as { name?: string }).name ?? ""} ${(describe as { version?: string }).version ?? ""}`.trim()
       : "";
 
-  const items = found.length > 0
+  const relayRecent = useMemo(
+    () =>
+      recent.filter(
+        (r) => r.port === 0 || r.host.startsWith("ws://") || r.host.startsWith("wss://") || r.host.startsWith("relay://"),
+      ),
+    [recent],
+  );
+  const lanItems = found.length > 0
     ? found.map((f) => ({ key: `found-${f.host}`, host: f.host, port: f.port, name: f.name, version: f.version, token: undefined }))
     : recent.map((r) => ({ key: `recent-${r.host}-${r.port}`, host: r.host, port: r.port, name: r.name, version: undefined, token: r.token }));
+  const remoteItems = relayRecent.map((r) => ({
+    key: `recent-relay-${r.host}`,
+    host: r.host,
+    port: r.port,
+    name: r.name,
+    version: undefined,
+    token: r.token,
+  }));
 
-  const showList = mode === "lan" && (found.length > 0 || showRecent);
+  const items = mode === "remote" ? remoteItems : lanItems;
+
+  const showList = mode === "remote" ? (!online && relayRecent.length > 0) : (found.length > 0 || showRecent);
 
   return (
     <KeyboardAvoidingView
@@ -249,7 +270,7 @@ export default function ConnectScreen() {
           </View>
         </Animated.View>
 
-        {state === "connecting" && <ConnectingBar />}
+        <ConnectionBanner />
 
         {(describeName.length > 0 || (online && relayPeerId)) && (
           <View style={styles.stateRow}>
@@ -260,12 +281,10 @@ export default function ConnectScreen() {
 
         <Animated.View key={`banner-${mode}`} entering={bannerEntering} exiting={bannerExiting} style={styles.banner}>
           <Text style={styles.bannerTitle}>
-            {mode === "remote" ? "远程连接我的电脑" : "同一 Wi-Fi 连接"}
+            {mode === "remote" ? t.connect.remoteBannerTitle : t.connect.lanBannerTitle}
           </Text>
           <Text style={styles.bannerDesc}>
-            {mode === "remote"
-              ? "走到哪儿都能连。填写电脑上显示的地址和 6 位码即可。"
-              : "手机和电脑连同一个 Wi-Fi 时使用。"}
+            {mode === "remote" ? t.connect.remoteBannerDesc : t.connect.lanBannerDesc}
           </Text>
         </Animated.View>
 
@@ -278,30 +297,49 @@ export default function ConnectScreen() {
         <Animated.View key={`form-${mode}`} entering={formEntering} exiting={formExiting} style={styles.card}>
           {mode === "remote" ? (
             <>
-              <Field
-                label="连接地址"
-                placeholder="电脑上显示的地址，例如 myrelay.com 或 192.168.1.5"
-                autoCapitalize="none"
-                autoCorrect={false}
-                value={remoteHost}
-                onChangeText={setRemoteHost}
-                onBlur={() => remoteHost.trim() && void draftStore.set(remoteHost.trim(), 0)}
-                editable={!online}
-              />
-              <Field
-                label="6 位码（可选）"
-                placeholder="电脑上显示的 6 位数字"
-                keyboardType="number-pad"
-                maxLength={6}
-                value={pairCode}
-                onChangeText={setPairCode}
-                editable={!online}
-              />
-              <Text style={styles.relayHint}>
-                {normalizedRelayUrl
-                  ? `将连接 ${normalizedRelayUrl}`
-                  : "地址不用加 http、ws 或端口，App 会自动补全"}
-              </Text>
+              {!showManual && !online ? (
+                <Pressable
+                  style={styles.manualToggle}
+                  onPress={() => setShowManual(true)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="手动输入地址和 6 位码"
+                >
+                  <Text style={styles.linkText}>{t.connect.manualToggle}</Text>
+                </Pressable>
+              ) : (
+                <>
+                  <Field
+                    label={t.connect.addressLabel}
+                    placeholder={t.connect.addressPlaceholder}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={remoteHost}
+                    onChangeText={setRemoteHost}
+                    onBlur={() => remoteHost.trim() && void draftStore.set(remoteHost.trim(), 0)}
+                    editable={!online}
+                  />
+                  <Field
+                    label={t.connect.codeLabel}
+                    placeholder={t.connect.codePlaceholder}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    value={pairCode}
+                    onChangeText={setPairCode}
+                    editable={!online}
+                  />
+                  <Text style={styles.relayHint}>
+                    {normalizedRelayUrl
+                      ? `将连接 ${normalizedRelayUrl}`
+                      : "地址不用加 http、ws 或端口，App 会自动补全"}
+                  </Text>
+                  {!online && (
+                    <Pressable onPress={() => setShowManual(false)} hitSlop={8} accessibilityRole="button" accessibilityLabel="收起手动输入">
+                      <Text style={styles.linkText}>{t.connect.collapseManual}</Text>
+                    </Pressable>
+                  )}
+                </>
+              )}
             </>
           ) : (
             <>
@@ -373,32 +411,55 @@ export default function ConnectScreen() {
           </View>
         )}
 
-        {mode === "remote" && !online && (
-          <Button tone="ghost" label="扫码连接" onPress={() => { void haptic("light"); router.push("/scan"); }} full />
-        )}
-
         {online ? (
-          <Button tone="danger" label="断开连接" onPress={() => { justConnected.current = false; void haptic("warning"); void disconnect(); }} full />
-        ) : (
+          <Button tone="danger" label={t.connect.disconnect} onPress={() => { justConnected.current = false; void haptic("warning"); void disconnect(); }} full />
+        ) : mode === "remote" && !showManual ? (
           <Button
-            label={busy ? "连接中…" : "连接"}
-            onPress={() => void onConnect()}
-            disabled={busy || (mode === "remote" ? !remoteHost.trim() : !lanHost.trim())}
+            label={t.connect.scanConnect}
+            onPress={() => { void haptic("light"); router.push("/scan"); }}
             full
           />
+        ) : (
+          <>
+            <Button
+              label={t.connect.connect}
+              loading={busy}
+              onPress={() => void onConnect()}
+              disabled={busy || (mode === "remote" ? !remoteHost.trim() : !lanHost.trim())}
+              full
+            />
+            {mode === "remote" && (
+              <Button tone="ghost" label={t.connect.scanConnect} onPress={() => { void haptic("light"); router.push("/scan"); }} full />
+            )}
+          </>
         )}
         {connectError.length > 0 && <Text style={styles.connectError}>{connectError}</Text>}
 
         {mode === "remote" && !online && (
+          <Pressable style={styles.moreRow} onPress={() => setShowPcHelp((v) => !v)} accessibilityRole="button" accessibilityLabel="电脑端怎么开">
+            <Text style={styles.moreLink}>{showPcHelp ? t.connect.collapseManual : t.connect.pcHelp}</Text>
+          </Pressable>
+        )}
+
+        {showPcHelp && mode === "remote" && !online && (
+          <View style={styles.pcHelpCard}>
+            <Text style={styles.pcHelpTitle}>{t.connect.pcHelpTitle}</Text>
+            <Text style={styles.pcHelpStep}>{t.connect.pcHelpStep1}</Text>
+            <Text style={styles.pcHelpStep}>{t.connect.pcHelpStep2}</Text>
+            <Text style={styles.pcHelpStep}>{t.connect.pcHelpStep3}</Text>
+          </View>
+        )}
+
+        {mode === "remote" && !online && (
           <Pressable style={styles.moreRow} onPress={() => { void haptic("light"); setMode("lan"); }} accessibilityRole="button" accessibilityLabel="更多连接方式">
-            <Text style={styles.moreLink}>更多连接方式 ›</Text>
+            <Text style={styles.moreLink}>{t.connect.moreConnections}</Text>
           </Pressable>
         )}
 
         {showList ? (
           <View style={styles.listCard}>
             <View style={styles.listHeader}>
-              <Text style={styles.listTitle}>{found.length > 0 ? "发现的电脑" : "历史电脑"}</Text>
+              <Text style={styles.listTitle}>{mode === "remote" ? t.connect.recentHosts : found.length > 0 ? "发现的电脑" : "历史电脑"}</Text>
               {found.length === 0 && (
                 <Pressable onPress={() => setShowRecent(false)} hitSlop={8} accessibilityRole="button" accessibilityLabel="收起历史电脑">
                   <Text style={styles.linkText}>收起</Text>
@@ -439,7 +500,7 @@ export default function ConnectScreen() {
 
         {online && (
           <Pressable style={styles.linkRow} onPress={() => router.push("/sessions")} accessibilityRole="link" accessibilityLabel="进入会话">
-            <Text style={styles.link}>进入会话 →</Text>
+            <Text style={styles.link}>{t.connect.enterSessions}</Text>
           </Pressable>
         )}
 
@@ -451,7 +512,7 @@ export default function ConnectScreen() {
           </Text>
         )}
 
-        <Text style={styles.version}>v0.2.0 · harness remote</Text>
+        <Text style={styles.version}>v0.3.0 · harness remote</Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -497,6 +558,15 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     portField: { width: 96 },
     advancedRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     linkText: { color: colors.accent, fontSize: font.body, fontWeight: "500" },
+    manualToggle: { alignItems: "center", paddingVertical: space.x2 },
+    pcHelpCard: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.card,
+      padding: space.x5,
+      gap: space.x2,
+    },
+    pcHelpTitle: { color: colors.text, fontSize: font.body + 1, fontWeight: "600" },
+    pcHelpStep: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
     savedToken: { color: colors.textMuted, fontSize: font.caption },
     clearToken: { alignItems: "flex-start" },
     textPressed: { opacity: 0.6 },

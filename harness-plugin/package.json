@@ -1,9 +1,9 @@
 {
-  "name": "@dsh-remote/harness-plugin",
-  "version": "0.2.0",
-  "description": "dsh-remote host plugin (M2): one-time pairing token issuance + validation for non-loopback /api access (pairing fence).",
+  "name": "dsh-harness-remote",
+  "version": "0.3.0",
+  "description": "dsh-harness-remote 电脑端插件：DSH 设置页一键开启手机远程（cloudflared 公网隧道 + 中继 + 6 位配对码）。",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./lib/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
     "dsh-remote": "./dist/cli.js"
@@ -11,26 +11,55 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
+      "default": "./lib/index.js"
+    },
+    "./client": "./client/client.js",
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "lib",
+    "client",
+    "dist",
+    "src",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/build.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "dev": "vitest"
+    "dev": "vitest",
+    "prepack": "pnpm build"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
   },
   "devDependencies": {
+    "@dsh-remote/protocol": "workspace:^",
     "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.5",
+    "esbuild": "^0.25.0",
+    "relay": "workspace:^",
     "typescript": "^5.7.0",
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@dsh-remote/protocol": "workspace:^",
-    "qrcode-terminal": "0.12.0",
-    "relay": "workspace:^"
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "0.12.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    }
   }
 }

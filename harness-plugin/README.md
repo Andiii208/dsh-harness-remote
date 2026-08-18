@@ -1,37 +1,52 @@
-# @dsh-remote/harness-plugin — DSH 宿主配对插件（M2）
+# dsh-harness-remote — DSH 电脑端插件（手机远程）
 
-在 DSH 宿主侧把「信任围栏」升级为「配对围栏」：宿主生成一次性**配对 token**（默认 15 分钟过期），手机 App 携带 token 访问 `/api`；回环请求保持放行（特权功能继续 loopback-only），**非回环请求必须带有效 token**，否则 `ok:false UNAUTHORIZED`。
+把 DeepSeek Harness 装进手机：DSH 设置页一键开启手机远程，公网模式走 cloudflared 免费隧道（无需账号/服务器/公网 IP），手机 App 扫码即连，人在外面也能看会话、发消息、审批。
 
-## 组件
-
-- `src/token.ts` — `PairingTokenStore`：签发/校验/过期/吊销（纯 TS，可注入时钟与随机源）。
-- `src/gate.ts` — `decideAccess` 访问决策 + `extractToken` 头解析（纯函数）。
-- `src/plugin.ts` — `createPairingPlugin`：接线骨架（issueToken / pairingUrl / revoke / authorize / extractToken）。
-
-## 二维码配对（P2）
-
-- `plugin.pairingUrl(host, port)`：签发新 token 并返回配对深链
-  `dshremote://pair?host=<host>&port=<port>&token=<token>`（契约见 docs/PROTOCOL.md §8）。
-- 宿主把该 URL 渲染为 QR 显示在终端；App 扫码即一键连接（token 随 URL 传递，仍受 15 分钟 TTL 限制）。
-- 单测：`test/pairing-url.test.ts`（构造 → `parsePairPayload` 解析 → token 生效）。
-
-## 安装（user patch 层，不改 DSH 源码）
+## 安装（官方标准路径）
 
 ```bash
-pnpm --filter @dsh-remote/harness-plugin build
+dsh plugin --profile web add dsh-harness-remote -w
 ```
 
-1. 构建产物 `dist/` 供宿主加载。
-2. 在 `<harness-home>/profiles/<profile>/cordis.patch.yml` 按宿主插件约定声明本插件入口（⚠️ 插件接缝细节以 DSH rc.5 插件文档为准——见下方校准说明）。
-3. 重启 DSH；通过宿主命令/接口调用 `issueToken()` 获取一次性 token，展示二维码或文本给手机 App。
+然后重启 `dsh web`：
 
-## ⚠️ 校准说明（诚实声明）
+```bash
+npx @deepseek-ai/dsh web
+```
 
-- DSH 为 developer preview（`0.1.0-rc.5`），插件加载/钩子细节可能变化；本包按自洽契约交付（协议层闭环由 mock-harness 配对场景覆盖）。
-- 拿到真实 harness 后：校准插件挂接点（中间件注入位置）、token 头格式、回环判定，并重录 conformance fixtures 回归。
+打开 DSH 设置页，左侧会出现 **「手机远程」** 入口：点「开启公网访问」→ 页面显示二维码 + 6 位配对码 → 手机 App 扫码即连。
+
+> 手动安装（仅旧版本兼容）：`pnpm --filter dsh-harness-remote build` 后，把本包按 DSH bundle 插件约定声明到 `<harness-home>/profiles/<profile>/cordis.patch.yml`。
+
+## 模式
+
+| 模式 | 说明 |
+|---|---|
+| 公网（默认） | 插件自动启动内置 relay（仅回环）→ 注册 console → cloudflared quick tunnel 暴露 `wss://xxx.trycloudflare.com` → 6 位配对码 + 二维码。任何网络可用；地址每次重启自动换新。 |
+| 局域网 | 同 Wi-Fi 直连；仅调试/兜底使用，App 里藏在「更多连接方式」。 |
+| CLI 后备 | `dsh-remote remote`（开发调试用，不依赖 DSH Web 设置页）。 |
 
 ## 安全边界
 
-- token 仅存内存（重启失效）；15 分钟过期；单 token 轮换（新签发即吊销旧的）。
-- token 是短期门禁凭证，非长期密钥；M3 中继升级为 E2E 密钥交换。
-- 日志绝不输出 token。
+- 公网入口 URL 随机且重启轮换；真正门禁是 relay 的 **6 位配对码（一次性）+ 失败锁定 + E2E 加密数据面**。
+- 设置页 RPC 仅 loopback 可调（`authority: "loopback"`），配对码/公网地址只在电脑本地可读。
+- relay 只转发 `{to, ciphertext, nonce}`，不接触 DSH 明文。
+- 日志绝不输出配对码。
+
+## 组件
+
+- `src/apply.ts` — DSH bundle 插件入口：加载即自动开启远程，注册 RPC，卸载清理。
+- `src/remote-service.ts` — 远程访问服务（状态快照 + 启停 + QR data URL）。
+- `src/web-rpc.ts` — 设置页 loopback RPC（`status/start/stop`）。
+- `src/remote-access.ts` — 可复用核心：relay + console + 6 位码 + DSH 桥接 + 公网/局域网地址。
+- `src/tunnel.ts` — cloudflared 二进制查找/下载/隧道启停/URL 解析。
+- `client/` — 设置页「手机远程」面板（esbuild 打包，DSH ModuleLoader 加载）。
+- `src/token.ts` / `src/gate.ts` / `src/plugin.ts` — M2 配对围栏组件（保留）。
+
+## 开发
+
+```bash
+pnpm --filter dsh-harness-remote build     # tsc + esbuild（lib/client/cli）
+pnpm --filter dsh-harness-remote test
+pnpm --filter dsh-harness-remote typecheck
+```

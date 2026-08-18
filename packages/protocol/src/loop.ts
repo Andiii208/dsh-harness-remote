@@ -33,6 +33,10 @@ export interface ConnectionLoopOptions extends TransportEvents {
   onStateChange?: (state: ConnectionState) => void;
   /** Called after a successful reconnect (resync point). */
   onResync?: () => void;
+  /** 连续连接失败达到该次数后放弃（不再退避重试）。缺省为无限重试。 */
+  maxAttempts?: number;
+  /** 达到 maxAttempts 放弃时回调（携带最后一次错误）。 */
+  onGiveUp?: (lastError: unknown) => void;
 }
 
 const DEFAULT_BASE = 500;
@@ -60,6 +64,8 @@ export class ConnectionLoop {
 
   private readonly out = new FrameQueue();
   private lastDescribe: unknown = null;
+  private lastError: unknown = null;
+  private failures = 0;
 
   constructor(opts: ConnectionLoopOptions) {
     this.opts = {
@@ -84,19 +90,27 @@ export class ConnectionLoop {
     return this.lastDescribe;
   }
 
+  /** 最近一次连接失败的错误（成功后清空；give-up 后保留供 UI 展示）。 */
+  lastErrorResult(): unknown {
+    return this.lastError;
+  }
+
   /** Kick off the connection loop in the background. Idempotent: a second
    *  start() while the loop is running is a no-op. */
   start(): void {
     if (this.running) return;
     this.running = true;
     this.stopped = false;
+    this.stoppedSettled = false; // 允许 stop() 再次等待新一轮 run 退出
     this.attempt = 0;
+    this.failures = 0;
     void this.run();
   }
 
   /** 停止并等待 run() 真正退出（幂等；已结算后再调直接 resolve，杜绝二次调用死锁）。 */
   stop(): Promise<void> {
     if (this.stoppedSettled) return Promise.resolve();
+    const wasRunning = this.running;
     this.stopped = true;
     this.running = false;
     this.conn?.close();
@@ -108,7 +122,10 @@ export class ConnectionLoop {
         this.resolveStop = resolve;
       });
     }
-    return this.stopPromise;
+    const promise = this.stopPromise;
+    // run() 已退出（give-up / 从未启动）时，无需等待，直接结算。
+    if (!wasRunning) this.settleStop();
+    return promise;
   }
 
   private settleStop(): void {
@@ -138,6 +155,8 @@ export class ConnectionLoop {
         }
         this.conn = conn;
         this.attempt = 0;
+        this.failures = 0;
+        this.lastError = null;
         this.setState("online");
         // Sync point after every successful (re)connect: re-run host.describe
         // and let the caller re-pull session state.
@@ -152,6 +171,8 @@ export class ConnectionLoop {
         this.setState("offline");
         this.conn = null;
       } catch (err) {
+        this.lastError = err;
+        this.failures += 1;
         this.opts.onError?.(err);
         this.setState("offline");
       }
@@ -159,6 +180,14 @@ export class ConnectionLoop {
       if (this.stopped) {
         this.running = false;
         this.settleStop();
+        return;
+      }
+
+      // 达到放弃阈值：停在 offline，不再退避重试（UI 可调用 start() 重新开始）。
+      if (this.opts.maxAttempts !== undefined && this.failures >= this.opts.maxAttempts) {
+        this.setState("offline");
+        this.opts.onGiveUp?.(this.lastError);
+        this.running = false;
         return;
       }
 

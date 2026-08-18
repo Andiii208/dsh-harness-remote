@@ -71,7 +71,7 @@ function OptionChip({ label, active, onPress }: { label: string; active: boolean
 
 const optionStyles = StyleSheet.create({
   chip: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
-  chipText: { fontSize: 13, fontWeight: "500" },
+  chipText: { fontSize: font.transcript, fontWeight: "500" },
 });
 
 function permissionText(p?: HostSettings["permissions"]): string {
@@ -148,10 +148,19 @@ export default function SettingsScreen() {
         signal: ctrl.signal,
         headers: { accept: "application/vnd.github+json" },
       });
-      const data = (await res.json()) as { tag_name?: string; html_url?: string };
+      const data = (await res.json()) as {
+        tag_name?: string;
+        html_url?: string;
+        assets?: Array<{ name?: string; browser_download_url?: string }>;
+      };
       const current = `v${Constants.expoConfig?.version ?? "0.1.0"}`;
       if (data.tag_name && data.tag_name !== current) {
-        setUpdateState({ status: "new", message: `新版本 ${data.tag_name}`, url: data.html_url });
+        const apk = data.assets?.find((a) => a.name?.endsWith(".apk"));
+        setUpdateState({
+          status: "new",
+          message: `新版本 ${data.tag_name}`,
+          url: apk?.browser_download_url ?? data.html_url,
+        });
       } else {
         setUpdateState({ status: "latest", message: "已是最新版本" });
       }
@@ -337,6 +346,7 @@ export default function SettingsScreen() {
           }}
           last
         />
+        <Text style={styles.hint}>电脑端插件更新：dsh plugin --profile web update dsh-harness-remote --latest -w</Text>
         <View style={styles.linkRow}>
           <Button tone="ghost" label="GitHub · 使用手册" onPress={() => void Linking.openURL("https://github.com/Andiii208/dsh-remote")} full />
         </View>

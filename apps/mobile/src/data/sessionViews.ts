@@ -50,3 +50,19 @@ export function pressureTier(percent: number): PressureTier {
   if (percent >= 70) return "warn";
   return "normal";
 }
+
+const DAY_NAMES = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+/** 会话时间格式：今天 HH:mm / 昨天 / 一周内周X / 更早 M/D。 */
+export function formatSessionTime(ms: number, now: number = Date.now()): string {
+  const nowDate = new Date(now);
+  const thenDate = new Date(ms);
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const dayDiff = Math.round((startOfDay(nowDate) - startOfDay(thenDate)) / 86_400_000);
+  if (dayDiff <= 0) {
+    return thenDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  if (dayDiff === 1) return "昨天";
+  if (dayDiff < 7) return DAY_NAMES[thenDate.getDay()] ?? "";
+  return `${thenDate.getMonth() + 1}/${thenDate.getDate()}`;
+}

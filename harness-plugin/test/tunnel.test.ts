@@ -1,0 +1,94 @@
+import { EventEmitter } from "node:events";
+import { describe, expect, it } from "vitest";
+import type { ChildProcess } from "node:child_process";
+import {
+  candidateBinPaths,
+  cloudflaredAsset,
+  parseTunnelUrl,
+  startCloudflaredTunnel,
+} from "../src/tunnel.js";
+
+class FakeChild extends EventEmitter {
+  stdout = new EventEmitter();
+  stderr = new EventEmitter();
+  killed = false;
+  kill(): boolean {
+    this.killed = true;
+    return true;
+  }
+}
+
+function fakeSpawn(): FakeChild {
+  return new FakeChild();
+}
+
+const asChildProcess = (child: FakeChild): ChildProcess => child as unknown as ChildProcess;
+
+describe("parseTunnelUrl", () => {
+  it("extracts trycloudflare URLs from cloudflared stdout", () => {
+    expect(parseTunnelUrl("2026-08-18T00:00:00Z INF  |  https://abc-123.trycloudflare.com")).toBe(
+      "https://abc-123.trycloudflare.com",
+    );
+    expect(parseTunnelUrl("no url here")).toBeNull();
+  });
+});
+
+describe("cloudflaredAsset", () => {
+  it("returns known assets for supported platforms", () => {
+    expect(cloudflaredAsset("win32", "x64")?.extract).toBe("none");
+    expect(cloudflaredAsset("darwin", "arm64")?.extract).toBe("tgz");
+    expect(cloudflaredAsset("linux", "x64")?.extract).toBe("none");
+    expect(cloudflaredAsset("freebsd", "x64")).toBeNull();
+  });
+});
+
+describe("candidateBinPaths", () => {
+  it("searches PATH then plugin bin dir", () => {
+    const paths = candidateBinPaths("C:\\Users\\me\\.dsh", "win32", "C:\\bin;D:\\tools", ";");
+    expect(paths[0]).toBe("C:\\bin\\cloudflared.exe");
+    expect(paths.some((p) => p.includes("dsh-harness-remote\\bin\\cloudflared.exe"))).toBe(true);
+  });
+});
+
+describe("startCloudflaredTunnel", () => {
+  it("resolves with public URL from stdout and stops child", async () => {
+    const child = fakeSpawn();
+    const promise = startCloudflaredTunnel({
+      localPort: 4090,
+      binPath: process.execPath,
+      timeoutMs: 1000,
+      spawnImpl: () => asChildProcess(child),
+    });
+    // 先启动，再模拟 stdout 输出公网 URL。
+    queueMicrotask(() => {
+      child.stdout.emit("data", Buffer.from("INF |  https://hello-42.trycloudflare.com\n"));
+    });
+    const handle = await promise;
+    expect(handle.publicUrl).toBe("https://hello-42.trycloudflare.com");
+    await handle.stop();
+    expect(child.killed).toBe(true);
+  });
+
+  it("rejects when child exits before URL appears", async () => {
+    const child = fakeSpawn();
+    const promise = startCloudflaredTunnel({
+      localPort: 4090,
+      binPath: process.execPath,
+      timeoutMs: 5000,
+      spawnImpl: () => asChildProcess(child),
+    });
+    queueMicrotask(() => child.emit("exit", 1));
+    await expect(promise).rejects.toThrow(/cloudflared 已退出/);
+  });
+
+  it("rejects on timeout", async () => {
+    const child = fakeSpawn();
+    const promise = startCloudflaredTunnel({
+      localPort: 4090,
+      binPath: process.execPath,
+      timeoutMs: 10,
+      spawnImpl: () => asChildProcess(child),
+    });
+    await expect(promise).rejects.toThrow(/超时/);
+  });
+});

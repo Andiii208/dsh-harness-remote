@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterSessions, groupByWorkspace, pressureTier } from "../src/data/sessionViews";
+import { filterSessions, formatSessionTime, groupByWorkspace, pressureTier } from "../src/data/sessionViews";
 import type { SessionSummary } from "../src/data/SessionStore";
 
 const s = (over: Partial<SessionSummary>): SessionSummary => ({
@@ -44,6 +44,20 @@ describe("groupByWorkspace", () => {
       s({ id: "new-w", workspace: "W2", updatedAt: 2 }),
     ]);
     expect(groups.map((g) => g.workspace)).toEqual(["其他", "W2", "W1"]);
+  });
+});
+
+describe("formatSessionTime", () => {
+  it("formats today as HH:mm, yesterday as 昨天, within a week as 周X, older as M/D", () => {
+    const now = new Date(2026, 7, 18, 21, 30).getTime(); // 2026-08-18 21:30（周二）
+    const today = new Date(2026, 7, 18, 9, 5).getTime();
+    const yesterday = new Date(2026, 7, 17, 23, 59).getTime();
+    const twoDaysAgo = new Date(2026, 7, 16, 12, 0).getTime(); // 周日
+    const older = new Date(2026, 6, 1, 10, 0).getTime();
+    expect(formatSessionTime(today, now)).toContain(":");
+    expect(formatSessionTime(yesterday, now)).toBe("昨天");
+    expect(formatSessionTime(twoDaysAgo, now)).toBe("周日");
+    expect(formatSessionTime(older, now)).toBe("7/1");
   });
 });
 
