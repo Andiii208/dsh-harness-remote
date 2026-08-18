@@ -1,5 +1,16 @@
 # PROGRESS
 
+## Phase 9：远程优先 + 插件能力面 + 设置迁移 + 一键远程（完成，2026-08-18）
+- R1 远程优先首屏：`apps/mobile/app/index.tsx` 默认远程模式；横幅文案随模式切换，[远程模式]/[局域网模式] 分段选择；远程模式只填 relay 地址（裸主机自动补 `ws://…:4090`）+ 可选 6 位配对码；LAN 保留主机/端口/token（token 收进高级）。`relayMode.ts` 增补裸主机/默认端口/IPv6 规则 + 单测（mobile 113）。
+- R5a `relay.pair.code`/`relay.pair.code.ack`：协议加类型与 `makePairCode`；relay 服务器处理（未认证拒绝、console 取码、码一次性）；`RelayClient.requestPairCode()`；联调脚本改走协议取码。protocol 110 / relay 34 / harness-plugin 30（阶段内计数）。
+- R2 插件能力面：protocol `plugin.ts`（PluginCommand/PluginSetting/PluginListResult + lenient 读取器）；harness-plugin `plugin-catalog.ts` 参考实现（DSH 注册表接缝 + 本地 manifest 目录 + 默认清单）；mock-harness `fixtures/plugins.json`；App 会话长按菜单动态展示插件指令 + `app/plugins.tsx` 插件页（单屏克制）。
+- R3 设置迁移：设置页扩展为「连接 / 模型与权限 / 插件 / 显示 / 关于」；`host.settings.get/set` 能力可探测（读不到自动隐藏）；模型选择、思考强度、上下文容量细进度条、审批权限状态；App 本地字体大小（小/标准/大，影响聊天正文与列表正文）；检查更新走 GitHub Releases 对比。protocol `host-settings.ts` + mock `fixtures/settings.json`。
+- R4 一键远程：`harness-plugin/src/cli.ts` 提供 `dsh-remote remote`：自动启动内置 relay（4090 被占用时自动选空闲端口）→ 注册 console → `relay.pair.code` 取 6 位码 → 打印小白卡片（relay 地址 + 配对码 + 操作说明）→ 配对成功提示 `已配对 device-xxx` → Ctrl+C 关闭。package.json 增加 bin 与 relay workspace 依赖。
+- 动效：模式切换/表单 180–240ms 淡入淡出 + 轻上移；主按钮按下 scale 0.98 + opacity 0.85；尊重系统「减弱动态」。
+- 集成联调：`.shots/relay-pair-integration.mjs` 组合 sessions/settings/plugins fixtures + relay + mock-harness + console；Playwright 在连接页输入 `127.0.0.1` + 6 位码完成配对，截图 `.shots/relay-mode-01-home.png` … `.shots/relay-mode-06-paired-home.png`（含设置页/插件页），find 证据 `.shots/relay-mode-find.txt`（插件指令/Ping 宿主/通知级别）。
+- 全仓回归：protocol 110 / mobile 113 / harness-plugin 30 / relay 34 / mock-harness 29 / capture 24，build/typecheck/test 全绿；CI 最新 run 全绿。
+- 明确不纳入：dsh-remote 自身不做插件宿主；用户 DIY 插件通过 DSH 插件系统 + R2 能力面在手机端呈现。
+
 ## Phase 8：UI 精简美化（DeepSeek 手机版风格，完成）
 - 连接页：首屏只保留品牌、状态、主机/端口/可选配对码与主连接按钮；「高级」折叠 token；历史主机默认折叠；自动发现/扫码为次级文字入口。
 - 引导页：3 步改为 1 屏（鲸鱼 + harness remote + 一句话 + 开始使用）。

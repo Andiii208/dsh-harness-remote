@@ -262,6 +262,22 @@ export class RelayTransport implements Transport {
 - 全仓回归：protocol 100 / mobile 109 / harness-plugin 23 / relay 26 / mock-harness 29 / capture 24，build/typecheck/test 全绿。
 - 真机 APNs/FCM 仍留待设备/账号窗口。
 
+### R5a 一次性配对码协议（2026-08-18 已实现）
+
+- 协议新增 `relay.pair.code` / `relay.pair.code.ack`（`RelayEnvelopeType` 加类型，`makePairCode` 构造器 + `RelayPairCodeRequest` / `RelayPairCodeAck` 类型）；`parseRelayEnvelope` 识别新类型。
+- relay 服务器处理 `relay.pair.code`：未认证 → `E_AUTH`；已认证但非 console → `E_AUTH`；console 成功取码（6 位、默认 TTL 10 分钟）；码一次性（同一码第二次 `relay.pair` 返回 `E_PAIR`）。
+- `harness-plugin/src/relay-client.ts` 增加 `requestPairCode(ttlMs?)`，发送 `relay.pair.code` 并等待 `relay.pair.code.ack`。
+- 联调脚本 `.shots/relay-pair-integration.mjs` 改为通过 `relay.pair.code` 取码（不再直接调用 `relay.store`）。
+
+### R1–R5 远程优先窗口（2026-08-18 已实现）
+
+- **R1 远程优先首屏**：`apps/mobile/app/index.tsx` 默认远程模式；顶部横幅文案随模式切换，[远程模式]/[局域网模式] 分段选择；远程模式只填 relay 地址（裸主机自动补 `ws://…:4090`）+ 可选 6 位配对码；LAN 保留主机/端口/token（token 收进高级）。`relayMode.ts` 增补 `toRelayWsUrl` 裸主机/默认端口/IPv6 规则 + 单测。
+- **R2 插件能力面**：`packages/protocol/src/plugin.ts` 定义 `PluginCommand` / `PluginSetting` / `PluginListResult` / `PluginExecResult` + lenient 读取器；`harness-plugin/src/plugin-catalog.ts` 参考实现（DSH 注册表接缝 + 本地 manifest 目录 + 默认清单）；mock-harness `fixtures/plugins.json`；App 会话长按菜单动态展示插件指令、设置页插件入口 + `app/plugins.tsx` 插件页（单屏克制）。
+- **R3 设置迁移**：设置页扩展为「连接 / 模型与权限 / 插件 / 显示 / 关于」；`host.settings.get/set` 能力可探测（读不到自动隐藏）；模型选择、思考强度、上下文容量细进度条、审批权限状态；App 本地字体大小（小/标准/大，影响聊天正文与列表正文）；检查更新走 GitHub Releases 最新版对比。
+- **R4 小白一键远程**：`harness-plugin/src/cli.ts` 提供 `dsh-remote remote`：自动启动内置 relay（4090 被占用时自动选空闲端口）→ 注册 console → `relay.pair.code` 取 6 位码 → 打印小白卡片（relay 地址 + 配对码 + 操作说明）→ 配对成功提示 `已配对 device-xxx` → Ctrl+C 关闭。
+- **动效**：模式切换/表单 180–240ms 淡入淡出 + 轻上移；主按钮按下 scale 0.98 + opacity 0.85；尊重系统「减弱动态」。
+- 集成证据：`.shots/relay-mode-01-home.png` … `.shots/relay-mode-06-paired-home.png`；find 证据 `.shots/relay-mode-find.txt`。
+
 ### M3.7 发布闸门前置（无真机部分，2026-08-17 已实现）
 
 - CI 升级 Node 24（`.github/workflows/ci.yml`）。

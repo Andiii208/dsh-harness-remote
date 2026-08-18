@@ -11,18 +11,22 @@ dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness�
 - **审批流程**：会话列表待办横幅直达审批列表页，多选批量批准/拒绝、提问批量跳过；处理历史按时间倒序可查；通知点击深链直达 `approval/:rpcId`。
 - **会话列表**：搜索（标题/workspace/最近消息，大小写不敏感）、按 workspace 分组（无 workspace 归「其他」）、上下文压力分档提醒（<70 正常 / 70–85 偏高 / ≥85 告警）。
 - **聊天体验**：长按消息操作菜单（复制全文/按代码块分别复制）；代码块默认展开可折叠 + 轻量语法高亮（关键词/字符串/注释/数字四类）；流式暂停为真中断（`session.interrupt` RPC，失败自动回退本地暂停渲染并提示）。
-- **LAN 起步、传输可插拔**：自动发现 + 二维码配对 + 最近主机一键重连，也可以手动直连局域网内的 DSH（`host:3080`）；传输层抽象为 `Transport` 接口，连接页 HOST 输入 `relay://` / `ws://` URL 即切换 Relay 模式（M3 中继：控制面 + E2E 加密 + 离线队列，自部署不托管）。
+- **远程优先首屏（R1）**：App 首屏默认「远程模式」，只填 relay 地址（裸主机自动补 `ws://…:4090`）+ 可选 6 位配对码；[远程模式]/[局域网模式] 分段切换，横幅文案随模式变化；LAN 保留主机/端口/配对 token（收进高级）。
+- **电脑端一键远程（R4）**：`dsh-remote remote` 自动启动内置 relay（4090 被占用自动选空闲端口）→ 注册 console → 取一次性 6 位配对码 → 打印小白卡片；手机配对成功提示 `已配对 device-xxx`，Ctrl+C 关闭。
+- **LAN 起步、传输可插拔**：自动发现 + 二维码配对 + 最近主机一键重连，也可以手动直连局域网内的 DSH（`host:3080`）；传输层抽象为 `Transport` 接口，连接页输入 `relay://` / `ws://` URL 即切换 Relay 模式（M3 中继：控制面 + E2E 加密 + 离线队列，自部署不托管）。
+- **插件能力面（R2）**：协议新增 `plugin.list` / `plugin.exec` 契约；App 会话长按菜单动态展示用户 DSH 插件指令，设置页插件入口进入插件列表（命令 + 设置，单屏克制）。dsh-remote 自身不做插件宿主——用户 DIY 插件通过 DSH 插件系统 + R2 能力面在手机端呈现。
+- **设置迁移（R3）**：设置页分「连接 / 模型与权限 / 插件 / 显示 / 关于」；`host.settings.get/set` 能力可探测（读不到自动隐藏）；模型选择、思考强度、上下文容量、审批权限状态；App 本地字体大小；检查更新走 GitHub Releases 对比。
 - **低门槛连接（P2）**：首启 3 步引导 → 扫码电脑上的配对二维码即连（`dshremote://pair` 深链）；同一局域网点「自动发现」列出可用实例；冷启动自动重连最近主机。
 - **协议对齐**：纯 TS 协议包（`packages/protocol`，零 RN 依赖）与 DSH 原生类型零失真对齐；宽容解码，线上层永不因未知数据崩溃。
 - **设计**：UI 设计系统 v7（docs/design/UI-SYSTEM-v7.md）——双主题（浅/深跟随系统）、DeepSeek 官方主按钮蓝（浅 `#3964FE` / 深 `#5686FE`）、官方黑色鲸鱼、Space Grotesk 显示字体；动效克制且尊重系统「减弱动态」。
 
 ## 界面预览
 
-| 连接页 | 会话列表 | 聊天 | 首启引导 |
-|---|---|---|---|
-| ![connect](docs/screenshots/connect.png) | ![sessions](docs/screenshots/sessions.png) | ![chat](docs/screenshots/chat.png) | ![onboarding](docs/screenshots/onboarding.png) |
+| 远程连接页 | 设置页 | 插件页 | 会话列表 | 聊天 |
+|---|---|---|---|---|
+| ![connect-remote](docs/screenshots/connect-remote.png) | ![settings](docs/screenshots/settings.png) | ![plugins](docs/screenshots/plugins.png) | ![sessions](docs/screenshots/sessions.png) | ![chat](docs/screenshots/chat.png) |
 
-> 截图来自 Web 预览（390×844 视口，浅/深双主题各截其一：连接页浅色、会话列表深色、聊天浅色、首启引导深色）；真机观感一致（通知/扫码为原生能力，Web 会优雅降级）。
+> 截图来自 Web 预览（390×844 视口）；远程连接页/设置页/插件页为 R1/R3 新界面（relay 配对闭环联调实截），会话列表/聊天沿用 v7 截图。真机观感一致（通知/扫码为原生能力，Web 会优雅降级）。
 
 ## 仓库结构
 
@@ -66,6 +70,10 @@ pnpm audit --prod   # 发布前依赖审计
 pnpm --filter mock-harness build
 node mock-harness/dist/cli.js --port 3080
 
+# 一键开启远程访问（电脑端小白命令：启动 relay + 打印 6 位配对码）
+pnpm --filter @dsh-remote/harness-plugin build
+node harness-plugin/dist/cli.js remote
+
 # 录制真实 DSH 流量 → conformance fixtures（需要可达的 DSH）
 pnpm --filter @dsh-remote/capture build
 node tools/capture/dist/cli.js record --host 127.0.0.1 --port 3080 --out ./fixtures
@@ -102,8 +110,9 @@ npx eas-cli build --profile production    # 商店版（自动递增 build numbe
 | M1 遥控闭环（通知/保活/审批提问/消息/goal-todo 控制） | ✅ 已交付 |
 | M2 跨端与安全（iOS EAS、配对 token 鉴权、开源发布） | ✅ 已交付 |
 | M3 中继 | 配对闭环已实现（relay 服务器、RelayTransport、E2E 加密、配对码闭环、设备密钥持久化、离线队列/推送桩、硬化文档）；真机推送与真机回归留待设备/账号窗口 |
+| R1–R5 远程优先窗口 | ✅ 已交付（远程优先首屏、`relay.pair.code` 取码协议、插件能力面、设置迁移、`dsh-remote remote` 一键远程、动效与联调证据） |
 
-> 状态：M0–M2 已通过评审；M3 中继（M3.1–M3.4）已实现并全仓回归绿；Phase B 真机联调已在 Android 真机（Expo Go）验证通过（连接/会话/流式聊天/发消息/审批/提问/goal 暂停/断线重连），通知/后台保活/真机推送/relay 真机回归需 development build 与设备/账号窗口验证（Expo Go SDK 53+ 限制，见 [docs/MANUAL.md](docs/MANUAL.md)）。
+> 状态：M0–M2 已通过评审；M3 中继（M3.1–M3.4）已实现并全仓回归绿；R1–R5 远程优先窗口已实现并全仓回归绿（protocol 110 / mobile 113 / harness-plugin 30 / relay 34 / mock-harness 29 / capture 24）。Phase B 真机联调已在 Android 真机（Expo Go）验证通过（连接/会话/流式聊天/发消息/审批/提问/goal 暂停/断线重连），通知/后台保活/真机推送/relay 真机回归需 development build 与设备/账号窗口验证（Expo Go SDK 53+ 限制，见 [docs/MANUAL.md](docs/MANUAL.md)）。
 
 ## 贡献
 
