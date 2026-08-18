@@ -197,7 +197,7 @@ function RemoteSettingsTab({ rpcCall }) {
     error ? h('div', { style: { ...styles.error, marginTop: 8 } }, `❌ ${error}`) : null,
 
     h('div', { style: { ...styles.block, textAlign: 'center' } },
-      h('a', { href: 'https://github.com/Andiii208/dsh-remote/releases', target: '_blank', rel: 'noreferrer', style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary,#6b7280)', textDecoration: 'none' } },
+      h('a', { href: 'https://github.com/Andiii208/dsh-harness-remote/releases', target: '_blank', rel: 'noreferrer', style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary,#6b7280)', textDecoration: 'none' } },
         '📱 下载手机 App（GitHub Releases）'),
     ),
   );

@@ -144,7 +144,7 @@ export default function SettingsScreen() {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000);
     try {
-      const res = await fetch("https://api.github.com/repos/Andiii208/dsh-remote/releases/latest", {
+      const res = await fetch("https://api.github.com/repos/Andiii208/dsh-harness-remote/releases/latest", {
         signal: ctrl.signal,
         headers: { accept: "application/vnd.github+json" },
       });
@@ -348,7 +348,7 @@ export default function SettingsScreen() {
         />
         <Text style={styles.hint}>电脑端插件更新：dsh plugin --profile web update dsh-harness-remote --latest -w</Text>
         <View style={styles.linkRow}>
-          <Button tone="ghost" label="GitHub · 使用手册" onPress={() => void Linking.openURL("https://github.com/Andiii208/dsh-remote")} full />
+          <Button tone="ghost" label="GitHub · 使用手册" onPress={() => void Linking.openURL("https://github.com/Andiii208/dsh-harness-remote")} full />
         </View>
       </Group>
     </ScrollView>
