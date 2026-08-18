@@ -14,7 +14,7 @@ import Animated from "react-native-reanimated";
 import * as Network from "expo-network";
 import { useEntering } from "../src/ui/anim";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
-import { isRelayUrl, RELAY_DEFAULT_PORT, toRelayWsUrl } from "../src/transport/relayMode";
+import { isRelayUrl, toRelayWsUrl } from "../src/transport/relayMode";
 import { tokenStore } from "../src/data/secureStoreAdapter";
 import { hostStore } from "../src/discovery/hostStoreAdapter";
 import type { RecentHost } from "../src/discovery/hostStore";
@@ -46,11 +46,14 @@ export default function ConnectScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  // 远程连接是首屏主路径；LAN 降级到「更多连接方式」里。
   const [mode, setMode] = useState<ConnectMode>("remote");
-  const [host, setHost] = useState("");
-  const [port, setPort] = useState("3080");
-  const [token, setToken] = useState("");
+  const [remoteHost, setRemoteHost] = useState("");
   const [pairCode, setPairCode] = useState("");
+  const [lanHost, setLanHost] = useState("");
+  const [lanPort, setLanPort] = useState("3080");
+  const [lanToken, setLanToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [recent, setRecent] = useState<RecentHost[]>([]);
   const [found, setFound] = useState<DiscoveredHost[]>([]);
@@ -82,13 +85,13 @@ export default function ConnectScreen() {
     };
   }, [router]);
 
-  // 配对深链（dshremote://pair?…）→ 一键连接（LAN 模式）
+  // 配对深链（dshremote://pair?…）→ 进入 LAN 模式一键连接。
   useEffect(() => {
     return registerPairDeepLink((p) => {
       setMode("lan");
-      setHost(p.host);
-      setPort(String(p.port));
-      if (p.token) setToken(p.token);
+      setLanHost(p.host);
+      setLanPort(String(p.port));
+      if (p.token) setLanToken(p.token);
       justConnected.current = true;
       void connect(p.host, p.port, p.token);
     });
@@ -97,28 +100,25 @@ export default function ConnectScreen() {
   useEffect(() => {
     void tokenStore.get().then((t) => {
       if (t) {
-        setToken(t);
+        setLanToken(t);
         setShowToken(true);
       }
     });
     void draftStore.get().then((d) => {
-      if (d) {
-        setHost(d.host);
-        if (d.port === 0) {
-          // 远程草稿：只恢复地址，端口由地址自动补全。
-          setMode("remote");
-        } else {
-          setMode("lan");
-          setPort(String(d.port));
-        }
+      if (!d) return;
+      // 远程草稿恢复到远程地址；LAN 草稿只填 LAN 表单，不抢占首屏主路径。
+      if (d.port === 0) setRemoteHost(d.host);
+      else {
+        setLanHost(d.host);
+        setLanPort(String(d.port));
       }
     });
   }, []);
 
   const online = state === "online";
   const normalizedRelayUrl = useMemo(
-    () => (mode === "remote" ? toRelayWsUrl(host) : ""),
-    [mode, host],
+    () => (remoteHost.trim() ? toRelayWsUrl(remoteHost) : ""),
+    [remoteHost],
   );
 
   useEffect(() => {
@@ -128,45 +128,57 @@ export default function ConnectScreen() {
       router.push("/sessions");
     }
     if (state === "offline") {
-      if (justConnected.current) setConnectError("连接失败：请检查地址与网络");
+      if (justConnected.current) setConnectError("没连上，请确认地址没错、电脑上的远程服务已开启");
       justConnected.current = false;
     }
   }, [online, state, router]);
 
   const onConnect = async () => {
-    if (!host.trim() || busy) return;
+    if (busy) return;
+    if (mode === "remote") {
+      if (!remoteHost.trim()) return;
+      setBusy(true);
+      setConnectError("");
+      justConnected.current = true;
+      void haptic("light");
+      try {
+        const wsUrl = toRelayWsUrl(remoteHost);
+        void draftStore.set(remoteHost.trim(), 0);
+        await connect(wsUrl, 0, undefined, pairCode.trim() || undefined);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    if (!lanHost.trim()) return;
     setBusy(true);
     setConnectError("");
     justConnected.current = true;
     void haptic("light");
     try {
-      if (mode === "remote") {
-        const wsUrl = toRelayWsUrl(host);
-        void draftStore.set(host.trim(), 0);
-        await connect(wsUrl, 0, undefined, pairCode.trim() || undefined);
-      } else {
-        const t = token.trim();
-        if (t) await tokenStore.set(t);
-        const p = Number.parseInt(port || "3080", 10);
-        void draftStore.set(host.trim(), p);
-        await connect(host.trim(), p, t || undefined);
-      }
+      const t = lanToken.trim();
+      if (t) await tokenStore.set(t);
+      const p = Number.parseInt(lanPort || "3080", 10);
+      void draftStore.set(lanHost.trim(), p);
+      await connect(lanHost.trim(), p, t || undefined);
     } finally {
       setBusy(false);
     }
   };
 
   const connectTo = async (h: string, p: number, t?: string) => {
-    setHost(h);
     setConnectError("");
     justConnected.current = true;
     if (p === 0 || isRelayUrl(h)) {
       setMode("remote");
-      await connect(isRelayUrl(h) ? h : toRelayWsUrl(h), 0, t, undefined);
+      setRemoteHost(h);
+      await connect(isRelayUrl(h) ? h : toRelayWsUrl(h), 0, undefined, undefined);
     } else {
       setMode("lan");
-      setPort(String(p));
-      if (t) setToken(t);
+      setLanHost(h);
+      setLanPort(String(p));
+      if (t) setLanToken(t);
       await connect(h, p, t);
     }
   };
@@ -186,22 +198,22 @@ export default function ConnectScreen() {
     try {
       const ip = await Network.getIpAddressAsync();
       if (!ip) {
-        setDiscoverError("无法获取本机 IP（请在真机/局域网下使用）");
+        setDiscoverError("没拿到本机 IP，请确认手机和电脑在同一个 Wi-Fi");
         return;
       }
       const list = await discoverHosts({ localIp: ip, signal: discoverAbort.current.signal });
       setFound(list);
-      if (list.length === 0) setDiscoverError("没有发现 DSH 实例——请确认电脑已启动插件且与手机同一网络");
+      if (list.length === 0) setDiscoverError("没有发现电脑——请确认电脑上已开启远程服务且与手机同一 Wi-Fi");
     } catch (err) {
       console.warn("[discover] failed", err);
-      setDiscoverError("自动发现失败，请手动输入地址");
+      setDiscoverError("自动发现失败，请手动输入电脑 IP");
     } finally {
       setDiscovering(false);
     }
   };
 
   const onClearToken = async () => {
-    setToken("");
+    setLanToken("");
     await tokenStore.clear();
   };
 
@@ -214,7 +226,7 @@ export default function ConnectScreen() {
     ? found.map((f) => ({ key: `found-${f.host}`, host: f.host, port: f.port, name: f.name, version: f.version, token: undefined }))
     : recent.map((r) => ({ key: `recent-${r.host}-${r.port}`, host: r.host, port: r.port, name: r.name, version: undefined, token: r.token }));
 
-  const showList = found.length > 0 || showRecent;
+  const showList = mode === "lan" && (found.length > 0 || showRecent);
 
   return (
     <KeyboardAvoidingView
@@ -241,50 +253,37 @@ export default function ConnectScreen() {
 
         <Animated.View key={`banner-${mode}`} entering={bannerEntering} style={styles.banner}>
           <Text style={styles.bannerTitle}>
-            {mode === "remote" ? "使用远程模式连接" : "使用局域网模式连接"}
+            {mode === "remote" ? "远程连接我的电脑" : "同一 Wi-Fi 连接"}
           </Text>
           <Text style={styles.bannerDesc}>
             {mode === "remote"
-              ? "通过你自己的中继服务器，随时随地访问电脑。只需填写 relay 地址。"
-              : "手机与电脑在同一 Wi-Fi 下直连，填写主机、端口与配对 token。"}
+              ? "走到哪儿都能连。填写电脑上显示的地址和 6 位码即可。"
+              : "手机和电脑连同一个 Wi-Fi 时使用。"}
           </Text>
         </Animated.View>
 
-        <View style={styles.segment}>
-          <Pressable
-            style={[styles.segmentItem, mode === "remote" && styles.segmentItemActive]}
-            onPress={() => setMode("remote")}
-            accessibilityRole="button"
-            accessibilityLabel="远程模式"
-          >
-            <Text style={[styles.segmentText, mode === "remote" && styles.segmentTextActive]}>远程模式</Text>
+        {mode === "lan" && (
+          <Pressable style={styles.backRow} onPress={() => setMode("remote")} hitSlop={8} accessibilityRole="button" accessibilityLabel="返回远程连接">
+            <Text style={styles.backLink}>‹ 返回远程连接</Text>
           </Pressable>
-          <Pressable
-            style={[styles.segmentItem, mode === "lan" && styles.segmentItemActive]}
-            onPress={() => setMode("lan")}
-            accessibilityRole="button"
-            accessibilityLabel="局域网模式"
-          >
-            <Text style={[styles.segmentText, mode === "lan" && styles.segmentTextActive]}>局域网模式</Text>
-          </Pressable>
-        </View>
+        )}
 
-        <Animated.View key={mode} entering={formEntering} style={styles.card}>
+        <Animated.View key={`form-${mode}`} entering={formEntering} style={styles.card}>
           {mode === "remote" ? (
             <>
               <Field
-                label="relay 地址"
-                placeholder="relay.example.com"
+                label="连接地址"
+                placeholder="电脑上显示的地址，例如 relay.example.com"
                 autoCapitalize="none"
                 autoCorrect={false}
-                value={host}
-                onChangeText={setHost}
-                onBlur={() => void draftStore.set(host.trim(), 0)}
+                value={remoteHost}
+                onChangeText={setRemoteHost}
+                onBlur={() => remoteHost.trim() && void draftStore.set(remoteHost.trim(), 0)}
                 editable={!online}
               />
               <Field
-                label="配对码 · 可选"
-                placeholder={`6 位配对码（${RELAY_DEFAULT_PORT} 端口自动补全）`}
+                label="6 位码（可选）"
+                placeholder="电脑上显示的 6 位数字"
                 keyboardType="number-pad"
                 maxLength={6}
                 value={pairCode}
@@ -292,9 +291,9 @@ export default function ConnectScreen() {
                 editable={!online}
               />
               <Text style={styles.relayHint}>
-                {host.trim() && !isRelayUrl(host.trim())
+                {normalizedRelayUrl
                   ? `将连接 ${normalizedRelayUrl}`
-                  : `只填主机名即可，App 自动补全 ws://…:${RELAY_DEFAULT_PORT}`}
+                  : "地址不用加 http、ws 或端口，App 会自动补全"}
               </Text>
             </>
           ) : (
@@ -302,13 +301,13 @@ export default function ConnectScreen() {
               <View style={styles.fieldsRow}>
                 <View style={styles.hostField}>
                   <Field
-                    label="主机"
+                    label="电脑 IP"
                     placeholder="192.168.1.5"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    value={host}
-                    onChangeText={setHost}
-                    onBlur={() => void draftStore.set(host.trim(), Number.parseInt(port || "3080", 10))}
+                    value={lanHost}
+                    onChangeText={setLanHost}
+                    onBlur={() => lanHost.trim() && void draftStore.set(lanHost.trim(), Number.parseInt(lanPort || "3080", 10))}
                     editable={!online}
                   />
                 </View>
@@ -317,53 +316,55 @@ export default function ConnectScreen() {
                     label="端口"
                     placeholder="3080"
                     keyboardType="number-pad"
-                    value={port}
-                    onChangeText={setPort}
-                    onBlur={() => void draftStore.set(host.trim(), Number.parseInt(port || "3080", 10))}
+                    value={lanPort}
+                    onChangeText={setLanPort}
+                    onBlur={() => lanHost.trim() && void draftStore.set(lanHost.trim(), Number.parseInt(lanPort || "3080", 10))}
                     editable={!online}
                   />
                 </View>
               </View>
 
               <View style={styles.advancedRow}>
-                <Pressable onPress={() => setShowToken((v) => !v)} hitSlop={8} accessibilityRole="button" accessibilityLabel="展开配对高级设置">
+                <Pressable onPress={() => setShowToken((v) => !v)} hitSlop={8} accessibilityRole="button" accessibilityLabel="展开高级设置">
                   <Text style={styles.linkText}>{showToken ? "收起高级" : "高级"}</Text>
                 </Pressable>
-                {token.length > 0 && !showToken && <Text style={styles.savedToken}>已保存配对</Text>}
+                {lanToken.length > 0 && !showToken && <Text style={styles.savedToken}>已保存安全码</Text>}
               </View>
 
               {showToken && (
                 <Field
-                  label="配对 Token"
+                  label="安全码"
                   placeholder="可选"
                   autoCapitalize="none"
                   autoCorrect={false}
-                  value={token}
-                  onChangeText={setToken}
+                  value={lanToken}
+                  onChangeText={setLanToken}
                   editable={!online}
                   secureTextEntry
                 />
               )}
 
-              <Text style={styles.relayHint}>LAN 直连，未配对时无鉴权——请仅在可信网络使用</Text>
-              {showToken && token.length > 0 && (
-                <Pressable style={({ pressed }) => [styles.clearToken, pressed && styles.textPressed]} onPress={onClearToken} accessibilityRole="button" accessibilityLabel="清除已保存的配对">
-                  <Text style={styles.clearTokenText}>清除已保存的配对</Text>
+              <Text style={styles.relayHint}>同一 Wi-Fi 直连。未设置安全码时，请仅在可信网络使用</Text>
+              {showToken && lanToken.length > 0 && (
+                <Pressable style={({ pressed }) => [styles.clearToken, pressed && styles.textPressed]} onPress={onClearToken} accessibilityRole="button" accessibilityLabel="清除已保存的安全码">
+                  <Text style={styles.clearTokenText}>清除已保存的安全码</Text>
                 </Pressable>
               )}
             </>
           )}
         </Animated.View>
 
-        <View style={styles.quickRow}>
-          <Pressable onPress={() => void onDiscover()} hitSlop={8} disabled={discovering} accessibilityRole="button" accessibilityLabel="自动发现主机">
-            <Text style={styles.quickLink}>{discovering ? "扫描中…" : "自动发现"}</Text>
-          </Pressable>
-          <Text style={styles.quickSeparator}>·</Text>
-          <Pressable onPress={() => router.push("/scan" as never)} hitSlop={8} accessibilityRole="button" accessibilityLabel="扫码配对">
-            <Text style={styles.quickLink}>扫码配对</Text>
-          </Pressable>
-        </View>
+        {mode === "lan" && (
+          <View style={styles.quickRow}>
+            <Pressable onPress={() => void onDiscover()} hitSlop={8} disabled={discovering} accessibilityRole="button" accessibilityLabel="自动发现电脑">
+              <Text style={styles.quickLink}>{discovering ? "正在扫描…" : "自动发现电脑"}</Text>
+            </Pressable>
+            <Text style={styles.quickSeparator}>·</Text>
+            <Pressable onPress={() => router.push("/scan" as never)} hitSlop={8} accessibilityRole="button" accessibilityLabel="扫码连接">
+              <Text style={styles.quickLink}>扫码连接</Text>
+            </Pressable>
+          </View>
+        )}
 
         {online ? (
           <Button tone="danger" label="断开连接" onPress={() => { justConnected.current = false; void haptic("warning"); void disconnect(); }} full />
@@ -371,24 +372,30 @@ export default function ConnectScreen() {
           <Button
             label={busy ? "连接中…" : "连接"}
             onPress={() => void onConnect()}
-            disabled={!host.trim() || busy}
+            disabled={busy || (mode === "remote" ? !remoteHost.trim() : !lanHost.trim())}
             full
           />
         )}
         {connectError.length > 0 && <Text style={styles.connectError}>{connectError}</Text>}
 
+        {mode === "remote" && !online && (
+          <Pressable style={styles.moreRow} onPress={() => { void haptic("light"); setMode("lan"); }} accessibilityRole="button" accessibilityLabel="更多连接方式">
+            <Text style={styles.moreLink}>更多连接方式 · 同一 Wi-Fi / 扫码 ›</Text>
+          </Pressable>
+        )}
+
         {showList ? (
           <View style={styles.listCard}>
             <View style={styles.listHeader}>
-              <Text style={styles.listTitle}>{found.length > 0 ? "发现的主机" : "历史主机"}</Text>
+              <Text style={styles.listTitle}>{found.length > 0 ? "发现的电脑" : "历史电脑"}</Text>
               {found.length === 0 && (
-                <Pressable onPress={() => setShowRecent(false)} hitSlop={8} accessibilityRole="button" accessibilityLabel="收起历史主机">
+                <Pressable onPress={() => setShowRecent(false)} hitSlop={8} accessibilityRole="button" accessibilityLabel="收起历史电脑">
                   <Text style={styles.linkText}>收起</Text>
                 </Pressable>
               )}
             </View>
             {items.length === 0 ? (
-              <Text style={styles.listEmpty}>暂无历史主机</Text>
+              <Text style={styles.listEmpty}>暂无历史电脑</Text>
             ) : (
               items.map((h) => (
                 <Pressable
@@ -396,10 +403,10 @@ export default function ConnectScreen() {
                   style={({ pressed }) => [styles.hostRow, pressed && styles.hostRowPressed]}
                   onPress={() => void connectTo(h.host, h.port, h.token)}
                   accessibilityRole="button"
-                  accessibilityLabel={`连接 ${h.host}:${h.port}`}
+                  accessibilityLabel={`连接 ${h.name ?? h.host}`}
                 >
                   <Text style={styles.hostRowText} numberOfLines={1}>
-                    {h.host}:{h.port}
+                    {h.name ?? h.host}{h.port !== 0 ? ` · ${h.host}:${h.port}` : ""}
                   </Text>
                   <Text style={styles.hostRowArrow}>›</Text>
                 </Pressable>
@@ -407,29 +414,31 @@ export default function ConnectScreen() {
             )}
           </View>
         ) : (
-          <Pressable onPress={() => setShowRecent(true)} style={styles.historyButton} hitSlop={8} accessibilityRole="button" accessibilityLabel="展开历史主机">
-            <Text style={styles.linkText}>历史主机{recent.length > 0 ? ` · ${recent.length}` : ""} ›</Text>
-          </Pressable>
+          mode === "lan" && (
+            <Pressable onPress={() => setShowRecent(true)} style={styles.historyButton} hitSlop={8} accessibilityRole="button" accessibilityLabel="展开历史电脑">
+              <Text style={styles.linkText}>历史电脑{recent.length > 0 ? ` · ${recent.length}` : ""} ›</Text>
+            </Pressable>
+          )
         )}
 
-        {discoverError.length > 0 && <Text style={styles.discoverError}>{discoverError}</Text>}
-        {found.length > 0 && (
-          <Text style={styles.discoverHint}>发现的实例首次连接可能需要配对 token——请用「扫码配对」获取</Text>
+        {mode === "lan" && discoverError.length > 0 && <Text style={styles.discoverError}>{discoverError}</Text>}
+        {mode === "lan" && found.length > 0 && (
+          <Text style={styles.discoverHint}>第一次连接可能需要安全码——可用「扫码连接」获取</Text>
         )}
 
         {online && (
-          <Pressable style={styles.linkRow} onPress={() => router.push("/sessions")} accessibilityRole="link" accessibilityLabel="进入 Sessions">
+          <Pressable style={styles.linkRow} onPress={() => router.push("/sessions")} accessibilityRole="link" accessibilityLabel="进入会话">
             <Text style={styles.link}>进入会话 →</Text>
           </Pressable>
         )}
 
-        <Text style={styles.hint}>
-          {mode === "remote"
-            ? "远程模式通过你的中继服务器转发；配对码为可选，仅用于绑定电脑端一次性码。"
-            : token.trim()
-              ? "已启用配对 token——仍请仅在可信网络使用"
-              : "LAN 直连，未配对时无鉴权——请仅在可信网络使用"}
-        </Text>
+        {mode === "lan" && (
+          <Text style={styles.hint}>
+            {lanToken.trim()
+              ? "已启用安全码——仍请仅在可信网络使用"
+              : "同一 Wi-Fi 直连，未设置安全码时无鉴权——请仅在可信网络使用"}
+          </Text>
+        )}
 
         <Text style={styles.version}>v0.7.0 · dsh-remote</Text>
       </ScrollView>
@@ -462,23 +471,8 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     },
     bannerTitle: { color: colors.text, fontSize: font.section, fontWeight: "600", letterSpacing: -0.2 },
     bannerDesc: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
-    segment: {
-      flexDirection: "row",
-      backgroundColor: colors.surface2,
-      borderRadius: radius.control,
-      padding: 3,
-      gap: 3,
-    },
-    segmentItem: {
-      flex: 1,
-      height: 38,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    segmentItemActive: { backgroundColor: colors.surface },
-    segmentText: { color: colors.textMuted, fontSize: 13, fontWeight: "500" },
-    segmentTextActive: { color: colors.text, fontWeight: "600" },
+    backRow: { alignItems: "flex-start", paddingVertical: 2 },
+    backLink: { color: colors.accent, fontSize: font.body, fontWeight: "500" },
     card: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,
@@ -499,6 +493,8 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     quickLink: { color: colors.accent, fontSize: font.body, fontWeight: "500" },
     quickSeparator: { color: colors.textDim, fontSize: font.body },
     connectError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
+    moreRow: { alignItems: "center", paddingVertical: 2 },
+    moreLink: { color: colors.textMuted, fontSize: font.caption, fontWeight: "500" },
     listCard: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,

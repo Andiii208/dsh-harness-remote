@@ -408,6 +408,6 @@ export function useConnection(): ConnectionApi {
 export const STATE_LABEL: Record<ConnectionState, string> = {
   connecting: "连接中",
   online: "在线",
-  offline: "离线",
-  backoff: "退避重试",
+  offline: "未连接",
+  backoff: "重连中",
 };
