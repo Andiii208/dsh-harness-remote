@@ -211,8 +211,10 @@ export async function startCloudflaredTunnel(opts: TunnelOptions): Promise<Tunne
       }
     };
 
+    // cloudflared 的日志（含 trycloudflare URL 行）走 stderr；stdout 也可能有数据。
+    // 两个流都同时用于解析 URL 和记录日志，避免只监听 stdout 导致 URL 被漏掉。
     child.stdout?.on("data", onStdout);
-    child.stderr?.on("data", (chunk: Buffer | string) => logger(`cloudflared: ${String(chunk).trim()}`));
+    child.stderr?.on("data", onStdout);
     child.once("error", (err) => fail(new Error(`cloudflared 启动失败：${err.message}`)));
     child.once("exit", (code) => {
       if (!settled) {

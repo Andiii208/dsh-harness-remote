@@ -16,6 +16,10 @@ import {
 } from "./remote-service.js";
 import { installRemoteRpc } from "./web-rpc.js";
 
+export const name = "dsh-harness-remote";
+/** host 侧需要的 Cordis 上下文注入：connection（loopback RPC）。 */
+export const inject = ["connection"];
+
 export interface DshRemoteApplyContext {
   logger?: (name: string) => { info?: (...args: unknown[]) => void; warn?: (...args: unknown[]) => void; error?: (...args: unknown[]) => void };
   connection?: {

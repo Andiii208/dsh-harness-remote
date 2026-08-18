@@ -8,7 +8,7 @@
 
 import type { RemoteAccessService } from "./remote-service.js";
 
-export const REMOTE_RPC_CHANNEL = "dsh-harness-remote";
+export const REMOTE_RPC_CHANNEL = "/dsh-harness-remote";
 
 export const REMOTE_RPC_ENDPOINTS = Object.freeze({
   status: "status",

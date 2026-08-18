@@ -11,6 +11,11 @@ import { build } from "esbuild";
 await mkdir("lib", { recursive: true }).catch(() => {});
 await mkdir("dist", { recursive: true }).catch(() => {});
 
+// esbuild 的 ESM 输出会为 CJS 依赖生成 __require()；Node ESM 里没有 require，
+// 会导致 "Dynamic require of ... is not supported"。这里在 bundle 顶部注入
+// createRequire，让 __require 对内置模块（events/fs/...）可用。
+const esmRequireBanner = 'import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);\n';
+
 const common = {
   bundle: true,
   platform: "node",
@@ -24,13 +29,15 @@ await build({
   ...common,
   entryPoints: ["src/index.ts"],
   outfile: "lib/index.js",
+  banner: { js: esmRequireBanner },
 });
 
 await build({
   ...common,
   entryPoints: ["src/cli.ts"],
   outfile: "dist/cli.js",
-  banner: { js: "#!/usr/bin/env node\n" },
+  // 源文件已有 shebang，esbuild 会自动保留到第一行；这里只注入 require shim。
+  banner: { js: esmRequireBanner },
 });
 
 // 设置页 web 客户端（client/index.jsx → client/client.js，DSH ModuleLoader 包装）。
