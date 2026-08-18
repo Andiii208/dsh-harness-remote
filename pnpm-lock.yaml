@@ -119,6 +119,9 @@ importers:
       '@dsh-remote/protocol':
         specifier: workspace:^
         version: link:../packages/protocol
+      relay:
+        specifier: workspace:^
+        version: link:../relay
     devDependencies:
       '@types/node':
         specifier: ^22.0.0

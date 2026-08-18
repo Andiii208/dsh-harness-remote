@@ -488,4 +488,46 @@ describe("RelayClient", () => {
       }),
     ).resolves.toEqual(original);
   });
+
+  it("requestPairCode sends relay.pair.code and resolves with the 6-digit code", async () => {
+    const { client, ws } = await connectedClient();
+
+    const p = client.requestPairCode();
+    const sent = JSON.parse(ws.sent[2]!) as { type: string; from: string; to: string; id: string; payload?: unknown };
+    expect(sent).toMatchObject({ type: "relay.pair.code", from: "console-c", to: "relay" });
+
+    ws.recv(
+      JSON.stringify({
+        v: 1,
+        type: "relay.pair.code.ack",
+        id: sent.id,
+        from: "relay",
+        to: "console-c",
+        ts: Date.now(),
+        payload: { code: "483920", ttlMs: 600_000 },
+      }),
+    );
+
+    await expect(p).resolves.toBe("483920");
+  });
+
+  it("requestPairCode rejects when relay answers with a bad code", async () => {
+    const { client, ws } = await connectedClient();
+
+    const p = client.requestPairCode();
+    const sent = JSON.parse(ws.sent[2]!) as { id: string };
+    ws.recv(
+      JSON.stringify({
+        v: 1,
+        type: "relay.pair.code.ack",
+        id: sent.id,
+        from: "relay",
+        to: "console-c",
+        ts: Date.now(),
+        payload: { code: "bad" },
+      }),
+    );
+
+    await expect(p).rejects.toThrow(/missing code/);
+  });
 });

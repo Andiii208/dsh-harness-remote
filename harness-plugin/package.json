@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "dsh-remote": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -26,6 +29,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@dsh-remote/protocol": "workspace:^"
+    "@dsh-remote/protocol": "workspace:^",
+    "relay": "workspace:^"
   }
 }

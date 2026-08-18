@@ -14,6 +14,7 @@ import {
   generateRelayKeyPair,
   makeHeartbeat,
   makeHello,
+  makePairCode,
   makeRegister,
   normalizeRelayError,
   openRelayPayload,
@@ -105,6 +106,7 @@ export class RelayClient {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private handshakeSettled = false;
   private settleHandshake: ((err: Error | null) => void) | null = null;
+  private readonly pairCodeWaiters = new Map<string, { resolve: (code: string) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 
   constructor(private readonly opts: RelayClientOptions) {
     this.cryptoImpl = opts.crypto
@@ -155,6 +157,33 @@ export class RelayClient {
   /** 发送 relay.heartbeat（from=clientId, to="relay"）。 */
   heartbeat(): void {
     this.sendEnvelope(makeHeartbeat(this.opts.clientId));
+  }
+
+  /**
+   * R5a/R4：向 relay 请求一个一次性 6 位配对码。
+   * 已连接后调用；返回 relay.pair.code.ack 中的 code。
+   */
+  requestPairCode(ttlMs?: number): Promise<string> {
+    if (!this.online || !this.ws) {
+      return Promise.reject(new Error("RelayClient: not connected"));
+    }
+    const id = `pair-code-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pairCodeWaiters.delete(id);
+        reject(new Error("RelayClient: relay.pair.code.ack not received before timeout"));
+      }, this.opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS);
+      this.pairCodeWaiters.set(id, { resolve, reject, timer });
+      try {
+        this.sendEnvelope(
+          makePairCode(this.opts.clientId, ttlMs !== undefined ? { ttlMs } : undefined, { id }),
+        );
+      } catch (err) {
+        clearTimeout(timer);
+        this.pairCodeWaiters.delete(id);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
   }
 
   /**
@@ -221,6 +250,11 @@ export class RelayClient {
       }
     }
     this.settleHandshake?.(new Error("RelayClient: closed"));
+    for (const waiter of this.pairCodeWaiters.values()) {
+      clearTimeout(waiter.timer);
+      waiter.reject(new Error("RelayClient: closed"));
+    }
+    this.pairCodeWaiters.clear();
   }
 
   private requireCrypto(): Crypto {
@@ -370,6 +404,17 @@ export class RelayClient {
       this.settleHandshake?.(
         new Error(`RelayClient: relay error ${err.code}: ${err.message}`),
       );
+    } else if (env.type === "relay.pair.code.ack") {
+      // R5a/R4：收到 relay 签发的一次性配对码，settle 对应请求。
+      const payload = isRecord(env.payload) ? env.payload : {};
+      const code = str(payload.code);
+      const waiter = this.pairCodeWaiters.get(env.id);
+      if (waiter) {
+        this.pairCodeWaiters.delete(env.id);
+        clearTimeout(waiter.timer);
+        if (code && /^\d{6}$/.test(code)) waiter.resolve(code);
+        else waiter.reject(new Error("RelayClient: relay.pair.code.ack missing code"));
+      }
     } else if (env.type === "relay.pair.ack" && env.from === "relay") {
       // M3.5：配对通知只安装会话密钥并触发 onPaired，不 settle 控制面握手。
       void this.handlePairAck(env.payload);
