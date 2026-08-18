@@ -51,7 +51,6 @@ class TestClient {
   constructor(readonly ws: WebSocket) {
     ws.on("message", (data: RawData) => {
       const env = JSON.parse(rawToText(data)) as RelayEnvelope;
-      this.queue.push(env);
       const idx = this.waiters.findIndex((w) => w.type === env.type);
       if (idx >= 0) {
         const waiter = this.waiters[idx];
@@ -59,8 +58,10 @@ class TestClient {
           this.waiters.splice(idx, 1);
           clearTimeout(waiter.timer);
           waiter.resolve(env);
+          return; // 已交给 waiter，不再入队，避免同一信封被消费两次
         }
       }
+      this.queue.push(env);
     });
   }
 
@@ -675,5 +676,78 @@ describe("relay server", () => {
     expect((err.payload as { code: string }).code).toBe("E_BAD_ENVELOPE");
 
     c.close();
+  });
+});
+
+describe("relay pair hardening (P2b)", () => {
+  it("locks unauthenticated pair attempts after repeated failures", async () => {
+    const entries: RelayAuditEntry[] = [];
+    const relay = await startRelay({
+      maxPairAttempts: 3,
+      pairLockMs: 60_000,
+      audit: (entry) => entries.push(entry),
+    });
+
+    const c = await TestClient.connect(relay.port);
+    // 连续快速尝试，服务端应在第 3 次触发锁定
+    for (let i = 0; i < 3; i++) {
+      c.send(
+        makeEnvelope("relay.pair", `brute-${i}`, "attacker-device", {
+          code: "000000",
+          deviceId: "attacker-device",
+        }),
+      );
+    }
+    const first = await c.next("relay.error");
+    const second = await c.next("relay.error");
+    const third = await c.next("relay.error");
+    expect((first.payload as { code: string }).code).toBe("E_PAIR");
+    expect((second.payload as { code: string }).code).toBe("E_PAIR");
+    expect((third.payload as { code: string }).code).toBe("E_RATE");
+
+    // 锁定后继续尝试也拒绝
+    c.send(
+      makeEnvelope("relay.pair", "brute-locked", "attacker-device", {
+        code: "000001",
+        deviceId: "attacker-device",
+      }),
+    );
+    const locked = await c.next("relay.error");
+    expect((locked.payload as { code: string }).code).toBe("E_RATE");
+
+    const pairFails = entries.filter((e) => e.event === "pair_fail");
+    expect(pairFails.length).toBeGreaterThanOrEqual(3);
+    expect(entries.some((e) => e.event === "pair_lock")).toBe(true);
+    for (const entry of entries) {
+      expect(Object.keys(entry).sort()).toEqual(["event", "from", "ok", "to", "ts"]);
+    }
+
+    c.close();
+  });
+
+  it("limits the number of unused pairing codes per console", async () => {
+    const relay = await startRelay({ maxPairingCodesPerConsole: 2 });
+    const consoleClient = await TestClient.connect(relay.port);
+    consoleClient.send(
+      registerEnvelope("reg-console-limit", "console-limit", { consoleId: "console-limit" }),
+    );
+    await consoleClient.next("relay.register.ack");
+
+    for (let i = 0; i < 2; i++) {
+      consoleClient.send(
+        makeEnvelope("relay.pair.code", `code-${i}`, "console-limit", {}),
+      );
+      const ack = await consoleClient.next("relay.pair.code.ack");
+      expect(ack.payload).toMatchObject({ code: expect.stringMatching(/^\d{6}$/) });
+    }
+
+    consoleClient.send(
+      makeEnvelope("relay.pair.code", "code-over", "console-limit", {}),
+    );
+    const err = await consoleClient.next("relay.error");
+    expect((err.payload as { code: string }).code).toBe("E_RATE");
+    expect((err.payload as { message: string }).message).toContain("too many unused pairing codes");
+
+    consoleClient.close();
   });
 });

@@ -138,6 +138,14 @@ export function createSqliteRelayStore(
       return code;
     },
 
+    countActivePairingCodes(consoleId: string): number {
+      const row = db.prepare(
+        `SELECT COUNT(*) AS n FROM relay_pairing_codes
+          WHERE console_id = ? AND used = 0 AND expires_at > ?`,
+      ).get(consoleId, now()) as { n?: number };
+      return Number(row?.n ?? 0);
+    },
+
     consumePairingCode(code: string): ConsumedPairingCode | undefined {
       const row = db.prepare(
         `SELECT code, console_id, expires_at, used FROM relay_pairing_codes WHERE code = ?`,

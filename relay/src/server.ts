@@ -56,6 +56,12 @@ export interface RelayServerOptions {
   queueTtlMs?: number;
   /** Simple token-bucket rate limit. Defaults: perMinute=120, burst=240. */
   rateLimit?: RelayRateLimitOptions;
+  /** Max unused (active) pairing codes one console may hold. Default 5. */
+  maxPairingCodesPerConsole?: number;
+  /** Failed pair attempts before a temporary lock. Default 10. */
+  maxPairAttempts?: number;
+  /** Lock duration after repeated pair failures (ms). Default 60s. */
+  pairLockMs?: number;
   /** Audit sink. Defaults to a one-line JSON console.log (metadata only). */
   audit?: (entry: RelayAuditEntry) => void;
   /** Optional persistent store (e.g. createSqliteRelayStore). Defaults to in-memory. */
@@ -126,6 +132,9 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
     perMinute: options.rateLimit?.perMinute ?? 120,
     burst: options.rateLimit?.burst ?? 240,
   });
+  const maxPairingCodesPerConsole = options.maxPairingCodesPerConsole ?? 5;
+  const maxPairAttempts = options.maxPairAttempts ?? 10;
+  const pairLockMs = options.pairLockMs ?? 60 * 1000;
   const audit =
     options.audit ??
     ((entry: RelayAuditEntry) => {
@@ -133,6 +142,8 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
     });
 
   const socketAuth = new Map<WebSocket, string>();
+  const socketPeers = new Map<WebSocket, string>();
+  const pairFailures = new Map<string, { count: number; lockedUntil: number }>();
   const onlineSockets = new Map<string, Set<WebSocket>>();
 
   function authenticate(ws: WebSocket, clientId: string): void {
@@ -161,6 +172,33 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
 
   function auditEvent(event: string, from: string, to: string, ok: boolean): void {
     audit({ event, from, to, ts: Date.now(), ok });
+  }
+
+  function pairFailureKey(ws: WebSocket): string {
+    return socketAuth.get(ws) ?? socketPeers.get(ws) ?? "unknown";
+  }
+
+  function isPairLocked(key: string): boolean {
+    const rec = pairFailures.get(key);
+    return !!rec && rec.lockedUntil > Date.now();
+  }
+
+  function recordPairFailure(key: string): boolean {
+    const now = Date.now();
+    const rec = pairFailures.get(key) ?? { count: 0, lockedUntil: 0 };
+    if (rec.lockedUntil > now) return true;
+    rec.count += 1;
+    if (rec.count >= maxPairAttempts) {
+      rec.lockedUntil = now + pairLockMs;
+      rec.count = 0;
+      auditEvent("pair_lock", key, "relay", false);
+    }
+    pairFailures.set(key, rec);
+    return rec.lockedUntil > now;
+  }
+
+  function resetPairFailures(key: string): void {
+    pairFailures.delete(key);
   }
 
   function sendError(
@@ -300,11 +338,29 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
           break;
         }
 
-        const consumed = store.consumePairingCode(code);
-        if (!consumed) {
-          sendError(ws, env.id, "E_PAIR", "invalid, used or expired pairing code", authClientId ?? env.from);
+        // P2b: unauthenticated pair attempts are rate-limited and lock after
+        // repeated failures (anti brute-force on the 6-digit code space).
+        const failKey = pairFailureKey(ws);
+        if (isPairLocked(failKey)) {
+          sendError(ws, env.id, "E_RATE", "pair attempts temporarily locked", authClientId ?? env.from);
+          auditEvent("pair_fail", failKey, "relay", false);
           break;
         }
+
+        const consumed = store.consumePairingCode(code);
+        if (!consumed) {
+          const locked = recordPairFailure(failKey);
+          auditEvent("pair_fail", authClientId ?? failKey, "relay", false);
+          sendError(
+            ws,
+            env.id,
+            locked ? "E_RATE" : "E_PAIR",
+            locked ? "pair attempts temporarily locked" : "invalid, used or expired pairing code",
+            authClientId ?? env.from,
+          );
+          break;
+        }
+        resetPairFailures(failKey);
 
         store.bindPair(deviceId, consumed.consoleId);
 
@@ -374,6 +430,14 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
           rawTtl !== undefined && Number.isFinite(rawTtl) && rawTtl > 0
             ? Math.floor(rawTtl)
             : 10 * 60 * 1000;
+
+        // P2b: bound how many unused pairing codes a single console may hold.
+        if (store.countActivePairingCodes(authClientId) >= maxPairingCodesPerConsole) {
+          sendError(ws, env.id, "E_RATE", "too many unused pairing codes", authClientId);
+          auditEvent("pair_code_limit", authClientId, "relay", false);
+          break;
+        }
+
         const code = store.createPairingCode(authClientId, ttlMs);
         const ack = makeEnvelope("relay.pair.code.ack", env.id, authClientId, {
           code,
@@ -488,11 +552,13 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
       const verified = credentials.verify(credential);
       if (verified) authenticate(ws, verified.clientId);
     }
+    socketPeers.set(ws, req.socket.remoteAddress ?? "unknown");
 
     ws.on("message", (data: RawData) => {
       handleMessage(ws, data);
     });
     ws.on("close", () => {
+      socketPeers.delete(ws);
       unauthSocket(ws);
     });
   });

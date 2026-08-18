@@ -35,6 +35,8 @@ export interface RelayStore {
   isOnline(clientId: string): boolean;
   /** Generate a one-time 6-digit pairing code bound to `consoleId`. */
   createPairingCode(consoleId: string, ttlMs?: number): string;
+  /** Number of active (unused, unexpired) pairing codes currently bound to a console. */
+  countActivePairingCodes(consoleId: string): number;
   /** Consume a pairing code. One-time: the code is destroyed on success and expired/used codes return undefined. */
   consumePairingCode(code: string): ConsumedPairingCode | undefined;
   bindPair(a: string, b: string): void;
@@ -86,6 +88,20 @@ export function createRelayStore(now: () => number = Date.now): RelayStore {
       const code = String(Math.floor(100000 + Math.random() * 900000));
       pairingCodes.set(code, { code, consoleId, expiresAt: now() + ttlMs, used: false });
       return code;
+    },
+
+    countActivePairingCodes(consoleId) {
+      let count = 0;
+      for (const record of pairingCodes.values()) {
+        if (
+          record.consoleId === consoleId &&
+          !record.used &&
+          record.expiresAt > now()
+        ) {
+          count += 1;
+        }
+      }
+      return count;
     },
 
     consumePairingCode(code) {

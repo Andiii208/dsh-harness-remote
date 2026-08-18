@@ -36,6 +36,12 @@
 - M3.5 配对闭环：手机输入 relay URL + 6 位配对码即完成 ECDH 公钥交换与会话密钥派生；`relay.pair` 成功会向被配对 console 推送对端公钥（在线直投/离线入队），双方据此启用加密数据面。
 - M3.5 密钥持久化：mobile 的 relay deviceId 与 ECDH 私钥经 `expo-secure-store` 持久化（Web 回退 localStorage，不可用降级内存不崩溃）；console 侧私钥由 harness-plugin 进程内生成/注入持有。
 
+## M3 中继配对加固（P2b，2026-08-18 已实现）
+
+- `relay.pair` 未认证/已认证配对尝试都受**失败锁定**保护：默认连续 10 次失败锁定 60s（`maxPairAttempts` / `pairLockMs` 可配），锁定后返回 `E_RATE`，防止爆破 6 位码。
+- 单 console 同时持有的**未使用配对码数量**默认上限 5（`maxPairingCodesPerConsole`），超出后 `relay.pair.code` 返回 `E_RATE`。
+- 审计日志新增 `pair_fail` / `pair_lock` / `pair_code_limit` 事件，仍只含 `event/from/to/ts/ok` 元数据，不含 payload/明文。
+
 ## 报告漏洞
 
 - 私密披露：给维护者发邮件（README 维护者邮箱）；或 GitHub 私有 Security Advisory。
