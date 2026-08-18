@@ -12,7 +12,7 @@ dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness�
 - **会话列表**：搜索（标题/workspace/最近消息，大小写不敏感）、按 workspace 分组（无 workspace 归「其他」）、上下文压力分档提醒（<70 正常 / 70–85 偏高 / ≥85 告警）。
 - **聊天体验**：长按消息操作菜单（复制全文/按代码块分别复制）；代码块默认展开可折叠 + 轻量语法高亮（关键词/字符串/注释/数字四类）；流式暂停为真中断（`session.interrupt` RPC，失败自动回退本地暂停渲染并提示）。
 - **远程优先首屏（R1）**：App 首屏就是「远程连接我的电脑」，只填电脑上显示的连接地址（自动补全 `ws://…:4090`）+ 可选 6 位码；同一 Wi-Fi/扫码等低频能力收进「更多连接方式」，不做专业术语展示。
-- **电脑端一键远程（R4）**：`dsh-remote remote` 自动启动内置 relay（4090 被占用自动选空闲端口）→ 注册 console → 取一次性 6 位配对码 → 打印小白卡片；手机配对成功提示 `已配对 device-xxx`，Ctrl+C 关闭。
+- **电脑端一键远程（R4）**：`dsh-remote remote` 自动启动内置 relay（4090 被占用自动选空闲端口）→ 注册 console → 取一次性 6 位配对码 → 打印小白卡片 + 远程二维码；手机配对成功提示 `已配对 device-xxx`，Ctrl+C 关闭。Windows 用户可直接双击 `dsh-remote-remote.bat`，不用敲命令。
 - **LAN 起步、传输可插拔**：自动发现 + 二维码配对 + 最近主机一键重连，也可以手动直连局域网内的 DSH（`host:3080`）；传输层抽象为 `Transport` 接口，连接页输入 `relay://` / `ws://` URL 即切换 Relay 模式（M3 中继：控制面 + E2E 加密 + 离线队列，自部署不托管）。
 - **插件能力面（R2）**：协议新增 `plugin.list` / `plugin.exec` 契约；App 会话长按菜单动态展示用户 DSH 插件指令，设置页插件入口进入插件列表（命令 + 设置，单屏克制）。dsh-remote 自身不做插件宿主——用户 DIY 插件通过 DSH 插件系统 + R2 能力面在手机端呈现。
 - **设置迁移（R3）**：设置页分「连接 / 模型与权限 / 插件 / 显示 / 关于」；`host.settings.get/set` 能力可探测（读不到自动隐藏）；模型选择、思考强度、上下文容量、审批权限状态；App 本地字体大小；检查更新走 GitHub Releases 对比。
@@ -71,6 +71,7 @@ pnpm --filter mock-harness build
 node mock-harness/dist/cli.js --port 3080
 
 # 一键开启远程访问（电脑端小白命令：启动 relay + 打印 6 位配对码）
+# Windows 用户也可以直接双击仓库根目录的 dsh-remote-remote.bat，免敲命令。
 pnpm --filter @dsh-remote/harness-plugin build
 node harness-plugin/dist/cli.js remote
 
