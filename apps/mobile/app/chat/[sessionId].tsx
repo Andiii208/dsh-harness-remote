@@ -176,7 +176,7 @@ export default function ChatScreen() {
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
-            placeholder={online ? "输入消息…" : "离线"}
+            placeholder={online ? "发消息…" : "离线"}
             placeholderTextColor={colors.textDim}
             value={draft}
             onChangeText={setDraft}
@@ -190,7 +190,7 @@ export default function ChatScreen() {
             onPress={send}
             disabled={!draft.trim() || !online}
           >
-            <Text style={styles.sendText}>➤</Text>
+            <Text style={styles.sendText}>↑</Text>
           </Pressable>
         </View>
       </View>
@@ -225,36 +225,42 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     inputBar: {
       gap: space.x2,
       padding: space.x3,
-      borderTopWidth: 1,
-      borderTopColor: colors.separator,
-      backgroundColor: colors.bg,
+      backgroundColor: "transparent",
     },
     pauseRow: { flexDirection: "row", alignItems: "center", gap: 10 },
     pauseButton: { paddingVertical: 4 },
     pauseButtonPressed: { opacity: 0.6 },
     pauseButtonText: { color: colors.accent, fontSize: font.caption, fontWeight: "500" },
     pauseHint: { color: colors.textMuted, fontSize: font.caption, flexShrink: 1 },
-    inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 9 },
+    inputRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      gap: 8,
+      backgroundColor: colors.surface,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.separator,
+      paddingLeft: 16,
+      paddingRight: 6,
+      paddingVertical: 6,
+    },
     input: {
       flex: 1,
-      backgroundColor: colors.surface,
-      borderRadius: radius.control,
       color: colors.text,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
+      paddingVertical: 8,
       fontSize: font.body,
       maxHeight: 120,
     },
     send: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
       backgroundColor: colors.accent,
       alignItems: "center",
       justifyContent: "center",
     },
     sendDisabled: { opacity: 0.4 },
-    sendText: { color: "#FFFFFF", fontSize: 15, fontWeight: "600" },
+    sendText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600", lineHeight: 22, marginTop: -1 },
     sendError: { color: colors.danger, fontSize: font.caption },
     jumpFabWrap: {
       position: "absolute",

@@ -53,6 +53,56 @@ describe("SessionStore", () => {
     expect(s.getTranscript("s1")[0]).toMatchObject({ gap: true });
   });
 
+  it("folds DSH Desktop object events (user/message, assistant/chunk, assistant/message)", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("session/event", {
+      sessionId: "s1",
+      event: { type: "user/message", seq: 1, time: Date.now(), data: { content: [{ type: "text", text: "远程发送的消息" }] } },
+    }) as never);
+    s.applyFrame(frame("session/event", {
+      sessionId: "s1",
+      event: { type: "assistant/chunk", seq: 2, time: Date.now(), data: { chunk: { type: "text-delta", text: "你好" } } },
+    }) as never);
+    s.applyFrame(frame("session/event", {
+      sessionId: "s1",
+      event: { type: "assistant/chunk", seq: 3, time: Date.now(), data: { chunk: { type: "text-delta", text: "，世界" } } },
+    }) as never);
+    s.applyFrame(frame("session/event", {
+      sessionId: "s1",
+      event: { type: "assistant/message", seq: 4, time: Date.now(), data: { message: { content: [{ type: "text", text: "你好，世界" }] } } },
+    }) as never);
+
+    const t = s.getTranscript("s1");
+    expect(t.map((m) => `${m.role}:${m.content}`)).toEqual([
+      "user:远程发送的消息",
+      "assistant:你好，世界",
+    ]);
+    expect(s.getSessions()[0]?.lastMessage).toBe("你好，世界");
+  });
+
+  it("finalizes a live DSH Desktop chunk when turn/end arrives", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("session/event", {
+      sessionId: "s1",
+      event: { type: "assistant/chunk", seq: 1, time: Date.now(), data: { chunk: { type: "text-delta", text: "流式内容" } } },
+    }) as never);
+    s.applyFrame(frame("session/event", {
+      sessionId: "s1",
+      event: { type: "turn/end", seq: 2, time: Date.now(), data: {} },
+    }) as never);
+    expect(s.getTranscript("s1")).toHaveLength(1);
+    expect(s.getTranscript("s1")[0]).toMatchObject({ role: "assistant", content: "流式内容" });
+  });
+
+  it("applies DSH Desktop key/value projection frames", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("session/projection", { sessionId: "s1", key: "title", value: "新版标题" }) as never);
+    s.applyFrame(frame("session/projection", { sessionId: "s1", key: "goal", value: { status: "active", objective: "远程目标" } }) as never);
+    s.applyFrame(frame("session/projection", { sessionId: "s1", key: "contextPressure", value: { percent: 88 } }) as never);
+    const summary = s.getSessions()[0];
+    expect(summary).toMatchObject({ title: "新版标题", goalStatus: "active", goalObjective: "远程目标", contextPercent: 88 });
+  });
+
   it("derives projection fields into the summary", () => {
     const s = new SessionStore();
     s.applyFrame(frame("session/projection", {

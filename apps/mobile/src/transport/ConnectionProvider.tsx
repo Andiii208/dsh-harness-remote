@@ -61,6 +61,8 @@ export interface ConnectionApi {
   setGoalStatus(sessionId: string, status: string): void;
   /** 下拉刷新：重新拉取 session.list 并全量替换会话列表。 */
   refreshSessions(): Promise<void>;
+  /** 新建会话（session.create）；返回新会话 id，失败返回 null。 */
+  createSession(): Promise<string | null>;
   connect(host: string, port: number, token?: string, pairCode?: string): Promise<void>;
   /** Relay 配对成功后对方的 consoleId（仅 relay 模式在线配对时非空）。 */
   relayPeerId: string | null;
@@ -410,6 +412,21 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       throw err; // 让 UI 层给出刷新失败提示
     }
   }, []);
+  const createSession = useCallback(async (): Promise<string | null> => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return null;
+    try {
+      const r = await c.unary("session.create", {});
+      if (!r.ok) return null;
+      const value = (r.result ?? {}) as { sessionId?: unknown; id?: unknown };
+      const id = typeof value.sessionId === "string" ? value.sessionId : typeof value.id === "string" ? value.id : null;
+      return id;
+    } catch (err) {
+      console.warn("[sessions] create failed", err);
+      return null;
+    }
+  }, []);
+
   const setGoalStatus = useCallback((sessionId: string, status: string) => {
     pipelineRef.current?.store.setGoalStatus(sessionId, status);
   }, []);
@@ -430,6 +447,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       setNotificationsEnabled,
       setGoalStatus,
       refreshSessions,
+      createSession,
       connect,
       disconnect,
       sendMessage,
@@ -440,7 +458,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       hostSettingsGet,
       hostSettingsSet,
     }),
-    [state, describe, relayPeerId, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, connect, disconnect, sendMessage, respond, interruptStream, transcript, liveMessage, setNotificationsEnabled, pluginList, pluginExec, hostSettingsGet, hostSettingsSet],
+    [state, describe, relayPeerId, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, createSession, connect, disconnect, sendMessage, respond, interruptStream, transcript, liveMessage, setNotificationsEnabled, pluginList, pluginExec, hostSettingsGet, hostSettingsSet],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;

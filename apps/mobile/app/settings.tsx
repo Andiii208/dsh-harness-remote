@@ -9,7 +9,7 @@ import { useAppSettings } from "../src/data/appSettingsContext";
 import type { FontSize } from "../src/data/appSettingsStore";
 import type { HostSettings } from "@dsh-remote/protocol";
 import { Button } from "../src/ui/Button";
-import { font, radius, space, type ThemeColors } from "../src/theme";
+import { font, radius, space, type ThemeColors, type ThemePreference } from "../src/theme";
 import { useTheme } from "../src/theme-context";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { StatusChip } from "../src/ui/StatusChip";
@@ -83,7 +83,7 @@ function permissionText(p?: HostSettings["permissions"]): string {
 }
 
 export default function SettingsScreen() {
-  const { colors } = useTheme();
+  const { colors, preference, setPreference } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { state, describe, lastEndpoint, notifications, disconnect, notificationsEnabled, setNotificationsEnabled, hostSettingsGet, hostSettingsSet, pluginList } = useConnection();
   const { fontSize, setFontSize } = useAppSettings();
@@ -283,6 +283,28 @@ export default function SettingsScreen() {
       </Group>
 
       <Group eyebrow="显示">
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>外观</Text>
+          <Text style={styles.rowValue}>{preference === "light" ? "浅色" : preference === "dark" ? "深色" : "跟随系统"}</Text>
+        </View>
+        <View style={styles.optionsRow}>
+          {([
+            ["light", "浅色"],
+            ["dark", "深色"],
+            ["system", "跟随系统"],
+          ] as Array<[ThemePreference, string]>).map(([value, label]) => (
+            <OptionChip
+              key={value}
+              label={label}
+              active={preference === value}
+              onPress={() => {
+                void haptic("light");
+                setPreference(value);
+              }}
+            />
+          ))}
+        </View>
+        <Text style={styles.hint}>默认浅色；深色模式适合夜间使用，跟随系统会随手机外观自动切换。</Text>
         <View style={styles.row}>
           <Text style={styles.rowLabel}>字体大小</Text>
           <Text style={styles.rowValue}>{fontSize === "small" ? "小" : fontSize === "large" ? "大" : "标准"}</Text>

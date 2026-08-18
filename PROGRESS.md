@@ -1,5 +1,14 @@
 # PROGRESS
 
+## v0.2.0 之后：可用性修复 + UI 对齐 DeepSeek（2026-08-18）
+- 图标：`icon.png` 黑鲸墨迹 bbox 对齐 DeepSeek 官方 App 图标实测尺寸（1024 画布宽约 780，居中）；`adaptive-icon.png` 缩小到宽约 533（约 52%），完整落在 Android 66% 安全圈内；`splash` 改浅色底 + 黑鲸。
+- 主题：`app.json` 改 `userInterfaceStyle: automatic` + 浅色 splash/背景；新增 `themePreferenceStore`（默认 `light`，持久化）；设置页「显示 → 外观」支持 浅色 / 深色 / 跟随系统；连接页右上角新增「设置」入口。
+- 动效：`useEntering` 的位移参数真实生效（`withInitialValues`），新增 `useExiting` 淡出；模式切换（远程/LAN）带退场动画；Stack 路由统一 `slide_from_right`。
+- 远程真正可用：`harness-plugin` 新增 `dsh-bridge.ts` —— `dsh-remote remote` 自动探测并桥接 DSH API（DSH_WEB_URL/56734/3080），转发 `session.list/create/prompt/cancel/respond` unary 与 `events.mux`/`events.host` 下行事件；CLI 卡片增加 DSH 状态，二维码载荷补 `port`，并打印扫码载荷作为终端无法渲染二维码时的回退。
+- 手机端：会话页新增「＋ 新会话」（`session.create`）；聊天输入区改为 DeepSeek 风格大圆角输入框 + 圆形发送按钮；`SessionStore` 兼容 DSH Desktop 新版事件（`user/message`、`assistant/chunk`、`assistant/message`、`session/projection {key,value}`）。
+- 协议：`RemotePairPayload` 增加可选 `port`；`RelayConnection` 增加 `interrupt`（走 `session.cancel`）。
+- 回归：`pnpm -r build` 全绿；测试 capture 24 / protocol 125 / mobile 125 / mock-harness 29 / relay 39 / harness-plugin 40 全过；relay 桥接冒烟实测 `session.list` 经 console 桥接返回 DSH Desktop 会话列表。
+
 ## v0.2.0 完善与自检（2026-08-18）
 - App 品牌/版本核对：`app.json` name=`harness remote`、icon=`assets/icon.png`（官方黑色鲸鱼，白底）、version=`0.2.0`；首页底部版本文案同步 `v0.2.0 · harness remote`，配对状态改中文「已配对」。
 - 本地 Android release APK 构建尝试：`expo prebuild` + `gradlew assembleRelease` 因 Windows pnpm 深路径 CMake/ninja 问题失败；已写 BLOCKED.md，需 EAS 云构建或 Linux CI。

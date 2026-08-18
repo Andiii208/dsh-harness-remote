@@ -25,6 +25,8 @@
 | `plugin.list/exec` | ⚠️ 非核心 RPC；DSH 插件清单走 `dsh-host-plugin-inventory` remote | App 探测不到时隐藏；harness-plugin `plugin-catalog` 提供参考实现 |
 | WS `/api/events.mux` + `/api/events.host` | ✅ 存在（WebSocket 下行，帧包在 `server-request` 信封内） | `WsDownlink` 自动解包并保留外层 `rpcId` |
 
+**DSH Desktop（`127.0.0.1:56734`，2026-08-18 实测）**：`dsh-remote remote` 会经 `DSH_WEB_URL` / 默认端口自动探测并桥接该宿主。Desktop 的 `session/event` 为对象形式（`{type:"user/message"|"assistant/chunk"|"assistant/message"|"turn/*", seq, time, data}`），`session/projection` 为 `{key,value}` 形式；App `SessionStore` 已同时兼容旧 fixture 平铺格式与 Desktop 新格式。
+
 **信封适配（关键）**：真实 DSH 请求体必须带 `type:"client-request"`；响应为
 `{"type":"server-response","rpcId":…,"result":{"ok":true,"value":…}}` 或
 `{"ok":false,"error":…}`；`/api/respond` 必须带 `type:"client-response"`。

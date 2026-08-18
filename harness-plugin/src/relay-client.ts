@@ -140,6 +140,11 @@ export class RelayClient {
     return this.credentialValue;
   }
 
+  /** console 注册 clientId（数据面信封 from 字段使用）。 */
+  get clientId(): string {
+    return this.opts.clientId;
+  }
+
   isOnline(): boolean {
     return this.online;
   }

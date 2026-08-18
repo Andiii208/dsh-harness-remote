@@ -57,6 +57,19 @@ function num(v: unknown): number | undefined {
   return typeof v === "number" ? v : undefined;
 }
 
+/** 从 DSH Desktop 的 content 块（text / content / message / delta）里递归提取纯文本。 */
+function extractDshText(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (Array.isArray(v)) return v.map((item) => extractDshText(item)).join("");
+  if (!isRecord(v)) return "";
+  if (typeof v.text === "string") return v.text;
+  if (typeof v.delta === "string") return v.delta;
+  if (typeof v.content === "string") return v.content;
+  if (v.content !== undefined) return extractDshText(v.content);
+  if (typeof v.message === "string") return v.message;
+  return "";
+}
+
 export class SessionStore {
   private sessions = new Map<string, SessionSummary>();
   private transcripts = new Map<string, TranscriptMessage[]>();
@@ -215,6 +228,15 @@ export class SessionStore {
     const id = str(f.sessionId);
     if (!id) return;
     const s = this.touchSession(id);
+
+    // DSH Desktop：projection 帧是 { key, value } 形式。
+    const key = str(f.key);
+    if (key !== undefined) {
+      this.applyProjectionValue(s, key, f.value);
+      return;
+    }
+
+    // 旧 mock / 早期 fixture：字段平铺在帧上。
     const title = str(f.title);
     if (title !== undefined) s.title = title;
 
@@ -251,10 +273,66 @@ export class SessionStore {
     }
   }
 
+  private applyProjectionValue(s: SessionSummary, key: string, value: unknown): void {
+    switch (key) {
+      case "title":
+        s.title = str(value) ?? s.title;
+        break;
+      case "goal": {
+        if (!isRecord(value)) break;
+        const status = str(value.status);
+        if (status !== undefined) s.goalStatus = status;
+        const objective = str(value.objective);
+        if (objective !== undefined) s.goalObjective = objective;
+        break;
+      }
+      case "todos": {
+        if (!Array.isArray(value)) break;
+        const todos: TranscriptTodo[] = [];
+        for (const t of value) {
+          if (!isRecord(t)) continue;
+          const content = str(t.content);
+          const status = str(t.status);
+          if (content !== undefined && status !== undefined) {
+            todos.push({ content, status });
+          }
+        }
+        if (todos.length > 0) s.todos = todos;
+        break;
+      }
+      case "tokenUsage": {
+        if (!isRecord(value)) break;
+        const total = num(value.total);
+        if (total !== undefined) s.tokenUsageTotal = total;
+        break;
+      }
+      case "contextPressure": {
+        if (!isRecord(value)) break;
+        const percent = num(value.percent);
+        if (percent !== undefined) s.contextPercent = percent;
+        break;
+      }
+      case "plan":
+        s.plan = value;
+        break;
+      default:
+        break;
+    }
+  }
+
   private applyEvent(f: Frame): void {
     const id = str(f.sessionId);
     if (!id) return;
     this.touchSession(id); // 会话列表随活动自动出现（即使没有注册表帧）
+
+    // DSH Desktop / 新版宿主：event 是 { type, seq, time, data } 对象。
+    if (isRecord(f.event)) {
+      const ev = str(f.event.type);
+      if (ev) this.applyDshEvent(id, ev, f.event.data);
+      return;
+    }
+
+    // 旧 mock / 早期 fixture：event 是字符串，消息体在 f.message。
     const ev = str(f.event);
     if (!ev) return;
     const msg = f.message as Record<string, unknown> | undefined;
@@ -315,6 +393,66 @@ export class SessionStore {
           this.pushMessage(id, cur);
           this.streaming.delete(id);
         }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  /** DSH Desktop 事件折叠：user/message、assistant/chunk、assistant/message、turn/*。 */
+  private applyDshEvent(id: string, ev: string, data: unknown): void {
+    switch (ev) {
+      case "turn/start": {
+        const leftover = this.streaming.get(id);
+        if (leftover && leftover.content.length > 0) {
+          this.pushMessage(id, { role: leftover.role, content: "…（间隙：消息流中断）", gap: true });
+        }
+        this.streaming.delete(id);
+        break;
+      }
+      case "user/message": {
+        const text = extractDshText(data);
+        if (text.length > 0) this.pushMessage(id, { role: "user", content: text });
+        break;
+      }
+      case "assistant/chunk": {
+        const chunk = isRecord(data) ? data.chunk : undefined;
+        if (!isRecord(chunk)) break;
+        const chunkType = str(chunk.type);
+        if (chunkType === "text-delta" || chunkType === "text") {
+          const delta = str(chunk.text) ?? str(chunk.delta) ?? "";
+          const cur = this.streaming.get(id);
+          if (cur) cur.content += delta;
+          else this.streaming.set(id, { role: "assistant", content: delta });
+        }
+        break;
+      }
+      case "assistant/message": {
+        const message = isRecord(data) ? data.message : undefined;
+        const text = extractDshText(message);
+        const live = this.streaming.get(id);
+        if (text.length > 0) {
+          this.pushMessage(id, { role: "assistant", content: text });
+        } else if (live && live.content.length > 0) {
+          this.pushMessage(id, live);
+        }
+        this.streaming.delete(id);
+        break;
+      }
+      case "turn/complete":
+      case "turn/end":
+      case "step/end": {
+        const cur = this.streaming.get(id);
+        if (cur) {
+          this.pushMessage(id, cur);
+          this.streaming.delete(id);
+        }
+        break;
+      }
+      case "interrupted": {
+        const cur = this.streaming.get(id);
+        if (cur) cur.interrupted = true;
         break;
       }
       default:

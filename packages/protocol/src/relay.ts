@@ -434,6 +434,13 @@ class RelayConnection implements Connection {
     return result;
   }
 
+  async interrupt(sessionId: string): Promise<void> {
+    const r = await this.unary("session.cancel", { sessionId });
+    if (!r.ok) {
+      throw new Error(r.error?.message ?? "session.cancel failed");
+    }
+  }
+
   async respond(rpcId: string, result: unknown): Promise<void> {
     if (this.encKey) {
       // M3.2: seal { rpcId, result } before it goes anywhere near the relay.

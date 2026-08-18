@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated from "react-native-reanimated";
 import * as Network from "expo-network";
-import { useEntering } from "../src/ui/anim";
+import { useEntering, useExiting } from "../src/ui/anim";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
 import { isRelayUrl, toRelayWsUrl } from "../src/transport/relayMode";
 import { tokenStore } from "../src/data/secureStoreAdapter";
@@ -67,6 +67,8 @@ export default function ConnectScreen() {
   const heroEntering = useEntering(10, 240);
   const bannerEntering = useEntering(6, 200);
   const formEntering = useEntering(6, 200);
+  const bannerExiting = useExiting();
+  const formExiting = useExiting();
 
   // 首启引导 + 最近主机
   useEffect(() => {
@@ -236,10 +238,15 @@ export default function ConnectScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Animated.View entering={heroEntering} style={styles.header}>
           <View style={styles.brand}>
-            <WhaleMark size={34} />
+            <WhaleMark size={28} />
             <Text style={styles.brandText}>harness remote</Text>
           </View>
-          <StatusChip tone={STATE_TONE[state] ?? "neutral"} label={STATE_LABEL[state] ?? state} />
+          <View style={styles.headerRight}>
+            <StatusChip tone={STATE_TONE[state] ?? "neutral"} label={STATE_LABEL[state] ?? state} />
+            <Pressable onPress={() => router.push("/settings")} hitSlop={8} accessibilityRole="button" accessibilityLabel="设置">
+              <Text style={styles.settingsLink}>设置</Text>
+            </Pressable>
+          </View>
         </Animated.View>
 
         {state === "connecting" && <ConnectingBar />}
@@ -251,7 +258,7 @@ export default function ConnectScreen() {
           </View>
         )}
 
-        <Animated.View key={`banner-${mode}`} entering={bannerEntering} style={styles.banner}>
+        <Animated.View key={`banner-${mode}`} entering={bannerEntering} exiting={bannerExiting} style={styles.banner}>
           <Text style={styles.bannerTitle}>
             {mode === "remote" ? "远程连接我的电脑" : "同一 Wi-Fi 连接"}
           </Text>
@@ -268,7 +275,7 @@ export default function ConnectScreen() {
           </Pressable>
         )}
 
-        <Animated.View key={`form-${mode}`} entering={formEntering} style={styles.card}>
+        <Animated.View key={`form-${mode}`} entering={formEntering} exiting={formExiting} style={styles.card}>
           {mode === "remote" ? (
             <>
               <Field
@@ -455,6 +462,8 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     screen: { flex: 1, backgroundColor: colors.bg },
     content: { paddingHorizontal: 20, paddingBottom: space.x7, gap: 18 },
     header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: space.x2 },
+    headerRight: { flexDirection: "row", alignItems: "center", gap: space.x4 },
+    settingsLink: { color: colors.textMuted, fontSize: font.caption, fontWeight: "500" },
     brand: { flexDirection: "row", alignItems: "center", gap: space.x3 },
     brandText: {
       color: colors.text,

@@ -77,6 +77,13 @@ pnpm start
 - 设置页（Sessions 右上「设置」）可查看当前目标主机/远端实例、切换自动重连、本地通知开关（Expo Go 下禁用）、断开连接。
 - 会话列表支持下拉刷新（重拉 session.list 全量校准）；上线后自动刷新一次，断线重连后再次自动刷新。
 
+### 一键远程（R4，DSH 自动桥接）
+- 电脑端运行 `dsh-remote remote`（或双击 `dsh-remote-remote.bat`）：启动内置 relay → 自动探测并桥接本机 DSH API → 打印 6 位配对码、二维码与扫码载荷。
+- DSH API 探测顺序：`$env:DSH_API_URL` / `$env:DSH_WEB_URL` → `http://127.0.0.1:56734`（DSH Desktop）→ `http://127.0.0.1:3080`（旧 harness）。探测不到时 relay 仍可用，但手机端会话列表为空。
+- 手机连接页选择「远程连接」，输入电脑上显示的地址和 6 位码；或直接扫二维码（`dshremote://remote?addr=…&code=…&port=…`）。
+- 配对成功后，手机端即通过 console 桥接访问 DSH 的 `session.list` / `session.create` / `session.prompt` / `session.cancel` / `respond` 与 `events.mux` / `events.host` 事件流。
+- 二维码渲染失败时，CLI 会回退打印完整扫码载荷，可用任意二维码生成器转成二维码使用。
+
 ## 2.8 Relay 部署（M3.4 自部署）
 
 ### 启动 relay

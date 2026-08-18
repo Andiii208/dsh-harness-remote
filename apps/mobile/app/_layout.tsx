@@ -37,6 +37,7 @@ function RootNavigator() {
           contentStyle: { backgroundColor: colors.bg },
           headerShadowVisible: false,
           headerBackTitle: "返回",
+          animation: "slide_from_right",
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />

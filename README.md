@@ -9,16 +9,16 @@ dsh-remote 是一个开源社区产品：用手机远程连接 DeepSeek Harness�
 
 - **跨端**：React Native + Expo（TypeScript），iOS + Android 一套代码，EAS 云构建无需 Mac 即可出 iOS 包。
 - **审批流程**：会话列表待办横幅直达审批列表页，多选批量批准/拒绝、提问批量跳过；处理历史按时间倒序可查；通知点击深链直达 `approval/:rpcId`。
-- **会话列表**：搜索（标题/workspace/最近消息，大小写不敏感）、按 workspace 分组（无 workspace 归「其他」）、上下文压力分档提醒（<70 正常 / 70–85 偏高 / ≥85 告警）。
-- **聊天体验**：长按消息操作菜单（复制全文/按代码块分别复制）；代码块默认展开可折叠 + 轻量语法高亮（关键词/字符串/注释/数字四类）；流式暂停为真中断（`session.interrupt` RPC，失败自动回退本地暂停渲染并提示）。
+- **会话列表**：搜索（标题/workspace/最近消息，大小写不敏感）、按 workspace 分组（无 workspace 归「其他」）、上下文压力分档提醒（<70 正常 / 70–85 偏高 / ≥85 告警）；在线时顶部「＋ 新会话」直接创建 DSH 会话。
+- **聊天体验**：DeepSeek 风格大圆角输入框 + 圆形发送按钮；长按消息操作菜单（复制全文/按代码块分别复制）；代码块默认展开可折叠 + 轻量语法高亮（关键词/字符串/注释/数字四类）；流式暂停为真中断（`session.cancel` RPC，失败自动回退本地暂停渲染并提示）；同时兼容 DSH Desktop 新版事件流（`user/message`、`assistant/chunk`、`assistant/message`）。
 - **远程优先首屏（R1）**：App 首屏就是「远程连接我的电脑」，只填电脑上显示的连接地址（自动补全 `ws://…:4090`）+ 可选 6 位码；同一 Wi-Fi/扫码等低频能力收进「更多连接方式」，不做专业术语展示。
-- **电脑端一键远程（R4）**：`dsh-remote remote` 自动启动内置 relay（4090 被占用自动选空闲端口）→ 注册 console → 取一次性 6 位配对码 → 打印小白卡片 + 远程二维码；手机配对成功提示 `已配对 device-xxx`，Ctrl+C 关闭。Windows 用户可直接双击 `dsh-remote-remote.bat`，不用敲命令。
+- **电脑端一键远程（R4）**：`dsh-remote remote` 自动启动内置 relay（4090 被占用自动选空闲端口）→ 自动探测并桥接本机 DSH API（`DSH_WEB_URL` / `127.0.0.1:56734` / `127.0.0.1:3080`）→ 注册 console → 取一次性 6 位配对码 → 打印小白卡片 + 远程二维码（含端口）+ 扫码载荷；手机配对后即可看到 DSH 会话、发消息、审批。Windows 用户可直接双击 `dsh-remote-remote.bat`，不用敲命令。
 - **LAN 起步、传输可插拔**：自动发现 + 二维码配对 + 最近主机一键重连，也可以手动直连局域网内的 DSH（`host:3080`）；传输层抽象为 `Transport` 接口，连接页输入 `relay://` / `ws://` URL 即切换 Relay 模式（M3 中继：控制面 + E2E 加密 + 离线队列，自部署不托管）。
 - **插件能力面（R2）**：协议新增 `plugin.list` / `plugin.exec` 契约；App 会话长按菜单动态展示用户 DSH 插件指令，设置页插件入口进入插件列表（命令 + 设置，单屏克制）。dsh-remote 自身不做插件宿主——用户 DIY 插件通过 DSH 插件系统 + R2 能力面在手机端呈现。
-- **设置迁移（R3）**：设置页分「连接 / 模型与权限 / 插件 / 显示 / 关于」；`host.settings.get/set` 能力可探测（读不到自动隐藏）；模型选择、思考强度、上下文容量、审批权限状态；App 本地字体大小；检查更新走 GitHub Releases 对比。
+- **设置迁移（R3）**：设置页分「连接 / 模型与权限 / 插件 / 显示 / 关于」；`host.settings.get/set` 能力可探测（读不到自动隐藏）；模型选择、思考强度、上下文容量、审批权限状态；App 本地字体大小；**外观：浅色（默认）/ 深色 / 跟随系统**；检查更新走 GitHub Releases 对比。
 - **低门槛连接（P2）**：首启 3 步引导 → 扫码电脑上的配对二维码即连（`dshremote://pair` 深链）；同一局域网点「自动发现」列出可用实例；冷启动自动重连最近主机。
 - **协议对齐**：纯 TS 协议包（`packages/protocol`，零 RN 依赖）与 DSH 原生类型零失真对齐；宽容解码，线上层永不因未知数据崩溃。
-- **设计**：UI 设计系统 v7（docs/design/UI-SYSTEM-v7.md）——双主题（浅/深跟随系统）、DeepSeek 官方主按钮蓝（浅 `#3964FE` / 深 `#5686FE`）、官方黑色鲸鱼、Space Grotesk 显示字体；动效克制且尊重系统「减弱动态」。
+- **设计**：UI 设计系统 v7（docs/design/UI-SYSTEM-v7.md）——双主题默认浅色、可手动切换/跟随系统，DeepSeek 官方主按钮蓝（浅 `#3964FE` / 深 `#5686FE`）、官方黑色鲸鱼、Space Grotesk 显示字体；统一入场/退场动效，尊重系统「减弱动态」。
 
 ## 界面预览
 
@@ -42,7 +42,7 @@ dsh-remote/
 │       │   ├── discovery/ # 最近主机 / 子网自动发现 / 配对深链 / 首启引导
 │       │   ├── ui/        # 设计系统 v7 组件（WhaleMark/StatusChip/Button/Field/…）
 │       │   ├── theme.ts   # DSH 设计令牌 v7（双主题：浅 #3964FE / 深 #5686FE）
-│       │   └── theme-context.tsx # ThemeProvider + useTheme（跟随系统深浅色）
+│       │   └── theme-context.tsx # ThemeProvider + useTheme（默认浅色，可切换深色/跟随系统）
 │       └── app.json       # EAS 配置（云构建）
 ├── packages/
 │   └── protocol/          # TS 协议核心（纯 TS，零运行时依赖）
@@ -70,7 +70,8 @@ pnpm audit --prod   # 发布前依赖审计
 pnpm --filter mock-harness build
 node mock-harness/dist/cli.js --port 3080
 
-# 一键开启远程访问（电脑端小白命令：启动 relay + 打印 6 位配对码）
+# 一键开启远程访问（启动 relay + 自动桥接本机 DSH + 打印 6 位配对码与二维码）
+# DSH API 探测顺序：$env:DSH_API_URL / $env:DSH_WEB_URL → 127.0.0.1:56734 → 127.0.0.1:3080。
 # Windows 用户也可以直接双击仓库根目录的 dsh-remote-remote.bat，免敲命令。
 pnpm --filter @dsh-remote/harness-plugin build
 node harness-plugin/dist/cli.js remote

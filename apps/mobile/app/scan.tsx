@@ -39,7 +39,8 @@ export default function ScanScreen() {
       void haptic("success");
       setError("");
       void (async () => {
-        await connect(toRelayWsUrl(remote.addr), 0, undefined, remote.code);
+        const addr = remote.port !== undefined ? `${remote.addr}:${remote.port}` : remote.addr;
+        await connect(toRelayWsUrl(addr), 0, undefined, remote.code);
         router.replace("/sessions");
       })();
       return;

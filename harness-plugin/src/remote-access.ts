@@ -11,6 +11,7 @@ import { networkInterfaces } from "node:os";
 import { createRelayServer } from "relay";
 import { buildRemotePairPayload } from "@dsh-remote/protocol";
 import { RelayClient } from "./relay-client.js";
+import { DshBridge, detectDshApiUrl } from "./dsh-bridge.js";
 
 export interface RemoteAccessOptions {
   /** 手机可达的展示地址；缺省自动选择局域网 IPv4，找不到时回退 127.0.0.1。 */
@@ -19,6 +20,12 @@ export interface RemoteAccessOptions {
   port?: number;
   /** 配对成功回调（宿主面板可弹提示）。 */
   onPaired?: (info: { deviceId: string }) => void;
+  /** 显式指定 DSH API baseUrl（如 http://127.0.0.1:56734）。 */
+  dshBaseUrl?: string | null;
+  /** 未显式指定 baseUrl 时，是否自动探测 DSH_WEB_URL / 默认端口。CLI 默认开启。 */
+  autoDetectDsh?: boolean;
+  /** DSH 桥接状态日志（CLI 打印用）。 */
+  onStatus?: (line: string) => void;
 }
 
 export interface RemoteAccessHandle {
@@ -30,9 +37,11 @@ export interface RemoteAccessHandle {
   url: string;
   /** 一次性 6 位配对码。 */
   code: string;
-  /** 扫码连接载荷（dshremote://remote?addr=...&code=...）。 */
+  /** 扫码连接载荷（dshremote://remote?addr=...&code=...&port=...）。 */
   qrPayload: string;
-  /** 关闭远程访问并释放 relay/console 资源。 */
+  /** 已连接的 DSH API baseUrl；未连接为 null。 */
+  dshUrl: string | null;
+  /** 关闭远程访问并释放 relay/console/DSH 桥接资源。 */
   stop(): Promise<void>;
 }
 
@@ -83,30 +92,54 @@ export async function startRemoteAccess(
 
   const host = opts.host ?? lanIp() ?? "127.0.0.1";
   const clientId = `console-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  let peerId: string | undefined;
   const client = new RelayClient({
     url: `ws://127.0.0.1:${port}`,
     clientId,
     kind: "console",
-    onPaired: (info) => opts.onPaired?.({ deviceId: info.deviceId }),
+    onPaired: (info) => {
+      peerId = info.deviceId;
+      opts.onPaired?.({ deviceId: info.deviceId });
+    },
   });
 
+  let bridge: DshBridge | null = null;
   try {
     await client.connect();
     const code = await client.requestPairCode();
     const url = `ws://${host}:${port}`;
-    const qrPayload = buildRemotePairPayload({ addr: host, code });
+    const qrPayload = buildRemotePairPayload({ addr: host, code, port });
+
+    // DSH API 桥接：显式 baseUrl 优先；否则按选项自动探测。
+    const baseUrl = opts.dshBaseUrl ?? (opts.autoDetectDsh ? await detectDshApiUrl(undefined, opts.onStatus) : null);
+    if (baseUrl) {
+      bridge = new DshBridge({
+        baseUrl,
+        relay: client,
+        getPeerId: () => peerId,
+        onStatus: opts.onStatus,
+        onError: (err) => opts.onStatus?.(`DSH 桥接错误：${err instanceof Error ? err.message : String(err)}`),
+      });
+      await bridge.start();
+    } else if (opts.autoDetectDsh) {
+      opts.onStatus?.("未检测到 DSH API：会话列表将为空，手机端只能连接但看不到会话。");
+    }
+
     return {
       host,
       port,
       url,
       code,
       qrPayload,
+      dshUrl: baseUrl,
       stop: async () => {
+        bridge?.stop();
         client.close();
         await relay.stop();
       },
     };
   } catch (err) {
+    bridge?.stop();
     client.close();
     await relay.stop();
     throw err;

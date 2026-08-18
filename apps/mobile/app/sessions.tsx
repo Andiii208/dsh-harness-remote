@@ -65,7 +65,7 @@ type SessionRow =
   | { kind: "session"; key: string; session: SessionSummary };
 
 export default function SessionsScreen() {
-  const { sessions, pending, state, refreshSessions } = useConnection();
+  const { sessions, pending, state, refreshSessions, createSession } = useConnection();
   const { colors } = useTheme();
   const { scale } = useAppSettings();
   const styles = useMemo(() => createStyles(colors, scale), [colors, scale]);
@@ -125,6 +125,17 @@ export default function SessionsScreen() {
     if (text.trim() === "") setSearchVisible(false);
   };
 
+  const onCreate = async () => {
+    if (state !== "online") return;
+    const id = await createSession();
+    if (id) {
+      void refreshSessions().catch(() => {});
+      router.push(`/chat/${encodeURIComponent(id)}`);
+    } else {
+      setRefreshError("新建会话失败：请确认 DSH 已开启会话能力");
+    }
+  };
+
   return (
     <FlashList
       style={styles.screen}
@@ -142,6 +153,16 @@ export default function SessionsScreen() {
               <StatusChip tone={state === "online" ? "success" : state === "offline" ? "danger" : "warn"} label={STATE_LABEL[state] ?? state} />
             </View>
             <View style={styles.headerActions}>
+              <Pressable
+                onPress={() => void onCreate()}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="新建会话"
+                style={({ pressed }) => [styles.newChatButton, pressed && styles.rowPressed]}
+                disabled={state !== "online"}
+              >
+                <Text style={styles.newChatText}>＋ 新会话</Text>
+              </Pressable>
               <Pressable onPress={toggleSearch} hitSlop={8} accessibilityRole="button" accessibilityLabel={searchVisible ? "完成搜索" : "搜索"}>
                 <Text style={styles.headerLink}>{searchVisible ? "完成" : "搜索"}</Text>
               </Pressable>
@@ -247,6 +268,13 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
       letterSpacing: -0.5,
     },
     headerActions: { flexDirection: "row", alignItems: "center", gap: space.x4 },
+    newChatButton: {
+      backgroundColor: colors.accent,
+      borderRadius: radius.pill,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+    },
+    newChatText: { color: "#FFFFFF", fontSize: 13, fontWeight: "600", letterSpacing: -0.1 },
     headerLink: { color: colors.accent, fontSize: 13, fontWeight: "500" },
     pendingRow: { paddingVertical: 2 },
     pendingText: { color: colors.accent, fontSize: 14, fontWeight: "500", letterSpacing: -0.1 },

@@ -18,16 +18,18 @@ Usage:
   dsh-remote --help    显示帮助
 `;
 
-function card(relayHost: string, code: string, via: "lan" | "loopback"): string {
-  const line = "─".repeat(36);
+function card(relayHost: string, port: number, code: string, via: "lan" | "loopback", dshUrl: string | null): string {
+  const line = "─".repeat(40);
   return [
     "",
     `┌${line}┐`,
-    `│  ✅ 远程连接已开启                    │`,
-    `│  地址：  ${relayHost.padEnd(26)}│`,
-    `│  6 位码： ${code.padEnd(29)}│`,
-    `│  手机打开 App 扫下面的二维码          │`,
-    `│  或选择「远程连接」手动输入            │`,
+    `│  ✅ 远程连接已开启                  │`,
+    `│  地址：  ${relayHost.padEnd(28)}│`,
+    `│  端口：  ${String(port).padEnd(31)}│`,
+    `│  6 位码： ${code.padEnd(30)}│`,
+    `│  DSH：   ${(dshUrl ?? "未检测到（会话列表将为空）").padEnd(28)}│`,
+    `│  手机打开 App 扫下面的二维码        │`,
+    `│  或选择「远程连接」手动输入          │`,
     `└${line}┘`,
     via === "loopback" ? "⚠ 未检测到局域网 IP，请在同一电脑上的模拟器/浏览器使用" : "",
   ].filter(Boolean).join("\n");
@@ -44,6 +46,8 @@ async function main(argv: string[]): Promise<number> {
   }
 
   const handle = await startRemoteAccess({
+    autoDetectDsh: true,
+    onStatus: (line) => console.log(`  · ${line}`),
     onPaired: (info) => console.log(`\n✅ 已配对 ${info.deviceId}`),
   });
 
@@ -58,10 +62,16 @@ async function main(argv: string[]): Promise<number> {
   process.on("SIGINT", () => void shutdown());
   process.on("SIGTERM", () => void shutdown());
 
-  console.log(card(handle.host, handle.code, handle.host === "127.0.0.1" ? "loopback" : "lan"));
+  console.log(card(handle.host, handle.port, handle.code, handle.host === "127.0.0.1" ? "loopback" : "lan", handle.dshUrl));
   console.log("\n📱 手机扫码连接：\n");
-  qrcode.generate(handle.qrPayload, { small: true });
-  console.log("\nCtrl+C 关闭远程访问。");
+  try {
+    qrcode.generate(handle.qrPayload, { small: true });
+  } catch (err) {
+    console.log(`（当前终端无法渲染二维码，请用下面的扫码载荷生成二维码）\n${handle.qrPayload}`);
+    console.log(err instanceof Error ? err.message : String(err));
+  }
+  console.log(`\n扫码载荷：${handle.qrPayload}`);
+  console.log("Ctrl+C 关闭远程访问。");
 
   return 0;
 }

@@ -16,10 +16,12 @@ export interface PairPayload {
   token?: string;
 }
 
-/** R1/R4 远程连接扫码载荷：dshremote://remote?addr=...&code=... */
+/** R1/R4 远程连接扫码载荷：dshremote://remote?addr=...&code=...&port=... */
 export interface RemotePairPayload {
   addr: string;
   code?: string;
+  /** relay 实际监听端口（缺省 4090，由 App 端 toRelayWsUrl 补全）。 */
+  port?: number;
 }
 
 export interface ProbeOptions {
@@ -86,11 +88,12 @@ export function parsePairPayload(url: string): PairPayload | null {
   }
 }
 
-/** 构造远程连接二维码/深链：dshremote://remote?addr=...&code=... */
+/** 构造远程连接二维码/深链：dshremote://remote?addr=...&code=...&port=... */
 export function buildRemotePairPayload(p: RemotePairPayload): string {
   const q = new URLSearchParams();
   q.set("addr", p.addr);
   if (p.code) q.set("code", p.code);
+  if (p.port !== undefined) q.set("port", String(p.port));
   return `dshremote://remote?${q.toString()}`;
 }
 
@@ -102,9 +105,13 @@ export function parseRemotePairPayload(url: string): RemotePairPayload | null {
     const addr = u.searchParams.get("addr");
     if (!addr || addr.trim().length === 0) return null;
     const code = u.searchParams.get("code") ?? undefined;
+    const portRaw = u.searchParams.get("port");
+    const port = portRaw === null ? undefined : Number.parseInt(portRaw, 10);
+    const validPort = port !== undefined && Number.isInteger(port) && port > 0 && port <= 65535 ? port : undefined;
     return {
       addr: addr.trim(),
       ...(code && /^\d{6}$/.test(code) ? { code } : {}),
+      ...(validPort !== undefined ? { port: validPort } : {}),
     };
   } catch {
     return null;

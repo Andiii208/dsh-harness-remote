@@ -6,11 +6,11 @@
     "version": "0.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
-    "backgroundColor": "#0A0C10",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#F7F7FA",
     "newArchEnabled": true,
     "splash": {
-      "backgroundColor": "#0A0C10",
+      "backgroundColor": "#F7F7FA",
       "resizeMode": "cover",
       "image": "./assets/splash.png"
     },

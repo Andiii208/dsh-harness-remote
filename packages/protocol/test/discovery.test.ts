@@ -71,9 +71,9 @@ describe("pair payload", () => {
 });
 
 describe("remote pair payload", () => {
-  it("round-trips addr and 6-digit code", () => {
-    const url = buildRemotePairPayload({ addr: "relay.example.com", code: "483920" });
-    expect(parseRemotePairPayload(url)).toEqual({ addr: "relay.example.com", code: "483920" });
+  it("round-trips addr, 6-digit code and port", () => {
+    const url = buildRemotePairPayload({ addr: "relay.example.com", code: "483920", port: 4091 });
+    expect(parseRemotePairPayload(url)).toEqual({ addr: "relay.example.com", code: "483920", port: 4091 });
   });
 
   it("omits empty or non-6-digit code", () => {
@@ -82,6 +82,12 @@ describe("remote pair payload", () => {
     });
     expect(parseRemotePairPayload("dshremote://remote?addr=h&code=123")).toEqual({ addr: "h" });
     expect(parseRemotePairPayload("dshremote://remote?addr=h&code=abcdef")).toEqual({ addr: "h" });
+  });
+
+  it("ignores invalid port values", () => {
+    expect(parseRemotePairPayload("dshremote://remote?addr=h&port=0")).toEqual({ addr: "h" });
+    expect(parseRemotePairPayload("dshremote://remote?addr=h&port=99999")).toEqual({ addr: "h" });
+    expect(parseRemotePairPayload("dshremote://remote?addr=h&port=abc")).toEqual({ addr: "h" });
   });
 
   it("rejects invalid urls", () => {

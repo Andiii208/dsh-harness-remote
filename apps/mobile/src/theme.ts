@@ -28,10 +28,15 @@ export interface ThemeColors {
   msgSelfText: string;
 }
 
+export type ThemePreference = "light" | "dark" | "system";
+
 export interface ThemeValue {
   colors: ThemeColors;
   scheme: ThemeScheme;
   isDark: boolean;
+  /** 用户选择的主题偏好（默认 light）。 */
+  preference: ThemePreference;
+  setPreference(pref: ThemePreference): void;
 }
 
 const light: ThemeColors = {
