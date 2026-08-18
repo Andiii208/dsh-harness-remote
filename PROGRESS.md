@@ -3,8 +3,9 @@
 ## v0.2.0 完善与自检（2026-08-18）
 - App 品牌/版本核对：`app.json` name=`harness remote`、icon=`assets/icon.png`（官方黑色鲸鱼，白底）、version=`0.2.0`；首页底部版本文案同步 `v0.2.0 · harness remote`，配对状态改中文「已配对」。
 - 本地 Android release APK 构建尝试：`expo prebuild` + `gradlew assembleRelease` 因 Windows pnpm 深路径 CMake/ninja 问题失败；已写 BLOCKED.md，需 EAS 云构建或 Linux CI。
+- Android APK 改走 CI：新增 `.github/workflows/android-apk.yml`（Linux runner `expo prebuild` + `gradlew assembleRelease`，tag push / workflow_dispatch 自动上传 GitHub Release）；本机 Windows 深路径阻塞不再影响发版。**iOS App 构建暂未完成**（需 Expo/Apple 开发者账号，当前未产出 iOS 安装包）。
 - 低门槛文案微调：远程地址 placeholder 更具体，连接主路径保持「地址 + 6 位码」两字段。
-- 自检结论：UI/动效/低门槛达标；正常使用由全仓测试 + 真实 DSH 探测支撑；Release 目前只有 Windows 脚本，APK/iOS 包待 EAS 凭据；因此「完全体可推广」尚差移动安装包与推送真机验证。
+- 自检结论：UI/动效/低门槛达标；正常使用由全仓测试 + 真实 DSH 探测支撑；Release 已有 Windows 脚本，Android APK 已接入 CI 自动构建，iOS 包暂未完成；因此「完全体可推广」尚差 iOS 安装包与推送真机验证。
 
 ## Phase P0–P2（真实宿主接缝 / 一键远程复用 / 推送准备 / TLS / 安全加固，2026-08-18）
 - **P0 真实 DSH 宿主接缝校准**：真实 DSH `0.1.0-rc.7` 实测；协议适配 `type:"client-request"` 请求、`type:"server-response"`/`result.value` 响应、`type:"client-response"` respond 回执、WS server-request 帧解包并保留 rpcId；`session.prompt` 改 `mode+content`、`session.interrupt`→`session.cancel`、session.list 兼容 `items/sessionId/projections/cwd`；approval/question 帧接入 pending；harness-plugin 增 `host-adapter` 参考映射；COMPATIBILITY.md 增真实宿主矩阵。真实联调证据 `.shots/p0-real-dsh-probe.txt`（connect/session.list 125 项/session.prompt/session.cancel）。

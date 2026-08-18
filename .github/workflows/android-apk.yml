@@ -1,0 +1,82 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Git tag / Release to upload the APK to (empty = latest tag)'
+        required: false
+        default: ''
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: pnpm -r build
+
+      - name: Prebuild Android project
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android --non-interactive --no-install
+
+      - name: Build release APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            TAG="${{ github.event.inputs.release_tag }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="$(git describe --tags --abbrev=0)"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          APK="apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
+          if [ ! -f "$APK" ]; then
+            echo "APK not found at $APK"
+            find apps/mobile/android/app/build/outputs/apk -type f -name '*.apk' 2>/dev/null || true
+            exit 1
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" --title "$TAG" --generate-notes
+          fi

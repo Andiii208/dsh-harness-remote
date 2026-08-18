@@ -80,7 +80,16 @@ pnpm --filter @dsh-remote/capture build
 node tools/capture/dist/cli.js record --host 127.0.0.1 --port 3080 --out ./fixtures
 ```
 
-## 构建（EAS 云构建，无需 Mac 出 iOS 包）
+## 构建
+
+### Android APK（GitHub Actions 自动构建，推荐）
+
+- 打 `v*` tag 推送，或手动运行 `Android APK` workflow（`workflow_dispatch`，可指定 Release tag），Linux runner 会执行 `expo prebuild --platform android` + `gradlew assembleRelease`，并把 APK 自动上传到 GitHub Release。
+- 本地构建也可：`cd apps/mobile && npx expo prebuild --platform android` 后在 `android/` 执行 `./gradlew assembleRelease`（注意 Windows + pnpm 深路径已知会失败，见 BLOCKED.md）。
+
+### iOS / EAS 云构建（暂未完成）
+
+> **iOS App 构建暂未完成**：需要 Expo 账号与 Apple 开发者账号，当前尚未产出 iOS 安装包。
 
 ```bash
 cd apps/mobile
@@ -88,8 +97,6 @@ npx eas-cli build --profile development   # 开发版（development client）
 npx eas-cli build --profile preview       # 内部预览
 npx eas-cli build --profile production    # 商店版（自动递增 build number）
 ```
-
-> 已发布安装包：Android APK 与 Windows 一键脚本可从 [GitHub Releases](https://github.com/Andiii208/dsh-remote/releases) 下载；本地构建 Android APK 可先 `npx expo prebuild --platform android` 再在 `android/` 执行 `./gradlew assembleRelease`。
 
 前置：`eas.json` 已配置三个 profile；首次运行 `npx eas-cli login` + `npx eas-cli init`（写入 `extra.eas.projectId`）。真机联调步骤见 [docs/MANUAL.md](docs/MANUAL.md)。
 
@@ -115,7 +122,7 @@ npx eas-cli build --profile production    # 商店版（自动递增 build numbe
 | M3 中继 | 配对闭环已实现（relay 服务器、RelayTransport、E2E 加密、配对码闭环、设备密钥持久化、离线队列/推送桩、硬化文档）；真机推送与真机回归留待设备/账号窗口 |
 | R1–R5 远程优先窗口 | ✅ 已交付（远程优先首屏、`relay.pair.code` 取码协议、插件能力面、设置迁移、`dsh-remote remote` 一键远程、动效与联调证据） |
 
-> 状态：M0–M2 已通过评审；M3 中继（M3.1–M3.4）已实现并全仓回归绿；R1–R5 远程优先窗口已实现并全仓回归绿；P0–P2（真实 DSH rc.7 接缝、一键远程复用、Expo 推送准备、TLS 实测、配对安全加固）已实现并全仓回归绿（protocol 124 / mobile 117 / harness-plugin 37 / relay 39 / mock-harness 29 / capture 24）。Phase B 真机联调已在 Android 真机（Expo Go）验证通过（连接/会话/流式聊天/发消息/审批/提问/goal 暂停/断线重连），通知/后台保活/真机推送/relay 真机回归需 development build 与设备/账号窗口验证（Expo Go SDK 53+ 限制，见 [docs/MANUAL.md](docs/MANUAL.md)）。v0.2.0 发布流程见 PROGRESS。
+> 状态：M0–M2 已通过评审；M3 中继（M3.1–M3.4）已实现并全仓回归绿；R1–R5 远程优先窗口已实现并全仓回归绿；P0–P2（真实 DSH rc.7 接缝、一键远程复用、Expo 推送准备、TLS 实测、配对安全加固）已实现并全仓回归绿（protocol 124 / mobile 117 / harness-plugin 37 / relay 39 / mock-harness 29 / capture 24）。Phase B 真机联调已在 Android 真机（Expo Go）验证通过（连接/会话/流式聊天/发消息/审批/提问/goal 暂停/断线重连），通知/后台保活/真机推送/relay 真机回归需 development build 与设备/账号窗口验证（Expo Go SDK 53+ 限制，见 [docs/MANUAL.md](docs/MANUAL.md)）。Android APK 由 GitHub Actions 自动构建并上传 Release；**iOS App 构建暂未完成**（需 Expo/Apple 开发者账号）。v0.2.0 发布流程见 PROGRESS。
 
 ## 贡献
 
