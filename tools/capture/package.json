@@ -1,6 +1,6 @@
 {
   "name": "@dsh-remote/capture",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Record real DSH traffic into conformance fixtures (meta + unary + ws frames + scenarios).",
   "type": "module",
   "main": "./dist/index.js",

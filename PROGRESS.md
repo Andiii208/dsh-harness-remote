@@ -1,5 +1,13 @@
 # PROGRESS
 
+## Phase P0–P2（真实宿主接缝 / 一键远程复用 / 推送准备 / TLS / 安全加固，2026-08-18）
+- **P0 真实 DSH 宿主接缝校准**：真实 DSH `0.1.0-rc.7` 实测；协议适配 `type:"client-request"` 请求、`type:"server-response"`/`result.value` 响应、`type:"client-response"` respond 回执、WS server-request 帧解包并保留 rpcId；`session.prompt` 改 `mode+content`、`session.interrupt`→`session.cancel`、session.list 兼容 `items/sessionId/projections/cwd`；approval/question 帧接入 pending；harness-plugin 增 `host-adapter` 参考映射；COMPATIBILITY.md 增真实宿主矩阵。真实联调证据 `.shots/p0-real-dsh-probe.txt`（connect/session.list 125 项/session.prompt/session.cancel）。
+- **P1a 宿主一键远程复用**：`remote-access.ts` 提供 `startRemoteAccess()/stop()`（relay + console + 6 位码 + QR 载荷），CLI 重构复用；测试覆盖 start/stop。
+- **P1b 推送准备**：relay 增 `ExpoPushProvider`（`relay --push expo`）与 `createExpoPushProviderFromEnv()`；EAS/FCM/APNs 凭据缺失已写 BLOCKED.md，真机验证待 EAS 登录。
+- **P2a TLS 部署实测**：Docker Desktop 已运行；`caddy:latest` + `tls internal` + `reverse_proxy host.docker.internal:4090` 验证 `wss://localhost:8443`：healthz 200、WSS 升级 101、RelayClient 经 WSS register + 取码成功（`.shots/p2-wss-handshake.txt`、`.shots/p2-wss-relay.txt`）。BLOCKED TLS 项已关闭。
+- **P2b 安全加固**：relay.pair 失败锁定（默认 10 次/60s）、单 console 未使用配对码上限（默认 5）、审计新增 `pair_fail/pair_lock/pair_code_limit`（仅元数据）；SECURITY/MANUAL 同步。
+- 全仓测试：protocol 124 / mobile 117 / harness-plugin 37 / relay 39 / mock-harness 29 / capture 24。
+
 ## Phase 9：远程优先 + 插件能力面 + 设置迁移 + 一键远程（完成，2026-08-18）
 - R1 远程优先首屏：`apps/mobile/app/index.tsx` 默认远程模式；横幅文案随模式切换，[远程模式]/[局域网模式] 分段选择；远程模式只填 relay 地址（裸主机自动补 `ws://…:4090`）+ 可选 6 位配对码；LAN 保留主机/端口/token（token 收进高级）。`relayMode.ts` 增补裸主机/默认端口/IPv6 规则 + 单测（mobile 113）。
 - R5a `relay.pair.code`/`relay.pair.code.ack`：协议加类型与 `makePairCode`；relay 服务器处理（未认证拒绝、console 取码、码一次性）；`RelayClient.requestPairCode()`；联调脚本改走协议取码。protocol 110 / relay 34 / harness-plugin 30（阶段内计数）。

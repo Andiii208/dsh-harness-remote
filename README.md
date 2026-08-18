@@ -113,7 +113,7 @@ npx eas-cli build --profile production    # 商店版（自动递增 build numbe
 | M3 中继 | 配对闭环已实现（relay 服务器、RelayTransport、E2E 加密、配对码闭环、设备密钥持久化、离线队列/推送桩、硬化文档）；真机推送与真机回归留待设备/账号窗口 |
 | R1–R5 远程优先窗口 | ✅ 已交付（远程优先首屏、`relay.pair.code` 取码协议、插件能力面、设置迁移、`dsh-remote remote` 一键远程、动效与联调证据） |
 
-> 状态：M0–M2 已通过评审；M3 中继（M3.1–M3.4）已实现并全仓回归绿；R1–R5 远程优先窗口已实现并全仓回归绿（protocol 110 / mobile 113 / harness-plugin 30 / relay 34 / mock-harness 29 / capture 24）。Phase B 真机联调已在 Android 真机（Expo Go）验证通过（连接/会话/流式聊天/发消息/审批/提问/goal 暂停/断线重连），通知/后台保活/真机推送/relay 真机回归需 development build 与设备/账号窗口验证（Expo Go SDK 53+ 限制，见 [docs/MANUAL.md](docs/MANUAL.md)）。
+> 状态：M0–M2 已通过评审；M3 中继（M3.1–M3.4）已实现并全仓回归绿；R1–R5 远程优先窗口已实现并全仓回归绿；P0–P2（真实 DSH rc.7 接缝、一键远程复用、Expo 推送准备、TLS 实测、配对安全加固）已实现并全仓回归绿（protocol 124 / mobile 117 / harness-plugin 37 / relay 39 / mock-harness 29 / capture 24）。Phase B 真机联调已在 Android 真机（Expo Go）验证通过（连接/会话/流式聊天/发消息/审批/提问/goal 暂停/断线重连），通知/后台保活/真机推送/relay 真机回归需 development build 与设备/账号窗口验证（Expo Go SDK 53+ 限制，见 [docs/MANUAL.md](docs/MANUAL.md)）。v0.2.0 发布流程见 PROGRESS。
 
 ## 贡献
 

@@ -284,4 +284,12 @@ export class RelayTransport implements Transport {
 - `pnpm audit --prod`：3 个 Expo 工具链传递漏洞（image-size ×2 high、uuid ×1 moderate），非运行时，已记录在 SECURITY.md 发布检查清单。
 - `relay/src/sqlite-store.ts`：可选 SQLite 持久化 store（`node:sqlite`，`createSqliteRelayStore(path)`；`createRelayServer` 增加 `store` 选项，CLI 增加 `--store <path>`）；重开保留注册/配对/在线状态。
 - `relay/test/relay-multi.test.ts`：多 console/device 隔离验证（在线路由只投配对 peer、离线队列按 peer 隔离）。
-- TLS 部署实测（Caddy/Docker）因 Docker Desktop daemon 未启动暂阻塞，已写 BLOCKED.md。
+- TLS 部署实测（Caddy/Docker）已关闭（P2a）：Docker Desktop 运行后用 `caddy:latest` + `tls internal` 验证 `wss://localhost:8443` 成功，证据见 BLOCKED.md。
+
+### P1b/P2b 中继推送与安全加固（2026-08-18 已实现）
+
+- **P1b 推送准备**：`relay/src/push.ts` 新增 `ExpoPushProvider`（调用 Expo Push API，`relay --push expo` 或 `createExpoPushProviderFromEnv()`），替换 Noop/Mock 的生产路径；App 端已有 Expo push token 注册，EAS 真机验证待凭据。
+- **P2b 安全加固**：
+  - `relay.pair` 失败锁定：默认 10 次失败锁定 60s（`maxPairAttempts` / `pairLockMs`）。
+  - 单 console 未使用配对码上限：默认 5（`maxPairingCodesPerConsole`）。
+  - 审计新增 `pair_fail` / `pair_lock` / `pair_code_limit`，仍仅元数据。

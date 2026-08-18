@@ -1,6 +1,6 @@
 {
   "name": "@dsh-remote/harness-plugin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "dsh-remote host plugin (M2): one-time pairing token issuance + validation for non-loopback /api access (pairing fence).",
   "type": "module",
   "main": "./dist/index.js",
