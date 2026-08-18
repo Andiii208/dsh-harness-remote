@@ -17,6 +17,7 @@ import {
   SpaceGrotesk_700Bold,
 } from "@expo-google-fonts/space-grotesk";
 import { ConnectionProvider } from "../src/transport/ConnectionProvider";
+import { AppSettingsProvider } from "../src/data/appSettingsContext";
 import { notificationService } from "../src/notify/expoAdapter";
 import { registerNotificationDeepLink } from "../src/notify/deeplink";
 import { ThemeProvider, useTheme } from "../src/theme-context";
@@ -86,9 +87,11 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <ThemeProvider>
-          <ConnectionProvider>
-            <RootNavigator />
-          </ConnectionProvider>
+          <AppSettingsProvider>
+            <ConnectionProvider>
+              <RootNavigator />
+            </ConnectionProvider>
+          </AppSettingsProvider>
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

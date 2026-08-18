@@ -1,0 +1,35 @@
+{
+  "meta": {
+    "baselineVersion": "0.1.0-rc.5",
+    "recordedAt": "2026-08-18T00:00:00.000Z",
+    "describe": { "name": "dsh", "version": "0.1.0-rc.5" }
+  },
+  "unaryResponses": [
+    {
+      "method": "host.settings.get",
+      "response": {
+        "ok": true,
+        "result": {
+          "model": "deepseek-v4",
+          "models": ["deepseek-v4", "deepseek-v3", "deepseek-v4-flash"],
+          "thinking": "medium",
+          "contextPercent": 42,
+          "contextLimit": 128000,
+          "permissions": {
+            "mode": "approve",
+            "description": "shell 命令需逐条审批"
+          },
+          "writable": true
+        }
+      }
+    },
+    {
+      "method": "host.settings.set",
+      "response": {
+        "ok": true,
+        "result": { "ok": true }
+      }
+    }
+  ],
+  "wsFrames": []
+}

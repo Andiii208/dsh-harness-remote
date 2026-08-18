@@ -11,6 +11,7 @@ import * as Clipboard from "expo-clipboard";
 import type { PluginCommand } from "@dsh-remote/protocol";
 import type { TranscriptMessage } from "../../data/SessionStore";
 import { useConnection } from "../../transport/ConnectionProvider";
+import { useAppSettings } from "../../data/appSettingsContext";
 import { font, radius, type ThemeColors } from "../../theme";
 import { useTheme } from "../../theme-context";
 import { StreamingCursor } from "../StreamingCursor";
@@ -35,7 +36,8 @@ function tokenColor(type: HighlightTokenType, colors: ThemeColors): string {
 
 export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolean }) {
   const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { scale } = useAppSettings();
+  const styles = useMemo(() => createStyles(colors, scale), [colors, scale]);
   const { pluginList, pluginExec } = useConnection();
   const [copied, setCopied] = useState(false);
   const [pluginNotice, setPluginNotice] = useState("");
@@ -225,10 +227,10 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, scale: number) {
   return StyleSheet.create({
     gapRow: { alignItems: "center", paddingVertical: 8 },
-    gapText: { color: colors.textDim, fontSize: 11, fontStyle: "italic" },
+    gapText: { color: colors.textDim, fontSize: 11 * scale, fontStyle: "italic" },
     bubble: {
       maxWidth: "82%",
       borderRadius: 18,
@@ -240,7 +242,7 @@ function createStyles(colors: ThemeColors) {
     body: { paddingVertical: 11, paddingHorizontal: 15, gap: 5, flexShrink: 1 },
     roleTag: { color: colors.textMuted, fontFamily: font.monoBold, fontSize: 9, fontWeight: "500", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 2 },
     roleTagTool: { color: colors.warn },
-    text: { color: colors.text, fontSize: font.transcript, lineHeight: 20, fontFamily: font.mono },
+    text: { color: colors.text, fontSize: font.transcript * scale, lineHeight: 20 * scale, fontFamily: font.mono },
     textUser: { color: colors.msgSelfText },
     toolText: { color: colors.textMuted },
     codeBlock: {
@@ -254,7 +256,7 @@ function createStyles(colors: ThemeColors) {
     codeHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
     codeLang: { color: colors.textDim, fontSize: 9, fontFamily: font.monoBold, letterSpacing: 1, textTransform: "uppercase" },
     codeToggle: { color: colors.accent, fontSize: 11, fontFamily: font.mono, fontWeight: "500" },
-    codeText: { color: colors.codeText, fontSize: 12, lineHeight: 19, fontFamily: font.mono },
+    codeText: { color: colors.codeText, fontSize: 12 * scale, lineHeight: 19 * scale, fontFamily: font.mono },
     copied: { color: colors.accent, fontSize: font.eyebrow, fontFamily: font.mono, alignSelf: "flex-end" },
     tail: { color: colors.warn, fontSize: 11, fontFamily: font.mono },
     modalBackdrop: {

@@ -4,6 +4,7 @@ import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native"
 import Animated from "react-native-reanimated";
 import { FlashList } from "@shopify/flash-list";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
+import { useAppSettings } from "../src/data/appSettingsContext";
 import { font, radius, space } from "../src/theme";
 import { useTheme } from "../src/theme-context";
 import { StatusChip } from "../src/ui/StatusChip";
@@ -66,7 +67,8 @@ type SessionRow =
 export default function SessionsScreen() {
   const { sessions, pending, state, refreshSessions } = useConnection();
   const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { scale } = useAppSettings();
+  const styles = useMemo(() => createStyles(colors, scale), [colors, scale]);
   const router = useRouter();
   const entering = useEntering();
   const [query, setQuery] = useState("");
@@ -230,7 +232,7 @@ export default function SessionsScreen() {
   );
 }
 
-function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: number) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
     content: { padding: space.x5, gap: space.x3, paddingBottom: space.x7 },
@@ -258,8 +260,8 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     rowPressed: { backgroundColor: colors.surface2 },
     skeletonStack: { gap: space.x3 },
     rowHeader: { flexDirection: "row", alignItems: "center", gap: space.x2 },
-    rowTitle: { color: colors.text, fontSize: font.section + 1, fontWeight: "500", letterSpacing: -0.2, flex: 1 },
-    rowPreview: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18, letterSpacing: 0.1 },
+    rowTitle: { color: colors.text, fontSize: (font.section + 1) * scale, fontWeight: "500", letterSpacing: -0.2, flex: 1 },
+    rowPreview: { color: colors.textMuted, fontSize: font.caption * scale, lineHeight: 18 * scale, letterSpacing: 0.1 },
     time: { color: colors.textDim, fontSize: 10, fontFamily: font.mono },
     pressure: { fontSize: 10, fontFamily: font.mono, letterSpacing: 0.2 },
     groupHeader: { color: colors.textMuted, fontSize: font.caption, fontWeight: "500", paddingTop: space.x2 },

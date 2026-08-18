@@ -16,8 +16,10 @@ import {
 import {
   LanTransport,
   RelayTransport,
+  readHostSettings,
   readPluginList,
   type ConnectionState,
+  type HostSettings,
   type PluginListResult,
 } from "@dsh-remote/protocol";
 import {
@@ -71,6 +73,10 @@ export interface ConnectionApi {
   pluginList(): Promise<PluginListResult | null>;
   /** R2：执行宿主插件命令；读不到/离线返回 null。 */
   pluginExec(commandId: string, args?: Record<string, unknown>): Promise<{ ok: boolean; result?: unknown; error?: { code: string; message: string } } | null>;
+  /** R3：读取宿主设置；宿主不支持/离线返回 null（UI 自动隐藏）。 */
+  hostSettingsGet(): Promise<HostSettings | null>;
+  /** R3：写回宿主设置；宿主不支持返回 false。 */
+  hostSettingsSet(patch: { model?: string; thinking?: string }): Promise<boolean>;
 }
 
 const ConnectionContext = createContext<ConnectionApi | null>(null);
@@ -299,6 +305,30 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // R3：宿主设置读取/写回。读不到返回 null（UI 隐藏），写失败返回 false。
+  const hostSettingsGet = useCallback(async (): Promise<HostSettings | null> => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return null;
+    try {
+      const r = await c.unary("host.settings.get", {});
+      if (!r.ok) return null;
+      return readHostSettings(r.result);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const hostSettingsSet = useCallback(async (patch: { model?: string; thinking?: string }): Promise<boolean> => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return false;
+    try {
+      const r = await c.unary("host.settings.set", patch);
+      return r.ok;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const transcript = useCallback((sessionId: string) => {
     return pipelineRef.current?.store.getTranscript(sessionId) ?? [];
   }, []);
@@ -360,8 +390,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       interruptStream,
       pluginList,
       pluginExec,
+      hostSettingsGet,
+      hostSettingsSet,
     }),
-    [state, describe, relayPeerId, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, connect, disconnect, sendMessage, respond, interruptStream, transcript, liveMessage, setNotificationsEnabled, pluginList, pluginExec],
+    [state, describe, relayPeerId, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, connect, disconnect, sendMessage, respond, interruptStream, transcript, liveMessage, setNotificationsEnabled, pluginList, pluginExec, hostSettingsGet, hostSettingsSet],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;

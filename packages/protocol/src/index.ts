@@ -9,3 +9,4 @@ export * from "./discovery.js";
 export * from "./relay.js";
 export * from "./relay-crypto.js";
 export * from "./plugin.js";
+export * from "./host-settings.js";
