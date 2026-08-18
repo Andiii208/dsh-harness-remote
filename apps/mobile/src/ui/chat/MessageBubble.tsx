@@ -132,9 +132,9 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
         accessibilityHint="长按打开操作菜单"
       >
         <View style={styles.body}>
-          {m.role && m.role !== "user" && (
-            <Text style={[styles.roleTag, isTool && styles.roleTagTool]}>
-              {isTool ? "tool · log" : (m.role ?? "assistant")}
+          {isTool && (
+            <Text style={[styles.roleTag, styles.roleTagTool]}>
+              tool · log
             </Text>
           )}
           {segments.map((seg, i) =>
@@ -237,12 +237,12 @@ function createStyles(colors: ThemeColors, scale: number) {
       overflow: "hidden",
     },
     bubbleUser: { alignSelf: "flex-end", backgroundColor: colors.msgSelf, borderBottomRightRadius: 6 },
-    bubbleBot: { alignSelf: "flex-start", backgroundColor: colors.surface, borderBottomLeftRadius: 6 },
+    bubbleBot: { alignSelf: "flex-start", backgroundColor: colors.surface, borderBottomLeftRadius: 6, borderWidth: 1, borderColor: colors.separator },
     bubblePressed: { opacity: 0.85 },
     body: { paddingVertical: 11, paddingHorizontal: 15, gap: 5, flexShrink: 1 },
     roleTag: { color: colors.textMuted, fontFamily: font.monoBold, fontSize: 9, fontWeight: "500", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 2 },
     roleTagTool: { color: colors.warn },
-    text: { color: colors.text, fontSize: font.transcript * scale, lineHeight: 20 * scale, fontFamily: font.mono },
+    text: { color: colors.text, fontSize: (font.body + 1) * scale, lineHeight: 22 * scale },
     textUser: { color: colors.msgSelfText },
     toolText: { color: colors.textMuted },
     codeBlock: {

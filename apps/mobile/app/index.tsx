@@ -507,7 +507,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     quickSeparator: { color: colors.textDim, fontSize: font.body },
     connectError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
     moreRow: { alignItems: "center", paddingVertical: 2 },
-    moreLink: { color: colors.textMuted, fontSize: font.caption, fontWeight: "500" },
+    moreLink: { color: colors.accent, fontSize: font.body, fontWeight: "500" },
     listCard: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,

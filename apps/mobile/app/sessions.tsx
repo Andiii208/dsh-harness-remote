@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FlashList } from "@shopify/flash-list";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
 import { useAppSettings } from "../src/data/appSettingsContext";
@@ -70,6 +71,7 @@ export default function SessionsScreen() {
   const { scale } = useAppSettings();
   const styles = useMemo(() => createStyles(colors, scale), [colors, scale]);
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const entering = useEntering();
   const [query, setQuery] = useState("");
   const [searchVisible, setSearchVisible] = useState(false);
@@ -139,7 +141,7 @@ export default function SessionsScreen() {
   return (
     <FlashList
       style={styles.screen}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + space.x2 }]}
       data={rows}
       keyExtractor={(row) => row.key}
       refreshControl={
@@ -147,6 +149,9 @@ export default function SessionsScreen() {
       }
       ListHeaderComponent={
         <View style={styles.header}>
+          <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="返回连接页" style={styles.backRow}>
+            <Text style={styles.backText}>‹ 连接</Text>
+          </Pressable>
           <View style={styles.headerRow}>
             <View style={styles.titleRow}>
               <Text style={styles.title}>会话</Text>
@@ -258,6 +263,8 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
     screen: { flex: 1, backgroundColor: colors.bg },
     content: { padding: space.x5, gap: space.x3, paddingBottom: space.x7 },
     header: { gap: space.x2, marginBottom: space.x2 },
+    backRow: { alignItems: "flex-start", paddingVertical: 2 },
+    backText: { color: colors.accent, fontSize: font.body, fontWeight: "500" },
     headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x3 },
     titleRow: { flexDirection: "row", alignItems: "center", gap: space.x2 },
     title: {

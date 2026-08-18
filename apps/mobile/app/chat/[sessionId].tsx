@@ -252,9 +252,9 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       maxHeight: 120,
     },
     send: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 38,
+      height: 38,
+      borderRadius: 19,
       backgroundColor: colors.accent,
       alignItems: "center",
       justifyContent: "center",
