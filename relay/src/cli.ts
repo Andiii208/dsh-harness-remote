@@ -9,23 +9,32 @@ import { createRelayServer } from "./server.js";
 const HELP = `relay — DSH relay control plane (M3.1 MVP)
 
 Usage:
-  relay [--port <n>] [--host <h>] [--store <sqlite-path>]
+  relay [--port <n>] [--host <h>] [--store <sqlite-path>] [--push expo]
 
 Options:
   --port <n>     listen port (default 4090)
   --host <h>     bind host (default 127.0.0.1)
   --store <path> persist registry/pairings to a SQLite file (default: in-memory)
+  --push expo    use Expo Push API for offline wake (EXPO_ACCESS_TOKEN optional)
   --help         show this help
 `;
 
-function parse(argv: string[]): { port: number; host: string; help: boolean; store?: string } {
-  const out = { port: 4090, host: "127.0.0.1", help: false, store: undefined as string | undefined };
+function parse(argv: string[]): { port: number; host: string; help: boolean; store?: string; push?: "expo" } {
+  const out = { port: 4090, host: "127.0.0.1", help: false, store: undefined as string | undefined, push: undefined as "expo" | undefined };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--help" || a === "-h") out.help = true;
     else if (a === "--port") out.port = Number.parseInt(argv[++i] ?? "", 10);
     else if (a === "--host") out.host = argv[++i] ?? "127.0.0.1";
     else if (a === "--store") out.store = argv[++i];
+    else if (a === "--push") {
+      const v = argv[++i] ?? "";
+      if (v !== "expo") {
+        console.error("invalid --push (only expo is supported)");
+        process.exit(2);
+      }
+      out.push = v;
+    }
   }
   return out;
 }
@@ -45,6 +54,10 @@ async function main(argv: string[]): Promise<number> {
   if (opts.store) {
     const { createSqliteRelayStore } = await import("./sqlite-store.js");
     serverOpts.store = createSqliteRelayStore(opts.store);
+  }
+  if (opts.push === "expo") {
+    const { createExpoPushProviderFromEnv } = await import("./push.js");
+    serverOpts.push = createExpoPushProviderFromEnv();
   }
   const relay = createRelayServer(serverOpts);
   await relay.start(opts.port);

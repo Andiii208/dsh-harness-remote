@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createOfflineQueue,
+  ExpoPushProvider,
   MockPushProvider,
   NoopPushProvider,
 } from "../src/index.js";
@@ -38,6 +39,43 @@ describe("push providers", () => {
   it("NoopPushProvider always returns skipped", async () => {
     const push = new NoopPushProvider();
     expect(await push.wake("c1", "t1")).toBe("skipped");
+  });
+
+  it("ExpoPushProvider sends a wake notification and reports sent", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const push = new ExpoPushProvider({
+      endpoint: "https://push.test/send",
+      accessToken: "tok",
+      fetchImpl: (async (url, init) => {
+        calls.push({ url: String(url), init: init as RequestInit });
+        return new Response(JSON.stringify({ data: [{ status: "ok" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }) as typeof fetch,
+    });
+    expect(await push.wake("c1", "ExponentPushToken[abc]")).toBe("sent");
+    expect(calls[0]?.url).toBe("https://push.test/send");
+    const body = JSON.parse(String(calls[0]?.init.body)) as { to: string; data: { clientId: string } };
+    expect(body.to).toBe("ExponentPushToken[abc]");
+    expect(body.data.clientId).toBe("c1");
+  });
+
+  it("ExpoPushProvider skips without a token", async () => {
+    const push = new ExpoPushProvider({ fetchImpl: async () => new Response("{}", { status: 200 }) as Response });
+    expect(await push.wake("c1")).toBe("skipped");
+  });
+
+  it("ExpoPushProvider reports failed on HTTP error or ticket error", async () => {
+    const push = new ExpoPushProvider({
+      fetchImpl: async () => new Response("boom", { status: 500 }) as Response,
+    });
+    expect(await push.wake("c1", "t1")).toBe("failed");
+
+    const ticketError = new ExpoPushProvider({
+      fetchImpl: async () => new Response(JSON.stringify({ data: [{ status: "error", details: { error: "DeviceNotRegistered" } }] }), { status: 200 }) as Response,
+    });
+    expect(await ticketError.wake("c2", "t2")).toBe("failed");
   });
 });
 

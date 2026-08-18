@@ -122,8 +122,8 @@ CMD ["node", "dist/cli.js", "--port", "4090", "--host", "0.0.0.0"]
 
 ### 环境变量 / 配置
 
-- CLI 参数：`--port`（默认 4090）、`--host`（默认 127.0.0.1）。
-- 服务器配置项（`createRelayServer`）：`credentialTtlMs`（短时凭证 TTL，默认 12h）、`queueTtlMs`（离线队列 TTL，默认 2 分钟）、`push`（APNs/FCM 注入桩，默认 Noop）、`rateLimit`（默认 120/分钟，突发 240）、`audit`（审计回调，默认 console 元数据日志）。
+- CLI 参数：`--port`（默认 4090）、`--host`（默认 127.0.0.1）、`--store <path>`（SQLite 持久化）、`--push expo`（Expo Push API 离线唤醒，可选 `EXPO_ACCESS_TOKEN`）。
+- 服务器配置项（`createRelayServer`）：`credentialTtlMs`（短时凭证 TTL，默认 12h）、`queueTtlMs`（离线队列 TTL，默认 2 分钟）、`push`（PushProvider，默认 Noop；生产可用 `createExpoPushProviderFromEnv()`）、`rateLimit`（默认 120/分钟，突发 240）、`audit`（审计回调，默认 console 元数据日志）。
 
 ### 版本协商
 
