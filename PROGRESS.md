@@ -3,7 +3,7 @@
 ## v0.2.0 完善与自检（2026-08-18）
 - App 品牌/版本核对：`app.json` name=`harness remote`、icon=`assets/icon.png`（官方黑色鲸鱼，白底）、version=`0.2.0`；首页底部版本文案同步 `v0.2.0 · harness remote`，配对状态改中文「已配对」。
 - 本地 Android release APK 构建尝试：`expo prebuild` + `gradlew assembleRelease` 因 Windows pnpm 深路径 CMake/ninja 问题失败；已写 BLOCKED.md，需 EAS 云构建或 Linux CI。
-- Android APK 改走 CI：新增 `.github/workflows/android-apk.yml`（Linux runner `expo prebuild` + `gradlew assembleRelease`，tag push / workflow_dispatch 自动上传 GitHub Release）；本机 Windows 深路径阻塞不再影响发版。**iOS App 构建暂未完成**（需 Expo/Apple 开发者账号，当前未产出 iOS 安装包）。
+- Android APK 改走 CI：新增 `.github/workflows/android-apk.yml`（Linux runner `expo prebuild` + `gradlew assembleRelease`，tag push / workflow_dispatch 自动上传 GitHub Release）；本机 Windows 深路径阻塞不再影响发版。已触发 v0.2.0 workflow 构建成功，Release 已附带 `app-release.apk`（约 125 MiB）。**iOS App 构建暂未完成**（需 Expo/Apple 开发者账号，当前未产出 iOS 安装包）。
 - 低门槛文案微调：远程地址 placeholder 更具体，连接主路径保持「地址 + 6 位码」两字段。
 - 自检结论：UI/动效/低门槛达标；正常使用由全仓测试 + 真实 DSH 探测支撑；Release 已有 Windows 脚本，Android APK 已接入 CI 自动构建，iOS 包暂未完成；因此「完全体可推广」尚差 iOS 安装包与推送真机验证。
 
