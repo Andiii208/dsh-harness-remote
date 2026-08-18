@@ -89,6 +89,8 @@ npx eas-cli build --profile preview       # 内部预览
 npx eas-cli build --profile production    # 商店版（自动递增 build number）
 ```
 
+> 已发布安装包：Android APK 与 Windows 一键脚本可从 [GitHub Releases](https://github.com/Andiii208/dsh-remote/releases) 下载；本地构建 Android APK 可先 `npx expo prebuild --platform android` 再在 `android/` 执行 `./gradlew assembleRelease`。
+
 前置：`eas.json` 已配置三个 profile；首次运行 `npx eas-cli login` + `npx eas-cli init`（写入 `extra.eas.projectId`）。真机联调步骤见 [docs/MANUAL.md](docs/MANUAL.md)。
 
 ## 文档

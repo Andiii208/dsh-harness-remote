@@ -247,7 +247,7 @@ export default function ConnectScreen() {
         {(describeName.length > 0 || (online && relayPeerId)) && (
           <View style={styles.stateRow}>
             {describeName.length > 0 && <Text style={styles.describe} numberOfLines={1}>{describeName}</Text>}
-            {online && relayPeerId && <Text style={styles.pairedConsole} numberOfLines={1}>{relayPeerId} · paired</Text>}
+            {online && relayPeerId && <Text style={styles.pairedConsole} numberOfLines={1}>已配对 · {relayPeerId}</Text>}
           </View>
         )}
 
@@ -273,7 +273,7 @@ export default function ConnectScreen() {
             <>
               <Field
                 label="连接地址"
-                placeholder="电脑上显示的地址，例如 relay.example.com"
+                placeholder="电脑上显示的地址，例如 myrelay.com 或 192.168.1.5"
                 autoCapitalize="none"
                 autoCorrect={false}
                 value={remoteHost}
@@ -444,7 +444,7 @@ export default function ConnectScreen() {
           </Text>
         )}
 
-        <Text style={styles.version}>v0.7.0 · dsh-remote</Text>
+        <Text style={styles.version}>v0.2.0 · harness remote</Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
