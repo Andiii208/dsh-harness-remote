@@ -239,7 +239,7 @@ export default function ConnectScreen() {
           </View>
         )}
 
-        <Animated.View entering={bannerEntering} style={styles.banner}>
+        <Animated.View key={`banner-${mode}`} entering={bannerEntering} style={styles.banner}>
           <Text style={styles.bannerTitle}>
             {mode === "remote" ? "使用远程模式连接" : "使用局域网模式连接"}
           </Text>
