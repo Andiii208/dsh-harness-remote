@@ -22,12 +22,25 @@ Usage:
 
 function lanIp(): string | undefined {
   const interfaces = networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const net of interfaces[name] ?? []) {
-      if (net.family === "IPv4" && !net.internal) return net.address;
+  const candidates: Array<{ addr: string; score: number }> = [];
+  for (const [name, nets] of Object.entries(interfaces)) {
+    const lower = name.toLowerCase();
+    // 跳过虚拟/容器网卡，避免把 Docker/WSL/Hyper-V 的地址打印给手机。
+    if (/(docker|vethernet|hyper-v|virtualbox|vmware|wsl|loopback|bluetooth)/.test(lower)) continue;
+    for (const net of nets ?? []) {
+      if (net.family !== "IPv4" || net.internal) continue;
+      const a = net.address;
+      let score = 0;
+      if (a.startsWith("192.168.")) score = 4;
+      else if (a.startsWith("10.")) score = 3;
+      else if (/^172\.(1[6-9]|2\d|3[01])\./.test(a)) score = 2;
+      else score = 1;
+      if (/(wi-fi|wlan|ethernet|以太)/.test(lower)) score += 1;
+      candidates.push({ addr: a, score });
     }
   }
-  return undefined;
+  candidates.sort((x, y) => y.score - x.score);
+  return candidates[0]?.addr;
 }
 
 function card(relayHost: string, code: string, via: "lan" | "loopback"): string {

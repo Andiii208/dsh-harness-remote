@@ -366,6 +366,10 @@ export default function ConnectScreen() {
           </View>
         )}
 
+        {mode === "remote" && !online && (
+          <Button tone="ghost" label="扫码连接" onPress={() => { void haptic("light"); router.push("/scan"); }} full />
+        )}
+
         {online ? (
           <Button tone="danger" label="断开连接" onPress={() => { justConnected.current = false; void haptic("warning"); void disconnect(); }} full />
         ) : (
@@ -380,7 +384,7 @@ export default function ConnectScreen() {
 
         {mode === "remote" && !online && (
           <Pressable style={styles.moreRow} onPress={() => { void haptic("light"); setMode("lan"); }} accessibilityRole="button" accessibilityLabel="更多连接方式">
-            <Text style={styles.moreLink}>更多连接方式 · 同一 Wi-Fi / 扫码 ›</Text>
+            <Text style={styles.moreLink}>更多连接方式 ›</Text>
           </Pressable>
         )}
 
