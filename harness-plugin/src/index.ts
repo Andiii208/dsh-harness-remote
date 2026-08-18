@@ -5,3 +5,4 @@ export * from "./interrupt.js";
 export * from "./relay-client.js";
 export * from "./plugin-catalog.js";
 export * from "./host-adapter.js";
+export * from "./remote-access.js";
