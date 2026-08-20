@@ -1,12 +1,13 @@
 # PROGRESS
 
-## 2026-08-20 UI 调整：保留 hero 流动深海背景，玻璃质感已回退
+## 2026-08-20 UI 调整：保留 hero 流动深海背景，玻璃质感已回退（已完成并验证）
 - 用户反馈：玻璃质感与参考风格不符、显得廉价，要求回退。
 - 保留：`FlowingOcean.tsx`（深海流动光晕 + 呼吸辉光 + 星点）与 `DeepOceanHero` 接入；`theme.ts` 的 heroAurora/heroGlow 令牌。
 - 已回退：`glass/glassBorder` 主题令牌；`Field`/`Button`/`index.tsx` 卡片全部恢复为原有 `surface`/`surface2` 实底样式；`DeepOceanHero` 恢复原 minHeight/无描边。
+- 回归：`pnpm -r build` 全绿（`.shots/ui-revert-build.log`）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 165 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0（`.shots/ui-revert-test.log`）。
+- 出包：提交 53790e4 → workflow 32337827372 首次因 `mergeDexRelease` CI 侧 `OutOfMemoryError: Java heap space` 失败 → 重试 run 32339166152 成功 → Release v0.3.0 的 `app-release.apk` 已更新。
+- 模拟器验证：安装新 APK 后 `am start -W` 成功，进程存活（pid 5105），`logcat -d -b crash` 空；截图 `.shots/apk-ui-revert-home.png`（hero 保留流动深海背景，表单卡片恢复实底白/无玻璃描边）。
 - Web 证据（回退后）：`.shots/ui-flow-home.png`、`.shots/ui-flow-sessions.png`。
-- 回归：`pnpm --filter @dsh-remote/mobile build/test` 通过（mobile 165）。
-- 待办：全仓回归 → 提交推送 → 重新出 APK → 模拟器验证。
 
 ## 2026-08-20 APK 真机闪退排查（已修复并验证）
 - 复现：本机模拟器 lovebuddy_api36 安装 v0.3.0 `app-release.apk` 成功，`am start` 后约 2s 内闪退；包名 `dev.dshremote.mobile`。
