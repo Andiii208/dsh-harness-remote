@@ -8,8 +8,8 @@
  */
 
 import { useEffect, useState, type ComponentProps } from "react";
-import { AccessibilityInfo, Easing } from "react-native";
-import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
+import { AccessibilityInfo } from "react-native";
+import Animated, { Easing, FadeInDown, FadeOut } from "react-native-reanimated";
 
 type EnteringProp = NonNullable<ComponentProps<typeof Animated.View>["entering"]>;
 type ExitingProp = NonNullable<ComponentProps<typeof Animated.View>["exiting"]>;

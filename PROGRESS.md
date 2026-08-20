@@ -1,5 +1,11 @@
 # PROGRESS
 
+## 2026-08-20 APK 真机闪退排查（根因已定位，待新 APK 验证）
+- 复现：本机模拟器 lovebuddy_api36 安装 v0.3.0 `app-release.apk` 成功，`am start` 后约 2s 内闪退；包名 `dev.dshremote.mobile`。
+- 关键 logcat：`FATAL EXCEPTION: main`，`com.facebook.jni.CppException: [Worklets] Tried to synchronously call a Remote Function. Called "anonymous" on the UI Runtime.`，堆栈指向 `timing/onFrame/step/valueSetter...`（证据 `.shots/crash-logcat.txt`、`.shots/crash-logcat-filtered.txt`）。
+- 根因：`apps/mobile/src/ui/anim.ts` 从 `react-native` 导入 `Easing`，并把 `Easing.bezier(...)` 传入 `FadeInDown/FadeOut` 的 `.easing()`；release 包 Reanimated 在 UI Runtime 同步调用该 JS 闭包时触发 worklets 崩溃。修复：`Easing` 改从 `react-native-reanimated` 导入（worklet 安全）。
+- 回归：`pnpm -r build` 全绿（BUILD_EXIT=0，`.shots/apk-fix-build.log`）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 165 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0（`.shots/apk-fix-test.log`）。
+- 下一步：提交推送 → 触发 `android-apk.yml` 出 v0.3.0 APK → 模拟器安装验证不闪退 + 截图证据。
 
 ## 任务 0 开工回执（2026-08-20 新窗口：Phase A→E 长程计划）
 - 已读：PROGRESS.md、BLOCKED.md、docs/plans/2026-08-18-next-window-plan.md、docs/plans/2026-08-18-ui-learning-and-next-plan.md（Global Constraints）。

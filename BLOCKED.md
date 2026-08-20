@@ -1,3 +1,7 @@
+## 2026-08-20 APK 闪退排查（已定位，待新 APK 验证）
+
+- **v0.3.0 APK 真机安装后闪退**：模拟器已复现。根因：`apps/mobile/src/ui/anim.ts` 将 `react-native` 的 `Easing.bezier` 传入 Reanimated `FadeInDown/FadeOut` 的 `.easing()`，release 包在 UI Runtime 同步调用该 JS 闭包触发 `[Worklets] Tried to synchronously call a Remote Function` 崩溃。修复：`Easing` 改从 `react-native-reanimated` 导入。待 CI 新 APK 在模拟器验证不闪退后关闭本条。
+
 ## 2026-08-20 新窗口（Phase A→E）阻塞记录
 
 - **Phase A A1 真机回归（阻塞）**：本机 `adb` 不在 PATH，未连接 Android 设备/模拟器，也没有 Expo Go 真机窗口；无法取得 `.shots/real-*.png` 真机截图。Web Playwright 已覆盖 hero/多图/大图/技能弹窗（`.shots/plan-*.png`），A2/A3/A4 继续执行。EAS/真机推送仍沿用下方 P1b 阻塞。
