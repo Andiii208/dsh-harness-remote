@@ -30,10 +30,15 @@ export function GoalCard({ summary }: { summary: SessionSummary | undefined }) {
 
   const toggle = async (next: "paused" | "active") => {
     if (!summary || busy) return;
+    const ref = summary.goalRef;
+    if (!ref) {
+      setError("未获取到 goal 版本，无法操作");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      const ok = next === "paused" ? await goals.pause(summary.id) : await goals.resume(summary.id);
+      const ok = next === "paused" ? await goals.pause(summary.id, ref) : await goals.resume(summary.id, ref);
       if (ok) {
         setGoalStatus(summary.id, next);
         setOpen(true);

@@ -24,6 +24,7 @@ import { registerPairDeepLink } from "../src/discovery/pairLink";
 import { discoverHosts, type DiscoveredHost } from "../src/discovery/discover";
 import { font, radius, space } from "../src/theme";
 import { WhaleMark } from "../src/ui/WhaleMark";
+import { DeepOceanHero } from "../src/ui/DeepOceanHero";
 import { StatusChip, type StatusTone } from "../src/ui/StatusChip";
 import { Field } from "../src/ui/Field";
 import { Button } from "../src/ui/Button";
@@ -49,6 +50,10 @@ export default function ConnectScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  // 引导检查：首次加载时先判断是否已引导，避免闪一下连接界面再跳转
+  const [booted, setBooted] = useState(false);
+  const [redirectToOnboarding, setRedirectToOnboarding] = useState(false);
+
   // 远程连接是首屏主路径；LAN 降级到「更多连接方式」里。
   const [mode, setMode] = useState<ConnectMode>("remote");
   const [remoteHost, setRemoteHost] = useState("");
@@ -69,22 +74,30 @@ export default function ConnectScreen() {
   const justConnected = useRef(false);
   const discoverAbort = useRef<AbortController | null>(null);
   const heroEntering = useEntering(10, 240);
-  const bannerEntering = useEntering(6, 200);
   const formEntering = useEntering(6, 200);
   const bannerExiting = useExiting();
   const formExiting = useExiting();
 
-  // 首启引导 + 最近主机
+  // 首启引导 + 最近主机（在 booted 状态之前执行，不渲染任何 UI）
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const seen = await onboardingStore.seen();
       if (!cancelled && !seen) {
+        setRedirectToOnboarding(true);
         router.replace("/onboarding" as never);
         return;
       }
-      const list = await hostStore.list();
-      if (!cancelled) setRecent(list);
+      // 已引导，加载最近主机
+      if (!cancelled) {
+        try {
+          const list = await hostStore.list();
+          if (!cancelled) setRecent(list);
+        } catch {
+          // 忽略存储读取失败
+        }
+        setBooted(true);
+      }
     })();
     return () => {
       cancelled = true;
@@ -251,6 +264,12 @@ export default function ConnectScreen() {
 
   const showList = mode === "remote" ? (!online && relayRecent.length > 0) : (found.length > 0 || showRecent);
 
+  // 在引导检查完成前，不渲染连接表单（避免闪一下连接界面再跳转）。
+  // 注意：必须放在所有 hooks 之后，否则会触发 hooks 数量不一致。
+  if (!booted && !redirectToOnboarding) {
+    return <View style={[styles.screen, { paddingTop: insets.top + space.x4 }]} />;
+  }
+
   return (
     <KeyboardAvoidingView
       style={[styles.screen, { paddingTop: insets.top + space.x4 }]}
@@ -279,13 +298,11 @@ export default function ConnectScreen() {
           </View>
         )}
 
-        <Animated.View key={`banner-${mode}`} entering={bannerEntering} exiting={bannerExiting} style={styles.banner}>
-          <Text style={styles.bannerTitle}>
-            {mode === "remote" ? t.connect.remoteBannerTitle : t.connect.lanBannerTitle}
-          </Text>
-          <Text style={styles.bannerDesc}>
-            {mode === "remote" ? t.connect.remoteBannerDesc : t.connect.lanBannerDesc}
-          </Text>
+        <Animated.View key={`banner-${mode}`} entering={heroEntering} exiting={bannerExiting}>
+          <DeepOceanHero
+              title={mode === "remote" ? t.connect.remoteHeroTitle : t.connect.lanBannerTitle}
+              subtitle={mode === "remote" ? t.connect.remoteBannerDesc : t.connect.lanBannerDesc}
+            />
         </Animated.View>
 
         {mode === "lan" && (
@@ -522,8 +539,8 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
     content: { paddingHorizontal: 20, paddingBottom: space.x7, gap: 18 },
-    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: space.x2 },
-    headerRight: { flexDirection: "row", alignItems: "center", gap: space.x4 },
+    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: space.x2, flexWrap: "wrap", rowGap: space.x2 },
+    headerRight: { flexDirection: "row", alignItems: "center", gap: space.x4, flexShrink: 1 },
     settingsLink: { color: colors.textMuted, fontSize: font.caption, fontWeight: "500" },
     brand: { flexDirection: "row", alignItems: "center", gap: space.x3 },
     brandText: {
@@ -537,14 +554,6 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     stateRow: { flexDirection: "row", alignItems: "center", gap: space.x3, flexWrap: "wrap" },
     describe: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono, flexShrink: 1 },
     pairedConsole: { color: colors.success, fontSize: 11, fontFamily: font.mono, letterSpacing: 0.2, flexShrink: 1 },
-    banner: {
-      backgroundColor: colors.accentSoft,
-      borderRadius: radius.card,
-      padding: space.x5,
-      gap: 6,
-    },
-    bannerTitle: { color: colors.text, fontSize: font.section, fontWeight: "600", letterSpacing: -0.2 },
-    bannerDesc: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
     backRow: { alignItems: "flex-start", paddingVertical: 2 },
     backLink: { color: colors.accent, fontSize: font.body, fontWeight: "500" },
     card: {

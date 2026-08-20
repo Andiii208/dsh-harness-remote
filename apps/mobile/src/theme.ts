@@ -20,6 +20,12 @@ export interface ThemeColors {
   separator: string;
   /** v8 别名：Board = separator（1px 分隔线/描边）。 */
   board: string;
+  /** DeepSeek 官网 hero 深海蓝背景。 */
+  heroBg: string;
+  /** DeepSeek 官网 hero 网格线颜色。 */
+  heroGrid: string;
+  heroText: string;
+  heroTextDim: string;
   text: string;
   textMuted: string;
   textDim: string;
@@ -53,6 +59,10 @@ const light: ThemeColors = {
   chip: "#F2F2F6",
   separator: "rgba(20,20,40,0.08)",
   board: "rgba(20,20,40,0.08)",
+  heroBg: "#0A1A3F",       // 深色：深海蓝；浅色同样深蓝（官网 hero 在浅色模式也常用深蓝）
+  heroGrid: "rgba(86,134,254,0.18)",
+  heroText: "#F2F6FF",
+  heroTextDim: "rgba(242,246,255,0.62)",
   text: "#101016",
   textMuted: "#6E6E7A",
   textDim: "#B4B4C0",
@@ -75,6 +85,10 @@ const dark: ThemeColors = {
   chip: "#1D1D24",
   separator: "rgba(255,255,255,0.07)",
   board: "rgba(255,255,255,0.07)",
+  heroBg: "#0A1A3F",       // 深色：深海蓝；浅色同样深蓝（官网 hero 在浅色模式也常用深蓝）
+  heroGrid: "rgba(86,134,254,0.18)",
+  heroText: "#F2F6FF",
+  heroTextDim: "rgba(242,246,255,0.62)",
   text: "#F2F2F6",
   textMuted: "#8E8E9C",
   textDim: "#555560",

@@ -1,8 +1,8 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect, useState } from "react";
-import { StyleSheet } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
@@ -72,9 +72,14 @@ export default function RootLayout() {
   }, [fontsLoaded]);
   const ready = fontsLoaded || fontFallback;
 
-  useEffect(() => {
-    if (ready) void SplashScreen.hideAsync();
-  }, [ready]);
+  // 使用 onLayout 隐藏 splash，确保内容已渲染，避免闪白
+  const splashHidden = useRef(false);
+  const onLayout = useCallback(() => {
+    if (!splashHidden.current) {
+      splashHidden.current = true;
+      void SplashScreen.hideAsync();
+    }
+  }, []);
 
   useEffect(() => {
     registerNotificationDeepLink();
@@ -86,7 +91,7 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <GestureHandlerRootView style={styles.root}>
+    <GestureHandlerRootView style={styles.root} onLayout={onLayout}>
       <SafeAreaProvider>
         <ThemeProvider>
           <I18nProvider>

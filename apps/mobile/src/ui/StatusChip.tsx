@@ -35,6 +35,6 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       paddingVertical: 4,
     },
     dot: { width: 7, height: 7, borderRadius: 4 },
-    label: { color: colors.textMuted, fontFamily: font.monoBold, fontSize: font.eyebrow, fontWeight: "500" },
+    label: { color: colors.textMuted, fontFamily: font.monoBold, fontSize: font.eyebrow, fontWeight: "500", lineHeight: 14 },
   });
 }

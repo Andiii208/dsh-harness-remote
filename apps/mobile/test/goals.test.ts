@@ -1,66 +1,73 @@
 import { describe, expect, it } from "vitest";
-import { GoalsClient, type GoalsApi } from "../src/data/goals";
+import { GoalsClient, type GoalRef, type GoalsApi } from "../src/data/goals";
 
-function stubApi(handler: (ns: string, method: string, payload: unknown) => unknown): GoalsApi {
+const ref: GoalRef = { id: "g1", revision: 3 };
+
+function stubApi(handler: (method: string, payload: unknown) => unknown): GoalsApi {
   return {
-    async call(ns, method, payload) {
-      return { ok: true, result: handler(ns, method, payload) };
+    async unary(method, payload) {
+      return { ok: true, result: handler(method, payload) };
     },
   };
 }
 
 describe("GoalsClient", () => {
-  it("lists goals with lenient parsing", async () => {
-    const api = stubApi(() => ({
-      goals: [
-        { id: "g1", objective: "部署", status: "active", todos: [{ content: "a", status: "completed" }] },
-        { id: "g2", status: "paused" },
-        { junk: true }, // 宽容跳过
-      ],
-    }));
-    const client = new GoalsClient(api);
-    const goals = await client.list();
-    expect(goals).toHaveLength(2);
-    expect(goals[0]).toMatchObject({ id: "g1", objective: "部署", status: "active", todos: [{ content: "a", status: "completed" }] });
-    expect(goals[1]).toMatchObject({ id: "g2", status: "paused" });
-  });
-
-  it("returns [] when list fails or result is garbage", async () => {
-    const fail = new GoalsClient({
-      async call() {
-        return { ok: false, error: { code: "NOT_FOUND", message: "no" } };
-      },
-    });
-    expect(await fail.list()).toEqual([]);
-
-    const garbage = new GoalsClient({
-      async call() {
-        return { ok: true, result: "nope" };
-      },
-    });
-    expect(await garbage.list()).toEqual([]);
-  });
-
-  it("pause/resume call goals/<method> with id and report ok", async () => {
-    const calls: Array<{ ns: string; method: string; payload: unknown }> = [];
+  it("create calls goal.create and returns ref", async () => {
+    const calls: Array<{ method: string; payload: unknown }> = [];
     const client = new GoalsClient({
-      async call(ns, method, payload) {
-        calls.push({ ns, method, payload });
-        return { ok: true, result: { id: (payload as { id: string }).id, status: "paused" } };
+      async unary(method, payload) {
+        calls.push({ method, payload });
+        return { ok: true, result: { ref: { id: "g1", revision: 1 } } };
       },
     });
-    expect(await client.pause("g1")).toBe(true);
-    expect(calls[0]).toMatchObject({ ns: "goals", method: "pause", payload: { id: "g1" } });
-    expect(await client.resume("g1")).toBe(true);
-    expect(calls[1]).toMatchObject({ ns: "goals", method: "resume" });
+    const created = await client.create("s1", "部署", 5);
+    expect(created).toEqual({ id: "g1", revision: 1 });
+    expect(calls[0]).toMatchObject({ method: "goal.create", payload: { sessionId: "s1", objective: "部署", maxGoalRounds: 5 } });
   });
 
-  it("pause returns false on error (no throw)", async () => {
+  it("create returns null on failure", async () => {
     const client = new GoalsClient({
-      async call() {
+      async unary() {
         return { ok: false, error: { code: "INTERNAL", message: "x" } };
       },
     });
-    expect(await client.pause("g1")).toBe(false);
+    expect(await client.create("s1", "部署")).toBeNull();
+  });
+
+  it("pause/resume/complete/clear call native goal.* with sessionId+ref", async () => {
+    const calls: Array<{ method: string; payload: unknown }> = [];
+    const client = new GoalsClient({
+      async unary(method, payload) {
+        calls.push({ method, payload });
+        return { ok: true, result: { ref } };
+      },
+    });
+    expect(await client.pause("s1", ref)).toBe(true);
+    expect(await client.resume("s1", ref)).toBe(true);
+    expect(await client.complete("s1", ref)).toBe(true);
+    expect(await client.clear("s1", ref)).toBe(true);
+    expect(calls.map((c) => c.method)).toEqual(["goal.pause", "goal.resume", "goal.complete", "goal.clear"]);
+    expect(calls[0]?.payload).toMatchObject({ sessionId: "s1", ref });
+  });
+
+  it("edit calls goal.edit with patch", async () => {
+    const calls: Array<{ method: string; payload: unknown }> = [];
+    const client = new GoalsClient({
+      async unary(method, payload) {
+        calls.push({ method, payload });
+        return { ok: true, result: { ref: { id: "g1", revision: 4 } } };
+      },
+    });
+    expect(await client.edit("s1", ref, { objective: "新目标" })).toBe(true);
+    expect(calls[0]).toMatchObject({ method: "goal.edit", payload: { sessionId: "s1", ref, objective: "新目标" } });
+  });
+
+  it("returns false on error without throwing", async () => {
+    const client = new GoalsClient({
+      async unary() {
+        return { ok: false, error: { code: "INTERNAL", message: "x" } };
+      },
+    });
+    expect(await client.pause("s1", ref)).toBe(false);
   });
 });

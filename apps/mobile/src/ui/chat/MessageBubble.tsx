@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import type { PluginCommand } from "@dsh-remote/protocol";
 import type { TranscriptMessage } from "../../data/SessionStore";
@@ -34,16 +34,18 @@ function tokenColor(type: HighlightTokenType, colors: ThemeColors): string {
   }
 }
 
-export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolean }) {
+export function MessageBubble({ m, live, sessionId }: { m: TranscriptMessage; live?: boolean; sessionId?: string }) {
   const { colors } = useTheme();
   const { scale } = useAppSettings();
   const styles = useMemo(() => createStyles(colors, scale), [colors, scale]);
-  const { pluginList, pluginExec } = useConnection();
+  const { pluginList, pluginExec, attachment } = useConnection();
   const [copied, setCopied] = useState(false);
   const [pluginNotice, setPluginNotice] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const [pluginCommands, setPluginCommands] = useState<PluginCommand[]>([]);
+  const [imageData, setImageData] = useState<Record<string, { mediaType: string; data: string }>>({});
+  const [zoomImage, setZoomImage] = useState<{ uri: string } | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pluginTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
@@ -65,6 +67,23 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
       alive = false;
     };
   }, [menuOpen, pluginList]);
+
+  // 图片消息：用 session.attachment 拉取 base64 显示（不落盘缓存）。
+  useEffect(() => {
+    const images = m.images;
+    if (!images || images.length === 0 || !sessionId) return;
+    let alive = true;
+    for (const img of images) {
+      void attachment(sessionId, img.attachmentId).then((r) => {
+        if (alive && r) {
+          setImageData((prev) => ({ ...prev, [img.attachmentId]: r }));
+        }
+      });
+    }
+    return () => {
+      alive = false;
+    };
+  }, [m.images, sessionId, attachment]);
 
   if (m.gap) {
     return (
@@ -136,6 +155,36 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
             <Text style={[styles.roleTag, styles.roleTagTool]}>
               tool · log
             </Text>
+          )}
+          {m.images && m.images.length > 0 && (
+            <View style={styles.imageRow}>
+              {m.images.map((img) => {
+                const loaded = imageData[img.attachmentId];
+                return (
+                  <Pressable
+                    key={img.attachmentId}
+                    onPress={() => {
+                      if (loaded) setZoomImage({ uri: `data:${loaded.mediaType};base64,${loaded.data}` });
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="查看大图"
+                  >
+                    {loaded ? (
+                      <Image
+                        source={{ uri: `data:${loaded.mediaType};base64,${loaded.data}` }}
+                        style={styles.imageThumb}
+                        resizeMode="cover"
+                        accessibilityLabel="图片消息"
+                      />
+                    ) : (
+                      <View style={[styles.imageThumb, styles.imageThumbLoading]}>
+                        <Text style={styles.imageThumbLoadingText}>…</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
           )}
           {segments.map((seg, i) =>
             seg.code ? (
@@ -233,6 +282,15 @@ export function MessageBubble({ m, live }: { m: TranscriptMessage; live?: boolea
           </View>
         </Pressable>
       </Modal>
+
+        <Modal visible={zoomImage !== null} transparent animationType="fade" onRequestClose={() => setZoomImage(null)}>
+          <Pressable style={styles.zoomBackdrop} onPress={() => setZoomImage(null)} accessibilityRole="button" accessibilityLabel="关闭大图">
+            {zoomImage && (
+              <Image source={{ uri: zoomImage.uri }} style={styles.zoomImage} resizeMode="contain" />
+            )}
+            <Text style={styles.zoomHint}>轻触关闭</Text>
+          </Pressable>
+        </Modal>
     </>
   );
 }
@@ -251,6 +309,15 @@ function createStyles(colors: ThemeColors, scale: number) {
     bubblePressed: { opacity: 0.85 },
     body: { paddingVertical: 11, paddingHorizontal: 15, gap: 5, flexShrink: 1 },
     roleTag: { color: colors.textMuted, fontFamily: font.monoBold, fontSize: 9, fontWeight: "500", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 2 },
+    imageRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+    imageThumb: {
+      width: 200,
+      height: 200,
+      borderRadius: 12,
+      backgroundColor: colors.codeBg,
+    },
+    imageThumbLoading: { alignItems: "center", justifyContent: "center" },
+    imageThumbLoadingText: { color: colors.textMuted, fontSize: font.body },
     roleTagTool: { color: colors.warn },
     text: { color: colors.text, fontSize: (font.body + 1) * scale, lineHeight: 22 * scale },
     textUser: { color: colors.msgSelfText },
@@ -275,6 +342,23 @@ function createStyles(colors: ThemeColors, scale: number) {
       backgroundColor: "rgba(0,0,0,0.5)",
       justifyContent: "flex-end",
     },
+      zoomBackdrop: {
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.86)",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+      },
+      zoomImage: {
+        width: "100%",
+        height: "80%",
+      },
+      zoomHint: {
+        color: "#FFFFFF",
+        fontSize: font.caption,
+        marginTop: 12,
+        opacity: 0.7,
+      },
     menuPanel: {
       backgroundColor: colors.surface,
       borderTopLeftRadius: 20,

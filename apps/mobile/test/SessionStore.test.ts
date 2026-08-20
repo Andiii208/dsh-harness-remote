@@ -80,6 +80,32 @@ describe("SessionStore", () => {
     expect(s.getSessions()[0]?.lastMessage).toBe("你好，世界");
   });
 
+  it("folds image content blocks into transcript images (user/message and assistant/message)", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("session/event", {
+      sessionId: "s1",
+      event: { type: "user/message", seq: 1, time: Date.now(), data: { content: [{ type: "text", text: "看这张图" }, { type: "image", mediaType: "image/png", attachmentId: "att_1" }] } },
+    }) as never);
+    s.applyFrame(frame("session/event", {
+      sessionId: "s1",
+      event: { type: "assistant/message", seq: 2, time: Date.now(), data: { message: { content: [{ type: "image", mediaType: "image/jpeg", attachmentId: "att_2" }] } } },
+    }) as never);
+
+    const t = s.getTranscript("s1");
+    expect(t).toHaveLength(2);
+    expect(t[0]).toMatchObject({
+      role: "user",
+      content: "看这张图",
+      images: [{ attachmentId: "att_1", mediaType: "image/png" }],
+    });
+    expect(t[1]).toMatchObject({
+      role: "assistant",
+      content: "",
+      images: [{ attachmentId: "att_2", mediaType: "image/jpeg" }],
+    });
+    expect(s.getSessions()[0]?.lastMessage).toBe("[图片]");
+  });
+
   it("finalizes a live DSH Desktop chunk when turn/end arrives", () => {
     const s = new SessionStore();
     s.applyFrame(frame("session/event", {
@@ -237,5 +263,134 @@ describe("SessionStore", () => {
     s.applySessionList([{ id: "s1", title: "t" }] as never);
     s.applySessionList([{ id: "s2", title: "t2" }] as never);
     expect(s.getSessions().map((x) => x.id)).toEqual(["s2"]);
+  });
+
+  it("applyHistory folds native session.history entries into transcript", () => {
+    const s = new SessionStore();
+    s.applyHistory([
+      { event: { type: "turn/start", seq: 0, time: 0, data: {} } },
+      { event: { type: "user/message", seq: 1, time: 0, data: { content: [{ type: "text", text: "你好" }] } } },
+      { event: { type: "assistant/chunk", seq: 2, time: 0, data: { chunk: { type: "text-delta", text: "你" } } } },
+      { event: { type: "assistant/chunk", seq: 3, time: 0, data: { chunk: { type: "text-delta", text: "好" } } } },
+      { event: { type: "assistant/message", seq: 4, time: 0, data: { message: { content: [{ type: "text", text: "你好" }] } } } },
+      { event: { type: "turn/end", seq: 5, time: 0, data: { reason: { kind: "done" } } } },
+    ], "s1");
+    const t = s.getTranscript("s1");
+    expect(t.map((m) => `${m.role}:${m.content}`)).toEqual(["user:你好", "assistant:你好"]);
+    expect(s.getSessions()[0]?.lastMessage).toBe("你好");
+  });
+
+  it("applyHistory folds tool call/result events", () => {
+    const s = new SessionStore();
+    s.applyHistory([
+      { event: { type: "tool/call", seq: 0, time: 0, data: { callId: "c1", name: "bash", arguments: "ls" } } },
+      { event: { type: "tool/result", seq: 1, time: 0, data: { message: { content: [{ type: "text", text: "README.md" }] } } } },
+    ], "s1");
+    const t = s.getTranscript("s1");
+    expect(t).toHaveLength(2);
+    expect(t[0]).toMatchObject({ role: "tool", id: "c1" });
+    expect(t[0]?.content).toContain("bash");
+    expect(t[1]?.content).toContain("README.md");
+  });
+
+  it("applySessionList parses permissions projection", () => {
+    const s = new SessionStore();
+    s.applySessionList([
+      {
+        sessionId: "s1",
+        updatedAt: 1,
+        projections: {
+          asOfSeq: 1,
+          values: {
+            title: "t",
+            permissions: {
+              options: [{ value: "read-only", name: "read-only" }, { value: "workspace-write", name: "workspace-write" }],
+              currentValue: "workspace-write",
+            },
+          },
+        },
+      },
+    ] as never);
+    const sum = s.getSessions()[0];
+    expect(sum?.permissionOptions).toEqual(["read-only", "workspace-write"]);
+    expect(sum?.permissionCurrent).toBe("workspace-write");
+  });
+
+  it("applyProjection updates permissions", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("session/projection", {
+      sessionId: "s1",
+      key: "permissions",
+      value: { options: [{ value: "danger-full-access", name: "danger-full-access" }], currentValue: "danger-full-access" },
+    }) as never);
+    const sum = s.getSessions()[0];
+    expect(sum?.permissionOptions).toEqual(["danger-full-access"]);
+    expect(sum?.permissionCurrent).toBe("danger-full-access");
+  });
+
+  it("folds imageLimits projection into session summary", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("session/projection", {
+      sessionId: "s1",
+      key: "imageLimits",
+      value: {
+        maxImageBytes: 5_000_000,
+        maxImagesPerMessage: 4,
+        maxMessageImageBytes: 8_000_000,
+        maxImagePixels: 20_000_000,
+        mediaTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+      },
+    }) as never);
+    expect(s.getSessions()[0]?.imageLimits).toMatchObject({
+      maxImageBytes: 5_000_000,
+      maxImagesPerMessage: 4,
+      mediaTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+    });
+
+    s.applySessionList([{
+      sessionId: "s1",
+      updatedAt: 1,
+      projections: {
+        asOfSeq: 1,
+        values: {
+          imageLimits: {
+            maxImageBytes: 1_000_000,
+            maxImagesPerMessage: 1,
+            maxMessageImageBytes: 1_000_000,
+            maxImagePixels: 10_000_000,
+            mediaTypes: ["image/png"],
+          },
+        },
+      },
+    }] as never);
+    expect(s.getSessions()[0]?.imageLimits).toMatchObject({ maxImageBytes: 1_000_000, mediaTypes: ["image/png"] });
+  });
+
+  it("folds session/queue and session/jobs frames", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("session/queue", {
+      sessionId: "s1",
+      items: [
+        { id: "q1", placement: "queued", message: { id: "m1", role: "user", content: [{ type: "text", text: "排队消息" }] } },
+        { id: "q2", placement: "steering", message: { id: "m2", role: "user", content: [{ type: "text", text: "插队消息" }] } },
+      ],
+    }) as never);
+    s.applyFrame(frame("session/jobs", {
+      sessionId: "s1",
+      jobs: [{ id: "j1", kind: "workflow", label: "发布", status: "running", startedAt: 1 }],
+    }) as never);
+    expect(s.getQueueItems("s1")).toHaveLength(2);
+    expect(s.getQueueItems("s1")[0]).toMatchObject({ id: "q1", placement: "queued", text: "排队消息" });
+    expect(s.getJobs("s1")).toHaveLength(1);
+    expect(s.getJobs("s1")[0]).toMatchObject({ id: "j1", status: "running", label: "发布" });
+  });
+
+  it("folds host/session-status and host/session-removed frames", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("session/registry", { action: "added", sessionId: "s1", title: "t" }) as never);
+    s.applyFrame(frame("host/session-status", { sessionId: "s1", running: true }) as never);
+    expect(s.getSessions()[0]?.running).toBe(true);
+    s.applyFrame(frame("host/session-removed", { sessionId: "s1" }) as never);
+    expect(s.getSessions()).toHaveLength(0);
   });
 });
