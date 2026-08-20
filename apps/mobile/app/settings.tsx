@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import Constants from "expo-constants";
+import type { HostSettings } from "@dsh-remote/protocol";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
+import { useI18n } from "../src/i18n";
+import { defaultsFromHostSettings } from "../src/ui/settingsDefaults";
 import { autoReconnectStore } from "../src/discovery/autoReconnectStoreAdapter";
 import { isExpoGo } from "../src/notify/expoEnv";
 import { useAppSettings } from "../src/data/appSettingsContext";
 import type { FontSize } from "../src/data/appSettingsStore";
-import type { HostSettings } from "@dsh-remote/protocol";
 import { Button } from "../src/ui/Button";
 import { font, radius, space, type ThemeColors, type ThemePreference } from "../src/theme";
 import { useTheme } from "../src/theme-context";
@@ -74,23 +76,18 @@ const optionStyles = StyleSheet.create({
   chipText: { fontSize: font.transcript, fontWeight: "500" },
 });
 
-function permissionText(p?: HostSettings["permissions"]): string {
-  if (!p) return "未知";
-  if (p.mode === "auto") return "自动放行";
-  if (p.mode === "readonly") return "只读";
-  if (p.mode === "approve") return "需审批";
-  return p.description ?? p.mode ?? "未知";
-}
-
 export default function SettingsScreen() {
   const { colors, preference, setPreference } = useTheme();
+  const { t } = useI18n();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { state, describe, lastEndpoint, notifications, disconnect, notificationsEnabled, setNotificationsEnabled, hostSettingsGet, hostSettingsSet, pluginList } = useConnection();
+  const { state, describe, lastEndpoint, notifications, disconnect, notificationsEnabled, setNotificationsEnabled, settingsDescribe, settingsMutate, agentPresetList, pluginList, hostSettingsGet, hostSettingsSet } = useConnection();
   const { fontSize, setFontSize } = useAppSettings();
   const router = useRouter();
   const [autoReconnect, setAutoReconnect] = useState(true);
+  const [settingsInfo, setSettingsInfo] = useState<{ writable: boolean; hasDocument: boolean; namespaces: Array<{ ns: string; value: unknown; revision: number; applies: string }> } | null>(null);
   const [hostSettings, setHostSettings] = useState<HostSettings | null>(null);
-  const [settingsRead, setSettingsRead] = useState(false);
+  const [presets, setPresets] = useState<Array<{ id: string; name: string; isDefault: boolean; trust: string; broken?: string }>>([]);
+  const [presetRead, setPresetRead] = useState(false);
   const [pluginCount, setPluginCount] = useState(0);
   const [updateState, setUpdateState] = useState<{ status: "idle" | "checking" | "new" | "latest" | "error"; message: string; url?: string }>({
     status: "idle",
@@ -102,17 +99,38 @@ export default function SettingsScreen() {
   }, []);
 
   useEffect(() => {
+    if (state !== "online") return;
     let alive = true;
     void hostSettingsGet().then((s) => {
+      if (alive) setHostSettings(s);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [state, hostSettingsGet]);
+
+  useEffect(() => {
+    let alive = true;
+    void settingsDescribe().then((s) => {
+      if (alive) setSettingsInfo(s);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [settingsDescribe]);
+
+  useEffect(() => {
+    let alive = true;
+    void agentPresetList().then((list) => {
       if (alive) {
-        setHostSettings(s);
-        setSettingsRead(true);
+        setPresets(list ?? []);
+        setPresetRead(true);
       }
     });
     return () => {
       alive = false;
     };
-  }, [hostSettingsGet]);
+  }, [agentPresetList]);
 
   useEffect(() => {
     let alive = true;
@@ -133,10 +151,41 @@ export default function SettingsScreen() {
       ? `${(describe as { name?: string }).name ?? ""} ${(describe as { version?: string }).version ?? ""}`.trim()
       : "—";
 
-  const applyHostSetting = async (patch: { model?: string; thinking?: string }) => {
+  const defaults = defaultsFromHostSettings(hostSettings);
+
+  const applyDefaultModel = async (model: string) => {
+    if (!defaults.writable) return;
     void haptic("light");
-    const ok = await hostSettingsSet(patch);
-    if (ok) setHostSettings((prev) => (prev ? { ...prev, ...patch } : prev));
+    const ok = await hostSettingsSet({ model });
+    if (ok) setHostSettings((prev) => (prev ? { ...prev, model } : prev));
+  };
+
+  const applyDefaultThinking = async (thinking: string) => {
+    if (!defaults.writable) return;
+    void haptic("light");
+    const ok = await hostSettingsSet({ thinking });
+    if (ok) setHostSettings((prev) => (prev ? { ...prev, thinking } : prev));
+  };
+
+  const permissionNs = settingsInfo?.namespaces.find((n) => n.ns === "permission");
+  const permissionValue = (permissionNs?.value as { defaultPreset?: unknown } | undefined)?.defaultPreset;
+  const permissionPreset = typeof permissionValue === "string" ? permissionValue : "";
+  const applyDefaultPreset = async (preset: string) => {
+    if (!permissionNs) return;
+    void haptic("light");
+    const ok = await settingsMutate(
+      permissionNs.ns,
+      [{ op: "set", path: ["defaultPreset"], value: preset }],
+      permissionNs.revision,
+    );
+    if (ok) {
+      setSettingsInfo((prev) => prev ? {
+        ...prev,
+        namespaces: prev.namespaces.map((n) => n.ns === permissionNs.ns
+          ? { ...n, value: { ...(n.value as Record<string, unknown>), defaultPreset: preset }, revision: n.revision + 1 }
+          : n),
+      } : prev);
+    }
   };
 
   const checkUpdate = async () => {
@@ -173,18 +222,18 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Group eyebrow="连接">
+      <Group eyebrow={t.settings.connection}>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>状态</Text>
+          <Text style={styles.rowLabel}>{t.settings.status}</Text>
           <StatusChip
             tone={state === "online" ? "success" : state === "offline" ? "danger" : "warn"}
             label={STATE_LABEL[state] ?? state}
           />
         </View>
-        <Row label="目标主机" value={lastEndpoint ? `${lastEndpoint.host}:${lastEndpoint.port}` : "未连接"} />
-        <Row label="远端实例" value={describeName} />
+        <Row label={t.settings.targetHost} value={lastEndpoint ? `${lastEndpoint.host}:${lastEndpoint.port}` : t.common.notSet} />
+        <Row label={t.settings.remoteInstance} value={describeName} />
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>自动重连</Text>
+          <Text style={styles.rowLabel}>{t.settings.autoReconnect}</Text>
           <Switch
             value={autoReconnect}
             onValueChange={(v) => void toggleAutoReconnect(v)}
@@ -194,12 +243,12 @@ export default function SettingsScreen() {
         </View>
         {state === "online" && (
           <View style={styles.disconnectRow}>
-            <Button tone="danger" label="断开连接" onPress={disconnect} full />
+            <Button tone="danger" label={t.settings.disconnect} onPress={disconnect} full />
           </View>
         )}
         <View style={styles.sectionSeparator} />
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>本地通知</Text>
+          <Text style={styles.rowLabel}>{t.settings.localNotifications}</Text>
           <Switch
             value={notificationsEnabled}
             onValueChange={setNotificationsEnabled}
@@ -208,81 +257,111 @@ export default function SettingsScreen() {
             thumbColor={colors.text}
           />
         </View>
-        <Row label="未读事件" value={notifications.length > 0 ? `${notifications.length} 条` : "无"} />
+        <Row label={t.settings.unreadEvents} value={notifications.length > 0 ? `${notifications.length}` : t.settings.none} />
         <Text style={styles.hint}>
           {isExpoGo() ? "Expo Go 不支持本地通知——此开关在 Expo Go 下不可用，development build 中生效。" : "关闭后仍会在应用内记录事件，只是不弹系统通知。"}
         </Text>
       </Group>
 
-      {settingsRead && hostSettings ? (
-        <Group eyebrow="模型与权限">
-          {hostSettings.models && hostSettings.models.length > 0 ? (
+      {settingsInfo !== null || presetRead ? (
+        <Group eyebrow={t.settings.modelsPermissions}>
+          {presetRead && presets.length > 0 && (
             <>
               <View style={styles.row}>
-                <Text style={styles.rowLabel}>模型</Text>
-                <Text style={styles.rowValue}>{hostSettings.model ?? "未选择"}</Text>
+                <Text style={styles.rowLabel}>{t.settings.agentPreset}</Text>
+                <Text style={styles.rowValue}>{presets.find((p) => p.isDefault)?.name ?? "未设置默认"}</Text>
               </View>
-              {hostSettings.writable !== false && (
+              <View style={styles.optionsRow}>
+                {presets.map((p) => (
+                  <OptionChip
+                    key={p.id}
+                    label={p.broken ? `${p.name}（不可用）` : p.name}
+                    active={p.isDefault}
+                    onPress={() => {}}
+                  />
+                ))}
+              </View>
+              <Text style={styles.hint}>会话内可在聊天页切换当前会话使用的 Agent 预设。</Text>
+            </>
+          )}
+
+          {permissionNs && (
+            <>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>{t.settings.defaultPermissionPreset}</Text>
+                <Text style={styles.rowValue}>{permissionPreset || "未设置"}</Text>
+              </View>
+              {permissionNs.applies !== "restart" && settingsInfo?.writable !== false && (
                 <View style={styles.optionsRow}>
-                  {hostSettings.models.map((m) => (
+                  {["read-only", "workspace-write", "danger-full-access"].map((preset) => (
                     <OptionChip
-                      key={m}
-                      label={m}
-                      active={m === hostSettings.model}
-                      onPress={() => void applyHostSetting({ model: m })}
+                      key={preset}
+                      label={preset}
+                      active={permissionPreset === preset}
+                      onPress={() => void applyDefaultPreset(preset)}
                     />
                   ))}
                 </View>
               )}
+              <Text style={styles.hint}>默认权限影响新会话；当前会话权限在聊天页顶部切换。</Text>
             </>
-          ) : null}
-
-          {hostSettings.thinking ? (
-            <>
-              <View style={styles.row}>
-                <Text style={styles.rowLabel}>思考强度</Text>
-                <Text style={styles.rowValue}>{hostSettings.thinking}</Text>
-              </View>
-              {hostSettings.writable !== false && (
-                <View style={styles.optionsRow}>
-                  {["low", "medium", "high"].map((t) => (
-                    <OptionChip
-                      key={t}
-                      label={t}
-                      active={t === hostSettings.thinking}
-                      onPress={() => void applyHostSetting({ thinking: t })}
-                    />
-                  ))}
-                </View>
-              )}
-            </>
-          ) : null}
-
-          {hostSettings.contextPercent !== undefined && (
-            <View style={styles.contextBlock}>
-              <View style={styles.contextHeader}>
-                <Text style={styles.rowLabel}>上下文容量</Text>
-                <Text style={styles.rowValue}>
-                  {hostSettings.contextPercent}%{hostSettings.contextLimit ? ` / ${hostSettings.contextLimit}` : ""}
-                </Text>
-              </View>
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: `${Math.min(100, Math.max(0, hostSettings.contextPercent))}%` }]} />
-              </View>
-            </View>
           )}
 
-          {hostSettings.permissions && (
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>审批权限</Text>
-              <Text style={styles.rowValue}>{permissionText(hostSettings.permissions)}</Text>
-            </View>
-          )}
-          <PressableRow label="审批 / 提问历史" value="查看" onPress={() => router.push("/approval/history" as never)} last />
+          <PressableRow label={t.settings.approvalHistory} value={t.settings.view} onPress={() => router.push("/approval/history" as never)} last />
         </Group>
       ) : null}
 
-      <Group eyebrow="插件">
+      {hostSettings !== null && (
+        <Group eyebrow={t.settings.defaults}>
+          {defaults.models.length > 0 && (
+            <>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>{t.settings.defaultModel}</Text>
+                <Text style={styles.rowValue}>{defaults.model ?? "未设置"}</Text>
+              </View>
+              {defaults.writable && (
+                <View style={styles.optionsRow}>
+                  {defaults.models.map((m) => (
+                    <OptionChip
+                      key={m}
+                      label={m}
+                      active={defaults.model === m}
+                      onPress={() => void applyDefaultModel(m)}
+                    />
+                  ))}
+                </View>
+              )}
+              <Text style={styles.hint}>新会话默认使用的模型；读不到 host.settings.get 时此分组自动隐藏。</Text>
+            </>
+          )}
+
+          {defaults.thinking !== undefined && (
+            <>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>{t.settings.defaultThinking}</Text>
+                <Text style={styles.rowValue}>{defaults.thinking}</Text>
+              </View>
+              {defaults.writable && (
+                <View style={styles.optionsRow}>
+                  {defaults.thinkingOptions.map((t) => (
+                    <OptionChip
+                      key={t}
+                      label={t}
+                      active={defaults.thinking === t}
+                      onPress={() => void applyDefaultThinking(t)}
+                    />
+                  ))}
+                </View>
+              )}
+            </>
+          )}
+          {defaults.models.length === 0 && defaults.thinking === undefined && (
+            <Text style={styles.hint}>宿主未提供默认模型/思考强度配置。</Text>
+          )}
+        </Group>
+      )}
+
+      <Group eyebrow={t.settings.plugins}>
         <PressableRow
           label="用户插件"
           value={pluginCount > 0 ? `${pluginCount} 个可用` : "读不到自动隐藏"}
@@ -291,7 +370,7 @@ export default function SettingsScreen() {
         />
       </Group>
 
-      <Group eyebrow="显示">
+      <Group eyebrow={t.settings.display}>
         <View style={styles.row}>
           <Text style={styles.rowLabel}>外观</Text>
           <Text style={styles.rowValue}>{preference === "light" ? "浅色" : preference === "dark" ? "深色" : "跟随系统"}</Text>
@@ -334,11 +413,11 @@ export default function SettingsScreen() {
         <Text style={styles.hint}>只影响聊天正文与列表正文，不缩放 UI 框架。</Text>
       </Group>
 
-      <Group eyebrow="关于">
-        <Row label="应用" value="harness remote" />
-        <Row label="版本" value={Constants.expoConfig?.version ? `v${Constants.expoConfig.version}` : "v0.1.0"} />
+      <Group eyebrow={t.settings.about}>
+        <Row label={t.settings.app} value="harness remote" />
+        <Row label={t.settings.version} value={Constants.expoConfig?.version ? `v${Constants.expoConfig.version}` : "v0.1.0"} />
         <PressableRow
-          label="检查更新"
+          label={t.settings.checkUpdate}
           value={updateState.status === "checking" ? updateState.message : updateState.status === "new" ? `${updateState.message} ›` : updateState.status === "latest" ? updateState.message : updateState.status === "error" ? updateState.message : "GitHub Releases"}
           onPress={() => {
             if (updateState.status === "new" && updateState.url) void Linking.openURL(updateState.url);

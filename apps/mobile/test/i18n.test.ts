@@ -17,4 +17,17 @@ describe("i18n translations", () => {
     expect(zhCN.onboarding.step1Title.length).toBeGreaterThan(0);
     expect(en.connect.scanConnect.length).toBeGreaterThan(0);
   });
+
+  it("covers sessions/chat/settings/approval/plugins visible copy", () => {
+    expect(zhCN.sessions.title.length).toBeGreaterThan(0);
+    expect(en.sessions.title.length).toBeGreaterThan(0);
+    expect(zhCN.chat.tabChat.length).toBeGreaterThan(0);
+    expect(en.chat.tabChat.length).toBeGreaterThan(0);
+    expect(zhCN.settings.defaults.length).toBeGreaterThan(0);
+    expect(en.settings.defaults.length).toBeGreaterThan(0);
+    expect(zhCN.approval.title.length).toBeGreaterThan(0);
+    expect(en.approval.title.length).toBeGreaterThan(0);
+    expect(zhCN.plugins.title.length).toBeGreaterThan(0);
+    expect(en.plugins.title.length).toBeGreaterThan(0);
+  });
 });

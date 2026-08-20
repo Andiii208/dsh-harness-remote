@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useConnection } from "../src/transport/ConnectionProvider";
+import { useI18n } from "../src/i18n";
 import type { PluginCommand, PluginInfo, PluginListResult } from "@dsh-remote/protocol";
 import { font, radius, space, type ThemeColors } from "../src/theme";
 import { useTheme } from "../src/theme-context";
@@ -9,14 +10,14 @@ import { StatusChip } from "../src/ui/StatusChip";
 import { EmptyState } from "../src/ui/EmptyState";
 import { haptic } from "../src/ui/haptics";
 
-function riskLabel(risk?: PluginCommand["risk"]): string | null {
+function riskLabel(risk: PluginCommand["risk"], t: ReturnType<typeof useI18n>["t"]): string | null {
   switch (risk) {
     case "read":
-      return "只读";
+      return t.plugins.readonly;
     case "write":
-      return "写入";
+      return t.plugins.write;
     case "approve":
-      return "需审批";
+      return t.plugins.approve;
     default:
       return null;
   }
@@ -24,16 +25,17 @@ function riskLabel(risk?: PluginCommand["risk"]): string | null {
 
 function CommandRow({ command }: { command: PluginCommand }) {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { pluginExec } = useConnection();
   const [notice, setNotice] = useState("");
   const run = async () => {
     void haptic("light");
     const r = await pluginExec(command.id);
-    setNotice(r?.ok === false ? `执行失败：${r.error?.message ?? "未知错误"}` : "已发送");
+    setNotice(r?.ok === false ? `${t.plugins.executeFailed}：${r.error?.message ?? "?"}` : t.plugins.sent);
     setTimeout(() => setNotice(""), 1600);
   };
-  const risk = riskLabel(command.risk);
+  const risk = riskLabel(command.risk, t);
   return (
     <Pressable style={({ pressed }) => [styles.itemRow, pressed && styles.itemRowPressed]} onPress={() => void run()} accessibilityRole="button" accessibilityLabel={command.title}>
       <View style={styles.itemBody}>
@@ -41,7 +43,7 @@ function CommandRow({ command }: { command: PluginCommand }) {
         {command.description ? <Text style={styles.itemDesc}>{command.description}</Text> : null}
         {risk ? <Text style={styles.itemMeta}>{risk}</Text> : null}
       </View>
-      <Text style={styles.itemAction}>{notice || "执行"}</Text>
+      <Text style={styles.itemAction}>{notice || t.plugins.execute}</Text>
     </Pressable>
   );
 }
@@ -62,6 +64,7 @@ function SettingRow({ pluginId, itemKey, title, value }: { pluginId: string; ite
 
 export default function PluginsScreen() {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { pluginList } = useConnection();
   const [list, setList] = useState<PluginListResult | null>(null);
@@ -88,22 +91,22 @@ export default function PluginsScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <StatusChip tone={plugins.length > 0 ? "success" : "warn"} label={plugins.length > 0 ? `${plugins.length} 个插件` : "未发现插件"} />
-        <Text style={styles.headerHint}>能力由宿主动态提供，读不到时自动隐藏</Text>
+        <StatusChip tone={plugins.length > 0 ? "success" : "warn"} label={plugins.length > 0 ? `${plugins.length} 个插件` : t.plugins.notFound} />
+        <Text style={styles.headerHint}>{t.plugins.headerHint}</Text>
       </View>
 
-      {loading && <Text style={styles.empty}>正在读取插件能力…</Text>}
+      {loading && <Text style={styles.empty}>{t.plugins.loading}</Text>}
 
       {!loading && plugins.length === 0 && (
         <EmptyState
           eyebrow="NO PLUGINS"
-          text="当前宿主未暴露插件能力——在电脑端 DSH 安装插件后，手机会自动展示其指令与设置"
+          text={t.plugins.empty}
         />
       )}
 
       {commands.length > 0 && (
         <View style={styles.group}>
-          <SectionLabel>插件指令</SectionLabel>
+          <SectionLabel>{t.plugins.commands}</SectionLabel>
           <View style={styles.card}>
             {commands.map((c) => (
               <CommandRow key={c.id} command={c} />
@@ -114,13 +117,13 @@ export default function PluginsScreen() {
 
       {settings.length > 0 && (
         <View style={styles.group}>
-          <SectionLabel>插件设置</SectionLabel>
+          <SectionLabel>{t.plugins.settings}</SectionLabel>
           <View style={styles.card}>
             {settings.map((s, i) => (
               <SettingRow key={`${s.key}-${i}`} pluginId={s.key.split(".")[0] ?? ""} itemKey={s.key} title={s.title} value={s.value} />
             ))}
           </View>
-          <Text style={styles.footnote}>设置项当前只读展示；修改能力由宿主提供后开放</Text>
+          <Text style={styles.footnote}>{t.plugins.footnote}</Text>
         </View>
       )}
     </ScrollView>

@@ -39,7 +39,10 @@ import { approvalHistoryStore } from "../data/approvalHistoryStoreAdapter";
 import { KeepaliveScheduler } from "../notify/keepalive";
 import { backgroundTaskApi, KEEPALIVE_TASK } from "../notify/keepaliveAdapter";
 import { GoalsClient, type GoalsApi } from "../data/goals";
-import type { PendingRequest, SessionSummary, TranscriptMessage } from "../data/SessionStore";
+import { parseSkillList, type SkillEntry } from "../data/skillList";
+import { toImageMediaType, type ImageMediaType } from "../data/imageMessage";
+import type { JobInfo, PendingRequest, QueueItem, SessionSummary, TranscriptMessage } from "../data/SessionStore";
+import type { TranscriptStep } from "../data/transcriptSteps";
 import type { NotificationEvent } from "../notify/classifier";
 import { relayDeviceStore } from "../relay/relayDeviceStoreAdapter";
 
@@ -65,6 +68,8 @@ export interface ConnectionApi {
   transcript(sessionId: string): TranscriptMessage[];
   /** 当前流式消息（未 complete 前；聊天页渲染闪烁光标）。 */
   liveMessage(sessionId: string): TranscriptMessage | undefined;
+  /** 轨迹步骤（tool/call、tool/result、turn/*、step/end 折叠）。 */
+  steps(sessionId: string): TranscriptStep[];
   goals: GoalsClient;
   /** 乐观更新 goal 状态（暂停/恢复后立即反映）。 */
   setGoalStatus(sessionId: string, status: string): void;
@@ -77,6 +82,10 @@ export interface ConnectionApi {
   relayPeerId: string | null;
   disconnect(): void;
   sendMessage(sessionId: string, text: string): Promise<void>;
+  /** 发送图片消息（session.prompt image block，mode:"queue"）。 */
+  sendImageMessage(sessionId: string, image: { mediaType: ImageMediaType; data: string; name?: string }): Promise<void>;
+  /** 读取图片附件 base64（session.attachment）；失败返回 null。 */
+  attachment(sessionId: string, attachmentId: string): Promise<{ mediaType: string; data: string } | null>;
   respond(rpcId: string, result: unknown): Promise<void>;
   /** 请求宿主中断流式（session.interrupt）；失败抛错，由 UI 回退本地暂停。 */
   interruptStream(sessionId: string): Promise<void>;
@@ -88,6 +97,40 @@ export interface ConnectionApi {
   hostSettingsGet(): Promise<HostSettings | null>;
   /** R3：写回宿主设置；宿主不支持返回 false。 */
   hostSettingsSet(patch: { model?: string; thinking?: string }): Promise<boolean>;
+  /** 加载会话历史转录（session.history）；支持 beforeSeq 分页。成功返回 true，失败返回 false。 */
+  loadHistory(sessionId: string, maxMessages?: number, beforeSeq?: number): Promise<boolean>;
+  /** 读取会话可用模型列表与当前模型。 */
+  sessionModels(sessionId: string): Promise<{ current: { provider: string; model: string; reasoningEffort?: string }; groups: Array<{ id: string; name: string; models: Array<{ id: string; name: string; reasoning?: { efforts?: Array<{ id: string; name: string }>; defaultEffort?: string } }> }> } | null>;
+  /** 选择会话模型。 */
+  selectModel(sessionId: string, provider: string, model: string, reasoningEffort?: string): Promise<boolean>;
+  /** 执行宿主命令（如 /permission workspace-write）。 */
+  executeCommand(sessionId: string, line: string): Promise<{ ok: boolean; result?: { kind: string; text?: string } } | null>;
+  /** 当前会话的排队消息（session/queue 帧）。 */
+  queueItems(sessionId: string): QueueItem[];
+  /** 当前会话的后台任务（session/jobs 帧）。 */
+  jobs(sessionId: string): JobInfo[];
+  /** 更新排队消息：edit/remove/steer（session.updateQueue）。 */
+  updateQueue(sessionId: string, itemId: string, action: { kind: "edit"; content: Array<{ type: "text"; text: string }> } | { kind: "remove" } | { kind: "steer" }): Promise<boolean>;
+  /** 重命名会话（session.rename）。 */
+  renameSession(sessionId: string, title: string): Promise<boolean>;
+  /** 派生会话（session.fork）。 */
+  forkSession(sessionId: string, atSeq?: number): Promise<string | null>;
+  /** 工作区列表（workspace.list）。 */
+  workspaceList(): Promise<{ items: Array<{ workspaceId: string; path: string; title: string; sessionIds: string[] }>; archivedSessionIds: string[] } | null>;
+  /** 归档会话（workspace.archiveSession）。 */
+  archiveSession(sessionId: string): Promise<boolean>;
+  /** 原生会话搜索（session.search）。 */
+  searchSessions(query: string): Promise<Array<{ sessionId: string; snippet: string }> | null>;
+  /** 原生 settings.describe：读取设置命名空间。 */
+  settingsDescribe(): Promise<{ writable: boolean; hasDocument: boolean; namespaces: Array<{ ns: string; value: unknown; revision: number; applies: string }> } | null>;
+  /** 原生 settings.mutate：按路径修改设置。 */
+  settingsMutate(ns: string, ops: Array<{ op: "set"; path: string[]; value: unknown } | { op: "unset"; path: string[] }>, expectedRevision?: number): Promise<boolean>;
+  /** 原生 agentPreset.list。 */
+  agentPresetList(): Promise<Array<{ id: string; name: string; isDefault: boolean; trust: string; broken?: string }> | null>;
+  /** 原生 agentPreset.select：为指定会话切换预设。 */
+  agentPresetSelect(sessionId: string, agentPreset: string): Promise<boolean>;
+  /** 读取当前会话可 @ 的技能清单（skill.list）；宿主不支持/离线返回 null。 */
+  skillList(sessionId: string): Promise<SkillEntry[] | null>;
 }
 
 const ConnectionContext = createContext<ConnectionApi | null>(null);
@@ -275,6 +318,42 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const sendImageMessage = useCallback(async (
+    sessionId: string,
+    image: { mediaType: ImageMediaType; data: string; name?: string },
+  ) => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) throw new Error("OFFLINE: not connected");
+    // 真实 DSH session.prompt 图片契约：mode:"queue" + content image block（base64 data）。
+    await c.unary("session.prompt", {
+      sessionId,
+      mode: "queue",
+      content: [{
+        type: "image",
+        mediaType: image.mediaType,
+        data: image.data,
+        ...(image.name !== undefined ? { name: image.name } : {}),
+      }],
+    });
+  }, []);
+
+  /** session.attachment：读取图片附件 base64。 */
+  const attachment = useCallback(async (sessionId: string, attachmentId: string) => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return null;
+    try {
+      const r = await c.unary("session.attachment", { sessionId, attachmentId });
+      if (!r.ok) return null;
+      const value = r.result as { attachment?: { mediaType?: unknown }; data?: unknown } | undefined;
+      if (!value || typeof value.data !== "string") return null;
+      const mediaType = toImageMediaType(value.attachment?.mediaType);
+      if (!mediaType) return null;
+      return { mediaType, data: value.data };
+    } catch {
+      return null;
+    }
+  }, []);
+
   const respond = useCallback(async (rpcId: string, result: unknown) => {
     const c = pipelineRef.current?.loop.connection;
     if (!c) return;
@@ -415,12 +494,16 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     return pipelineRef.current?.store.getLiveMessage(sessionId);
   }, []);
 
-  // goals/* typert 调用（经活动连接的 unary，路径即 /api/goals/<method>）
+  const steps = useCallback((sessionId: string) => {
+    return pipelineRef.current?.store.getSteps(sessionId) ?? [];
+  }, []);
+
+  // 原生 DSH goal.* 调用（经活动连接的 unary，路径即 /api/goal.<method>）
   const goalsApi: GoalsApi = {
-    call: async (ns, method, payload) => {
+    unary: async (method, payload) => {
       const c = pipelineRef.current?.loop.connection;
       if (!c) return { ok: false, error: { code: "OFFLINE", message: "not connected" } };
-      return c.unary(`${ns}/${method}`, payload);
+      return c.unary(method, payload);
     },
   };
   const goals = useMemo(() => new GoalsClient(goalsApi), []);
@@ -468,6 +551,301 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     pipelineRef.current?.store.setGoalStatus(sessionId, status);
   }, []);
 
+  /** 加载会话历史转录（session.history）；支持 beforeSeq 分页向前翻页。 */
+  const loadHistory = useCallback(async (sessionId: string, maxMessages?: number, beforeSeq?: number): Promise<boolean> => {
+    const c = pipelineRef.current?.loop.connection;
+    const store = pipelineRef.current?.store;
+    if (!c || !store) return false;
+    try {
+      const r = await c.unary("session.history", {
+        sessionId,
+        ...(maxMessages !== undefined ? { maxMessages } : {}),
+        ...(beforeSeq !== undefined ? { beforeSeq } : {}),
+      });
+      if (!r.ok) return false;
+      const result = r.result as Record<string, unknown> | undefined;
+      const events = Array.isArray((result as Record<string, unknown> | undefined)?.events)
+        ? ((result as Record<string, unknown>).events as Array<Record<string, unknown>>)
+        : [];
+      store.applyHistory(events, sessionId);
+      return true;
+    } catch (err) {
+      console.warn("[history] load failed", err);
+      return false;
+    }
+  }, []);
+
+  /** 读取会话可用模型列表与当前模型。 */
+  const sessionModels = useCallback(async (sessionId: string) => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return null;
+    try {
+      const r = await c.unary("session.models", { sessionId });
+      if (!r.ok) return null;
+      const result = r.result as Record<string, unknown> | undefined;
+      if (!result) return null;
+      const current = result.current as { provider?: string; model?: string; reasoningEffort?: string } | undefined;
+      const groups = Array.isArray(result.groups) ? result.groups as Array<Record<string, unknown>> : [];
+      return {
+        current: {
+          provider: current?.provider ?? "",
+          model: current?.model ?? "",
+          reasoningEffort: current?.reasoningEffort,
+        },
+        groups: groups.map((g) => ({
+          id: String(g.id ?? ""),
+          name: String(g.name ?? ""),
+          models: Array.isArray(g.models) ? g.models.map((m: Record<string, unknown>) => ({
+            id: String(m.id ?? ""),
+            name: String(m.name ?? ""),
+            reasoning: m.reasoning
+              ? (() => {
+                  const r = m.reasoning as { efforts?: unknown; defaultEffort?: unknown };
+                  return {
+                    efforts: Array.isArray(r.efforts)
+                      ? (r.efforts as Array<{ id?: unknown; name?: unknown }>).map((e) => ({
+                          id: String(e.id ?? ""),
+                          name: String(e.name ?? ""),
+                        }))
+                      : undefined,
+                    defaultEffort: String(r.defaultEffort ?? ""),
+                  };
+                })()
+              : undefined,
+          })) : [],
+        })),
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /** 选择会话模型。 */
+  const selectModel = useCallback(async (sessionId: string, provider: string, model: string, reasoningEffort?: string) => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return false;
+    try {
+      const r = await c.unary("session.selectModel", {
+        sessionId,
+        provider,
+        model,
+        ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+      });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  /** 执行宿主命令（如 /permission workspace-write）。 */
+  const executeCommand = useCallback(async (sessionId: string, line: string) => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return null;
+    try {
+      const r = await c.unary("commands/execute", {
+        args: { agentId: sessionId, line },
+      });
+      if (!r.ok) return { ok: false, result: undefined };
+      // 真实 DSH commands/execute 返回 { commandId, result: { kind, text } }
+      const value = r.result as { commandId?: unknown; result?: { kind?: unknown; text?: unknown } } | undefined;
+      const inner = value?.result;
+      return {
+        ok: true,
+        result: inner ? { kind: String(inner.kind ?? "success"), text: typeof inner.text === "string" ? inner.text : undefined } : undefined,
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const queueItems = useCallback((sessionId: string) => {
+    return pipelineRef.current?.store.getQueueItems(sessionId) ?? [];
+  }, []);
+
+  const jobs = useCallback((sessionId: string) => {
+    return pipelineRef.current?.store.getJobs(sessionId) ?? [];
+  }, []);
+
+  /** session.updateQueue：编辑 / 移除 / 立即执行排队消息。 */
+  const updateQueue = useCallback(async (
+    sessionId: string,
+    itemId: string,
+    action: { kind: "edit"; content: Array<{ type: "text"; text: string }> } | { kind: "remove" } | { kind: "steer" },
+  ) => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return false;
+    try {
+      const r = await c.unary("session.updateQueue", { sessionId, itemId, action });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  /** session.rename。 */
+  const renameSession = useCallback(async (sessionId: string, title: string) => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return false;
+    try {
+      const r = await c.unary("session.rename", { sessionId, title });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  /** session.fork；返回新会话 id。 */
+  const forkSession = useCallback(async (sessionId: string, atSeq?: number) => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return null;
+    try {
+      const r = await c.unary("session.fork", {
+        sessionId,
+        ...(atSeq !== undefined ? { atSeq } : {}),
+      });
+      if (!r.ok) return null;
+      const value = r.result as { sessionId?: unknown } | undefined;
+      return typeof value?.sessionId === "string" ? value.sessionId : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /** workspace.list。 */
+  const workspaceList = useCallback(async () => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return null;
+    try {
+      const r = await c.unary("workspace.list", {});
+      if (!r.ok) return null;
+      const value = r.result as { items?: Array<{ workspaceId?: unknown; path?: unknown; title?: unknown; sessionIds?: unknown }>; archivedSessionIds?: unknown } | undefined;
+      const items = Array.isArray(value?.items) ? value.items : [];
+      return {
+        items: items.map((w) => ({
+          workspaceId: String(w.workspaceId ?? ""),
+          path: String(w.path ?? ""),
+          title: String(w.title ?? ""),
+          sessionIds: Array.isArray(w.sessionIds) ? w.sessionIds.map((s) => String(s)) : [],
+        })),
+        archivedSessionIds: Array.isArray(value?.archivedSessionIds) ? value.archivedSessionIds.map((s) => String(s)) : [],
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /** workspace.archiveSession。 */
+  const archiveSession = useCallback(async (sessionId: string) => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return false;
+    try {
+      const r = await c.unary("workspace.archiveSession", { sessionId });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  /** session.search。 */
+  const searchSessions = useCallback(async (query: string) => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return null;
+    try {
+      const r = await c.unary("session.search", { query });
+      if (!r.ok) return null;
+      const value = r.result as { items?: Array<{ sessionId?: unknown; snippet?: unknown }> } | undefined;
+      return Array.isArray(value?.items) ? value.items.map((s) => ({ sessionId: String(s.sessionId ?? ""), snippet: String(s.snippet ?? "") })) : [];
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /** 原生 settings.describe。 */
+  const settingsDescribe = useCallback(async () => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return null;
+    try {
+      const r = await c.unary("settings.describe", {});
+      if (!r.ok) return null;
+      const value = r.result as { writable?: unknown; hasDocument?: unknown; namespaces?: unknown } | undefined;
+      const namespaces = Array.isArray(value?.namespaces) ? value.namespaces as Array<Record<string, unknown>> : [];
+      return {
+        writable: value?.writable === true,
+        hasDocument: value?.hasDocument === true,
+        namespaces: namespaces.map((ns) => ({
+          ns: String(ns.ns ?? ""),
+          value: ns.value,
+          revision: typeof ns.revision === "number" ? ns.revision : 0,
+          applies: String(ns.applies ?? "live"),
+        })),
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /** 原生 settings.mutate。 */
+  const settingsMutate = useCallback(async (ns: string, ops: Array<{ op: "set"; path: string[]; value: unknown } | { op: "unset"; path: string[] }>, expectedRevision?: number) => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return false;
+    try {
+      const r = await c.unary("settings.mutate", {
+        ns,
+        ops,
+        ...(expectedRevision !== undefined ? { expectedRevision } : {}),
+      });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  /** 原生 agentPreset.list。 */
+  const agentPresetList = useCallback(async () => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return null;
+    try {
+      const r = await c.unary("agentPreset.list", {});
+      if (!r.ok) return null;
+      const value = r.result as { presets?: unknown } | undefined;
+      if (!Array.isArray(value?.presets)) return [];
+      return (value.presets as Array<Record<string, unknown>>).map((p) => ({
+        id: String(p.id ?? ""),
+        name: String(p.name ?? p.id ?? ""),
+        isDefault: p.isDefault === true,
+        trust: String(p.trust ?? "user"),
+        broken: typeof p.broken === "string" ? p.broken : undefined,
+      }));
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /** 原生 agentPreset.select。 */
+  const agentPresetSelect = useCallback(async (sessionId: string, agentPreset: string) => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return false;
+    try {
+      const r = await c.unary("agentPreset.select", { sessionId, agentPreset });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  /** 读取当前会话可 @ 的技能清单（skill.list）。 */
+  const skillList = useCallback(async (sessionId: string): Promise<SkillEntry[] | null> => {
+    const c = pipelineRef.current?.loop.connection;
+    if (!c) return null;
+    try {
+      const r = await c.unary("skill.list", { sessionId });
+      if (!r.ok) return null;
+      return parseSkillList(r.result);
+    } catch {
+      return null;
+    }
+  }, []);
+
   const value = useMemo<ConnectionApi>(
     () => ({
       state,
@@ -483,6 +861,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       notifications,
       transcript,
       liveMessage,
+      steps,
       goals,
       notificationsEnabled,
       setNotificationsEnabled,
@@ -492,14 +871,33 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       connect,
       disconnect,
       sendMessage,
+      sendImageMessage,
+      attachment,
       respond,
       interruptStream,
       pluginList,
       pluginExec,
       hostSettingsGet,
       hostSettingsSet,
+      loadHistory,
+      sessionModels,
+      selectModel,
+      executeCommand,
+      queueItems,
+      jobs,
+      updateQueue,
+      renameSession,
+      forkSession,
+      workspaceList,
+      archiveSession,
+      searchSessions,
+      settingsDescribe,
+      settingsMutate,
+      agentPresetList,
+      agentPresetSelect,
+      skillList,
     }),
-    [state, describe, relayPeerId, lastError, givenUp, retry, stopRetrying, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, createSession, connect, disconnect, sendMessage, respond, interruptStream, transcript, liveMessage, setNotificationsEnabled, pluginList, pluginExec, hostSettingsGet, hostSettingsSet],
+    [state, describe, relayPeerId, lastError, givenUp, retry, stopRetrying, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, createSession, connect, disconnect, sendMessage, sendImageMessage, attachment, respond, interruptStream, transcript, liveMessage, steps, setNotificationsEnabled, pluginList, pluginExec, hostSettingsGet, hostSettingsSet, loadHistory, sessionModels, selectModel, executeCommand, queueItems, jobs, updateQueue, renameSession, forkSession, workspaceList, archiveSession, searchSessions, settingsDescribe, settingsMutate, agentPresetList, agentPresetSelect, skillList],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;

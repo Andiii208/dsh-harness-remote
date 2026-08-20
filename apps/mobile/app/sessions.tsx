@@ -1,10 +1,10 @@
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
-import Animated from "react-native-reanimated";
+import { Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FlashList } from "@shopify/flash-list";
 import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
+import { useI18n } from "../src/i18n";
 import { useAppSettings } from "../src/data/appSettingsContext";
 import { font, radius, space } from "../src/theme";
 import { useTheme } from "../src/theme-context";
@@ -13,9 +13,12 @@ import { SkeletonRow } from "../src/ui/SkeletonRow";
 import { Field } from "../src/ui/Field";
 import { EmptyState } from "../src/ui/EmptyState";
 import { Button } from "../src/ui/Button";
-import { useEntering } from "../src/ui/anim";
 import type { SessionSummary } from "../src/data/SessionStore";
 import { filterSessions, formatSessionTime, groupByWorkspace, pressureTier } from "../src/data/sessionViews";
+
+function normalizePath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/+$/, "");
+}
 
 function goalLabel(status?: string): string {
   switch (status) {
@@ -61,27 +64,76 @@ type SessionRow =
   | { kind: "session"; key: string; session: SessionSummary };
 
 export default function SessionsScreen() {
-  const { sessions, pending, state, refreshSessions, createSession } = useConnection();
+  const { sessions, pending, state, refreshSessions, createSession, renameSession, forkSession, archiveSession, searchSessions, workspaceList } = useConnection();
+  const { t } = useI18n();
   const { colors } = useTheme();
   const { scale } = useAppSettings();
   const styles = useMemo(() => createStyles(colors, scale), [colors, scale]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const entering = useEntering();
   const [query, setQuery] = useState("");
   const [searchVisible, setSearchVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
+  const [menuSession, setMenuSession] = useState<SessionSummary | null>(null);
+  const [renameVisible, setRenameVisible] = useState(false);
+  const [renameTitle, setRenameTitle] = useState("");
   const autoRefreshed = useRef(false);
   const [, setTick] = useState(0);
 
+  // 原生 session.search：输入停止后触发，结果合并到本地过滤中。
+  const nativeSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [nativeResults, setNativeResults] = useState<Array<{ sessionId: string; snippet: string }> | null>(null);
+  useEffect(() => {
+    if (nativeSearchTimer.current) clearTimeout(nativeSearchTimer.current);
+    if (!query.trim() || state !== "online") {
+      setNativeResults(null);
+      return;
+    }
+    nativeSearchTimer.current = setTimeout(() => {
+      void searchSessions(query.trim()).then(setNativeResults).catch(() => setNativeResults(null));
+    }, 300);
+    return () => {
+      if (nativeSearchTimer.current) clearTimeout(nativeSearchTimer.current);
+    };
+  }, [query, state, searchSessions]);
+
+  // 原生 workspace.list：用于按工作区标题分组 + 过滤已归档会话。
+  const [workspaceGroups, setWorkspaceGroups] = useState<Array<{ workspaceId: string; path: string; title: string; sessionIds: string[] }>>([]);
+  const [archivedIds, setArchivedIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (state !== "online") return;
+    void workspaceList().then((list) => {
+      if (!list) return;
+      setWorkspaceGroups(list.items);
+      setArchivedIds(list.archivedSessionIds);
+    });
+  }, [state, workspaceList]);
+
   const rows = useMemo<SessionRow[]>(() => {
-    const filtered = filterSessions(sessions, query);
+    // 原生搜索优先：session.search 结果映射回本地 session 摘要。
+    if (nativeResults !== null) {
+      const ids = new Set(nativeResults.map((r) => r.sessionId));
+      const matched = sessions.filter((s) => ids.has(s.id));
+      return [
+        { kind: "header", key: "search-header", workspace: `${t.sessions.searchResults} ${matched.length}`, count: matched.length },
+        ...matched.map((session) => ({ kind: "session" as const, key: session.id, session })),
+      ];
+    }
+    // 原生 workspace 分组：按 workspace.list 的 path → title 映射，同时过滤已归档会话。
+    const pathToTitle = new Map(workspaceGroups.map((w) => [normalizePath(w.path), w.title]));
+    const archived = new Set(archivedIds);
+    const visible = archived.size > 0 ? sessions.filter((s) => !archived.has(s.id)) : sessions;
+    const groupedSessions = visible.map((s) => ({
+      ...s,
+      workspace: (s.workspace ? pathToTitle.get(normalizePath(s.workspace)) : undefined) ?? s.workspace ?? t.common.other,
+    }));
+    const filtered = filterSessions(groupedSessions, query);
     return groupByWorkspace(filtered).flatMap<SessionRow>((g) => [
       { kind: "header", key: `header:${g.workspace}`, workspace: g.workspace, count: g.sessions.length },
       ...g.sessions.map((session) => ({ kind: "session" as const, key: session.id, session })),
     ]);
-  }, [sessions, query]);
+  }, [sessions, query, nativeResults, workspaceGroups, archivedIds]);
   useEffect(() => {
     const t = setInterval(() => setTick(Date.now()), 60_000);
     return () => clearInterval(t);
@@ -92,7 +144,7 @@ export default function SessionsScreen() {
     if (state === "online" && !autoRefreshed.current) {
       autoRefreshed.current = true;
       setRefreshError("");
-      void refreshSessions().catch(() => setRefreshError("刷新失败：连接异常"));
+      void refreshSessions().catch(() => setRefreshError(t.sessions.refreshFailed));
     }
   }, [state, refreshSessions]);
 
@@ -102,9 +154,48 @@ export default function SessionsScreen() {
     try {
       await refreshSessions();
     } catch {
-      setRefreshError("刷新失败：连接异常");
+      setRefreshError(t.sessions.refreshFailed);
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const openMenu = (session: SessionSummary) => {
+    setMenuSession(session);
+  };
+
+  const doRename = async () => {
+    if (!menuSession || !renameTitle.trim()) return;
+    const ok = await renameSession(menuSession.id, renameTitle.trim());
+    if (ok) {
+      setRenameVisible(false);
+      setMenuSession(null);
+      void refreshSessions().catch(() => {});
+    } else {
+      setRefreshError(t.sessions.renameFailed);
+    }
+  };
+
+  const doFork = async () => {
+    if (!menuSession) return;
+    const id = await forkSession(menuSession.id);
+    if (id) {
+      setMenuSession(null);
+      void refreshSessions().catch(() => {});
+      router.push(`/chat/${encodeURIComponent(id)}`);
+    } else {
+      setRefreshError(t.sessions.forkFailed);
+    }
+  };
+
+  const doArchive = async () => {
+    if (!menuSession) return;
+    const ok = await archiveSession(menuSession.id);
+    if (ok) {
+      setMenuSession(null);
+      void refreshSessions().catch(() => {});
+    } else {
+      setRefreshError(t.sessions.archiveFailed);
     }
   };
 
@@ -129,27 +220,28 @@ export default function SessionsScreen() {
       void refreshSessions().catch(() => {});
       router.push(`/chat/${encodeURIComponent(id)}`);
     } else {
-      setRefreshError("新建会话失败：请确认 DSH 已开启会话能力");
+      setRefreshError(t.sessions.createFailed);
     }
   };
 
   return (
-    <FlashList
-      style={styles.screen}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + space.x2 }]}
-      data={rows}
-      keyExtractor={(row) => row.key}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.textMuted} colors={[colors.accent]} />
-      }
+    <View style={styles.screen}>
+      <FlashList
+        style={styles.list}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + space.x2 }]}
+        data={rows}
+        keyExtractor={(row) => row.key}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.textMuted} colors={[colors.accent]} />
+        }
       ListHeaderComponent={
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="返回连接页" style={styles.backRow}>
-            <Text style={styles.backText}>‹ 连接</Text>
+            <Text style={styles.backText}>{t.sessions.backToConnect}</Text>
           </Pressable>
           <View style={styles.headerRow}>
             <View style={styles.titleRow}>
-              <Text style={styles.title}>会话</Text>
+              <Text style={styles.title}>{t.sessions.title}</Text>
               <StatusChip tone={state === "online" ? "success" : state === "offline" ? "danger" : "warn"} label={STATE_LABEL[state] ?? state} />
             </View>
             <View style={styles.headerActions}>
@@ -161,20 +253,20 @@ export default function SessionsScreen() {
                 style={({ pressed }) => [styles.newChatButton, pressed && styles.rowPressed]}
                 disabled={state !== "online"}
               >
-                <Text style={styles.newChatText}>＋ 新会话</Text>
+                <Text style={styles.newChatText}>{t.sessions.newSession}</Text>
               </Pressable>
-              <Pressable onPress={toggleSearch} hitSlop={8} accessibilityRole="button" accessibilityLabel={searchVisible ? "完成搜索" : "搜索"}>
-                <Text style={styles.headerLink}>{searchVisible ? "完成" : "搜索"}</Text>
+              <Pressable onPress={toggleSearch} hitSlop={8} accessibilityRole="button" accessibilityLabel={searchVisible ? t.sessions.doneSearch : t.common.search}>
+                <Text style={styles.headerLink}>{searchVisible ? t.sessions.doneSearch : t.common.search}</Text>
               </Pressable>
-              <Pressable onPress={() => router.push("/settings" as never)} hitSlop={8} accessibilityRole="button" accessibilityLabel="设置">
-                <Text style={styles.headerLink}>设置</Text>
+              <Pressable onPress={() => router.push("/settings" as never)} hitSlop={8} accessibilityRole="button" accessibilityLabel={t.common.settings}>
+                <Text style={styles.headerLink}>{t.common.settings}</Text>
               </Pressable>
             </View>
           </View>
           {searchVisible && (
             <Field
-              label="搜索"
-              placeholder="搜索标题 / workspace / 最近消息"
+              label={t.common.search}
+              placeholder={t.sessions.searchPlaceholder}
               value={query}
               onChangeText={onChangeQuery}
               autoFocus
@@ -187,9 +279,9 @@ export default function SessionsScreen() {
               onPress={() => router.push("/approval" as never)}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel={`${pending.length} 个待处理请求`}
+              accessibilityLabel={`${pending.length} ${t.sessions.pendingRequests}`}
             >
-              <Text style={styles.pendingText}>{pending.length} 个待处理请求 ›</Text>
+              <Text style={styles.pendingText}>{pending.length} {t.sessions.pendingRequests} ›</Text>
             </Pressable>
           )}
         </View>
@@ -202,18 +294,18 @@ export default function SessionsScreen() {
             <SkeletonRow />
           </View>
         ) : query.trim() ? (
-          <EmptyState eyebrow="NO MATCH" text="没有匹配的会话，换个关键词试试" />
+          <EmptyState eyebrow="NO MATCH" text={t.sessions.noMatchText} />
         ) : state === "offline" ? (
           <EmptyState
             eyebrow="OFFLINE"
-            text="还没有连接到电脑，先去连接才能看到会话"
-            action={<Button label="去连接" onPress={() => router.push("/")} full />}
+            text={t.sessions.offlineText}
+            action={<Button label={t.common.goConnect} onPress={() => router.push("/")} full />}
           />
         ) : (
           <EmptyState
             eyebrow="EMPTY"
-            text="还没有会话——在电脑上新建一个，或直接在手机上创建"
-            action={<Button label="＋ 新建会话" onPress={() => void onCreate()} full />}
+            text={t.sessions.emptyText}
+            action={<Button label={t.sessions.newSession} onPress={() => void onCreate()} full />}
           />
         )
       }
@@ -221,57 +313,105 @@ export default function SessionsScreen() {
         item.kind === "header" ? (
           <Text style={styles.groupHeader}>{item.workspace}</Text>
         ) : (
-          <Animated.View entering={entering}>
-            <Pressable
-              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-              onPress={() => router.push(`/chat/${encodeURIComponent(item.session.id)}`)}
-              accessibilityRole="button"
-              accessibilityLabel={item.session.title ?? item.session.id}
-            >
-              <View style={styles.rowHeader}>
-                <Text style={styles.rowTitle} numberOfLines={1}>
-                  {item.session.title ?? item.session.id}
-                </Text>
-                <GoalPill status={item.session.goalStatus} colors={colors} />
-                {item.session.contextPercent !== undefined && item.session.contextPercent >= 70 && (
-                  <Text
-                    style={[
-                      styles.pressure,
-                      pressureTier(item.session.contextPercent) === "warn" && { color: colors.warn },
-                      pressureTier(item.session.contextPercent) === "danger" && { color: colors.danger },
-                    ]}
-                  >
-                    {item.session.contextPercent}%
-                  </Text>
-                )}
-                {item.session.lastActiveAt !== undefined && (
-                  <Text style={styles.time} numberOfLines={1}>
-                    {formatSessionTime(item.session.lastActiveAt)}
-                  </Text>
-                )}
-              </View>
-              {item.session.lastMessage !== undefined && (
-                <Text style={styles.rowPreview} numberOfLines={1}>
-                  {item.session.lastMessage}
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+            onPress={() => router.push(`/chat/${encodeURIComponent(item.session.id)}`)}
+            onLongPress={() => openMenu(item.session)}
+            delayLongPress={350}
+            accessibilityRole="button"
+            accessibilityLabel={item.session.title ?? item.session.id}
+          >
+            <View style={styles.rowHeader}>
+              <Text style={styles.rowTitle} numberOfLines={1}>
+                {item.session.title ?? item.session.id}
+              </Text>
+              <GoalPill status={item.session.goalStatus} colors={colors} />
+              {item.session.contextPercent !== undefined && item.session.contextPercent >= 70 && (
+                <Text
+                  style={[
+                    styles.pressure,
+                    pressureTier(item.session.contextPercent) === "warn" && { color: colors.warn },
+                    pressureTier(item.session.contextPercent) === "danger" && { color: colors.danger },
+                  ]}
+                >
+                  {item.session.contextPercent}%
                 </Text>
               )}
-            </Pressable>
-          </Animated.View>
+              {item.session.lastActiveAt !== undefined && (
+                <Text style={styles.time} numberOfLines={1}>
+                  {formatSessionTime(item.session.lastActiveAt)}
+                </Text>
+              )}
+            </View>
+            {item.session.lastMessage !== undefined && (
+              <Text style={styles.rowPreview} numberOfLines={1}>
+                {item.session.lastMessage}
+              </Text>
+            )}
+          </Pressable>
         )
       }
-    />
+      />
+
+      {/* 会话操作菜单（长按触发） */}
+      <Modal visible={menuSession !== null} transparent animationType="fade" onRequestClose={() => setMenuSession(null)}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenuSession(null)} accessibilityRole="button" accessibilityLabel="关闭会话菜单" />
+          <View style={styles.menuPanel}>
+            <Text style={styles.menuTitle}>{menuSession?.title ?? menuSession?.id ?? t.sessions.menuTitle}</Text>
+            <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => { setRenameTitle(menuSession?.title ?? ""); setRenameVisible(true); }} accessibilityRole="button" accessibilityLabel={t.sessions.menuRename}>
+              <Text style={styles.menuItemText}>{t.sessions.menuRename}</Text>
+            </Pressable>
+            <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => void doFork()} accessibilityRole="button" accessibilityLabel={t.sessions.menuFork}>
+              <Text style={styles.menuItemText}>{t.sessions.menuFork}</Text>
+            </Pressable>
+            <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => void doArchive()} accessibilityRole="button" accessibilityLabel={t.sessions.menuArchive}>
+              <Text style={[styles.menuItemText, { color: colors.danger }]}>{t.sessions.menuArchive}</Text>
+            </Pressable>
+            <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => setMenuSession(null)} accessibilityRole="button" accessibilityLabel={t.common.cancel}>
+              <Text style={[styles.menuItemText, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 重命名弹窗 */}
+      <Modal visible={renameVisible} transparent animationType="fade" onRequestClose={() => setRenameVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setRenameVisible(false)} accessibilityRole="button" accessibilityLabel="关闭重命名" />
+          <View style={styles.menuPanel}>
+            <Text style={styles.menuTitle}>{t.sessions.renameTitle}</Text>
+            <TextInput
+              style={styles.renameInput}
+              value={renameTitle}
+              onChangeText={setRenameTitle}
+              placeholder={t.sessions.renamePlaceholder}
+              placeholderTextColor={colors.textDim}
+              autoFocus
+            />
+            <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => void doRename()} accessibilityRole="button" accessibilityLabel={t.sessions.renameConfirm}>
+              <Text style={styles.menuItemText}>{t.sessions.renameConfirm}</Text>
+            </Pressable>
+            <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => setRenameVisible(false)} accessibilityRole="button" accessibilityLabel={t.common.cancel}>
+              <Text style={[styles.menuItemText, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: number) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
+    list: { flex: 1 },
     content: { padding: space.x5, gap: space.x3, paddingBottom: space.x7 },
     header: { gap: space.x2, marginBottom: space.x2 },
     backRow: { alignItems: "flex-start", paddingVertical: 2 },
     backText: { color: colors.accent, fontSize: font.body, fontWeight: "500" },
-    headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x3 },
-    titleRow: { flexDirection: "row", alignItems: "center", gap: space.x2 },
+    headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x3, flexWrap: "wrap", rowGap: space.x2 },
+    titleRow: { flexDirection: "row", alignItems: "center", gap: space.x2, flexShrink: 1 },
     title: {
       color: colors.text,
       fontFamily: font.display,
@@ -307,5 +447,36 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
     groupHeader: { color: colors.textMuted, fontSize: font.caption, fontWeight: "500", paddingTop: space.x2 },
     empty: { alignItems: "center", paddingTop: space.x7 * 2 },
     emptyText: { color: colors.textMuted, fontSize: font.caption, textAlign: "center" },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "flex-end",
+    },
+    menuPanel: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 16,
+      paddingBottom: 28,
+      gap: 8,
+    },
+    menuTitle: { color: colors.text, fontSize: font.section, fontWeight: "600", marginBottom: 6 },
+    menuItem: {
+      backgroundColor: colors.surface2,
+      borderRadius: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+    },
+    menuItemPressed: { opacity: 0.7 },
+    menuItemText: { color: colors.text, fontSize: font.body, fontWeight: "500" },
+    renameInput: {
+      backgroundColor: colors.surface2,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      color: colors.text,
+      fontSize: font.body,
+      marginBottom: 4,
+    },
   });
 }

@@ -1,0 +1,100 @@
+{
+  "meta": {
+    "baselineVersion": "0.1.0-rc.5",
+    "recordedAt": "2026-08-20T00:00:00.000Z",
+    "describe": { "name": "dsh", "version": "0.1.0-rc.5" }
+  },
+  "unaryResponses": [
+    {
+      "method": "session.attachment",
+      "request": { "sessionId": "s1", "attachmentId": "att_1" },
+      "response": {
+        "ok": true,
+        "result": {
+          "attachment": {
+            "attachmentId": "att_1",
+            "mediaType": "image/png",
+            "bytes": 69,
+            "width": 1,
+            "height": 1,
+            "name": "pixel-blue.png"
+          },
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOwTPkHAAJ1AZxDAxl2AAAAAElFTkSuQmCC"
+        }
+      }
+    },
+    {
+      "method": "session.attachment",
+      "request": { "sessionId": "s1", "attachmentId": "att_2" },
+      "response": {
+        "ok": true,
+        "result": {
+          "attachment": {
+            "attachmentId": "att_2",
+            "mediaType": "image/png",
+            "bytes": 69,
+            "width": 1,
+            "height": 1,
+            "name": "pixel-green.png"
+          },
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGMQW+wFAAHWAQSeqOZrAAAAAElFTkSuQmCC"
+        }
+      }
+    },
+    {
+      "method": "session.attachment",
+      "request": { "sessionId": "s1", "attachmentId": "att_gif" },
+      "response": {
+        "ok": true,
+        "result": {
+          "attachment": {
+            "attachmentId": "att_gif",
+            "mediaType": "image/gif",
+            "bytes": 34,
+            "width": 1,
+            "height": 1,
+            "name": "pixel.gif"
+          },
+          "data": "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+        }
+      }
+    },
+    {
+      "method": "session.attachment",
+      "request": { "sessionId": "s1", "attachmentId": "att_jpeg" },
+      "response": {
+        "ok": true,
+        "result": {
+          "attachment": {
+            "attachmentId": "att_jpeg",
+            "mediaType": "image/jpeg",
+            "bytes": 160,
+            "width": 1,
+            "height": 1,
+            "name": "pixel.jpg"
+          },
+          "data": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q=="
+        }
+      }
+    },
+    {
+      "method": "session.attachment",
+      "request": { "sessionId": "s1", "attachmentId": "att_webp" },
+      "response": {
+        "ok": true,
+        "result": {
+          "attachment": {
+            "attachmentId": "att_webp",
+            "mediaType": "image/webp",
+            "bytes": 44,
+            "width": 1,
+            "height": 1,
+            "name": "pixel.webp"
+          },
+          "data": "UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAUAmJaQAA3AA/vuUAAA="
+        }
+      }
+    }
+  ],
+  "wsFrames": []
+}

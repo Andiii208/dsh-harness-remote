@@ -29,6 +29,40 @@
         "ok": true,
         "result": { "ok": true }
       }
+    },
+    {
+      "method": "settings.describe",
+      "response": {
+        "ok": true,
+        "result": {
+          "writable": true,
+          "hasDocument": true,
+          "namespaces": [
+            {
+              "ns": "permission",
+              "value": { "defaultPreset": "workspace-write" },
+              "revision": 1,
+              "applies": "live"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "method": "settings.mutate",
+      "response": { "ok": true, "result": { "ok": true } }
+    },
+    {
+      "method": "agentPreset.list",
+      "response": {
+        "ok": true,
+        "result": {
+          "presets": [
+            { "id": "preset-general", "name": "通用助手", "isDefault": true, "trust": "user" },
+            { "id": "preset-coding", "name": "编码专家", "isDefault": false, "trust": "user" }
+          ]
+        }
+      }
     }
   ],
   "wsFrames": []

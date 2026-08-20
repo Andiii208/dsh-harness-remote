@@ -29,6 +29,18 @@
     {
       "method": "session.interrupt",
       "response": { "ok": true, "result": { "interrupted": true } }
+    },
+    {
+      "method": "session.rename",
+      "response": { "ok": true, "result": { "renamed": true } }
+    },
+    {
+      "method": "session.fork",
+      "response": { "ok": true, "result": { "sessionId": "s1-fork" } }
+    },
+    {
+      "method": "workspace.archiveSession",
+      "response": { "ok": true, "result": { "archived": true } }
     }
   ],
   "wsFrames": [
@@ -44,6 +56,25 @@
       "stream": "mux",
       "frame": { "type": "session/projection", "sessionId": "s1", "title": "deploy checklist", "goal": { "status": "active", "objective": "deploy app" }, "tokenUsage": { "total": 12000 } }
     },
+      {
+        "stream": "mux",
+        "frame": {
+          "type": "session/event",
+          "sessionId": "s1",
+          "event": {
+            "type": "user/message",
+            "seq": 100,
+            "time": 1787000000000,
+            "data": {
+              "content": [
+                { "type": "text", "text": "看这两张图" },
+                { "type": "image", "mediaType": "image/png", "attachmentId": "att_1" },
+                { "type": "image", "mediaType": "image/png", "attachmentId": "att_2" }
+              ]
+            }
+          }
+        }
+      },
     {
       "stream": "mux",
       "frame": { "type": "session/event", "sessionId": "s1", "event": "interrupted" }

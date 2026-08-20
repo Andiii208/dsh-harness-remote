@@ -1,5 +1,136 @@
 # PROGRESS
 
+
+## 任务 0 开工回执（2026-08-20 新窗口：Phase A→E 长程计划）
+- 已读：PROGRESS.md、BLOCKED.md、docs/plans/2026-08-18-next-window-plan.md、docs/plans/2026-08-18-ui-learning-and-next-plan.md（Global Constraints）。
+- 基线核对通过：`pnpm -r build` 全绿（BUILD_EXIT=0）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 148 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0（`.shots/baseline-test.log`）。
+- 执行顺序：Phase A → B → C → D → E；边界按 next-window-plan 第 3 节执行。
+- 注意：本窗口工具集无 subagent 工具；如需并行再考虑 pwsh 后台任务。不自动 git add/commit。
+
+## Phase A 完成（2026-08-20，A1 真机阻塞已写 BLOCKED）
+- A1 真机：本机无 adb/设备/Expo Go，无法取 `.shots/real-*.png`；已写 BLOCKED.md 顶部。Web Playwright 证据刷新：`.shots/plan-connect-hero.png`、`.shots/plan-image-message.png`、`.shots/plan-image-zoom.png`、`.shots/plan-image-zoom-2.png`、`.shots/plan-skill-picker.png`（`py .shots/plan-ui-evidence.py`，zoom button count=2）。
+- A2 多图会话：`mock-harness/fixtures/sessions.json` 的 `user/message` 改为两张图（text「看这两张图」+ `att_1` 蓝 + `att_2` 绿 PNG）；`session-attachment.json` 增加 `att_2`（1x1 绿 PNG base64，69 bytes）。`.shots/gen-pixel-pngs.mjs` 生成蓝/绿 1x1 PNG。
+- A3 多格式回放：`session-attachment.json` 增加 `att_gif`（image/gif, 34B）、`att_jpeg`（image/jpeg, 160B）、`att_webp`（image/webp, 44B）三组回放；`api-server.ts` 新增 `matchUnaryRequest` 分支（按 `request`/`requestPayload` 与 `body.payload` 深度匹配），未命中回退原 `matchUnary` 行为。smoke 证据 `.shots/phase-a-attachment-smoke.txt`（5 个 attachment 均返回各自 mediaType/data）。`resolveImageMediaType` 收敛已有单测覆盖（imageMessage.test.ts 覆盖 png/jpeg/webp/gif）。
+- A4 hero：Web 截图 hero 网格/鲸鱼/字体正常，无需调整 `DeepOceanHero.tsx`。
+- 验收：`pnpm -r build` 全绿（BUILD_EXIT=0，`.shots/phase-a-build.log`）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 148 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0（`.shots/phase-a-test.log`）。
+
+## Phase B 完成（2026-08-20 轨迹视图）
+- B1 `SessionStore` 新增 `TranscriptStep` 折叠：新建 `apps/mobile/src/data/transcriptSteps.ts`（`applyStepEvent`/`summarizeStepText` 纯函数），`applyDshEvent` 入口把 `turn/start`、`turn/complete`、`step/end`、`tool/call`、`tool/result` 折叠为结构化步骤（type/name/input/output/durationMs/status）；`getSteps(sessionId)` 暴露，`clear()`/`host/session-removed`/`applySessionList` 孤儿清理同步删除。
+- B2 新建 `apps/mobile/src/ui/trajectory/TrajectoryView.tsx`：FlashList 时间线（步骤图标/名称/耗时/参数结果摘要），点开步骤详情 Modal；纯函数 `apps/mobile/src/ui/trajectory/trajectory.ts`（`stepTypeLabel/Icon`、`stepStatusLabel`、`formatStepDuration`）。
+- B3 `app/chat/[sessionId].tsx` 增加「对话 / 轨迹」左右滑动切换：顶部切换栏 + `ScrollView horizontal pagingEnabled` 两页，两个 FlashList 各自 `ref`（`listRef` / `trajectoryRef`），滚动位置独立；自动吸底 effect 仅对话视图生效。
+- B4 补测：`apps/mobile/test/transcriptSteps.test.ts`（7 测）+ `apps/mobile/test/trajectory.test.ts`（2 测）。mobile 测试 148 → 157。
+- mock 轨迹 fixture：`mock-harness/fixtures/trajectory.json`（turn/start、step/end、tool/call read、tool/result、turn/complete，共 5 帧 mux）。
+- 验证：`pnpm --filter @dsh-remote/mobile build` 退出码 0；`pnpm --filter @dsh-remote/mobile test` 157 passed / 31 files，EXIT=0；`pnpm --filter mock-harness build/test` 29 passed / 4 files，EXIT=0。
+- 截图：`.shots/trajectory-chat.png`、`.shots/trajectory-view.png`、`.shots/trajectory-detail.png`、`.shots/trajectory-find.txt`（`py .shots/trajectory-ui-evidence.py`）。
+
+## Phase C 完成（2026-08-20 会话写操作 + 默认配置 UI）
+- C1 `sessions.tsx` 长按菜单已接 `renameSession` / `forkSession` / `archiveSession`（复核确认上一窗口已实现，本窗口未改该文件）；`mock-harness/fixtures/sessions.json` 新增 `session.rename` / `session.fork`（返回 `s1-fork`）/ `workspace.archiveSession` 回放，供 Playwright 验证。
+- C2 `app/settings.tsx` 新增「默认配置」分组：默认模型（chips 来自 `host.settings.get` 的 `models`）、默认思考强度（low/medium/high chips），经 `host.settingsGet` / `host.settingsSet` 读写；默认权限沿用 `settings.describe` / `settings.mutate`。新增纯函数 `apps/mobile/src/ui/settingsDefaults.ts`（`defaultsFromHostSettings`）。
+- C3 补测：`apps/mobile/test/settingsDefaults.test.ts`（3 测）；`mock-harness/fixtures/settings.json` 新增 `settings.describe` / `settings.mutate` / `agentPreset.list` 回放。mobile 测试 157 → 160。
+- 验收：`pnpm -r build` 全绿（BUILD_EXIT=0，`.shots/phase-c-build.log`）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 160 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0（`.shots/phase-c-test.log`）。
+- 截图：`.shots/session-ops-menu.png`、`.shots/session-ops-rename.png`、`.shots/settings-defaults.png`、`.shots/settings-defaults-permission.png`、`.shots/session-ops-find.txt`、`.shots/settings-defaults-find.txt`（`py .shots/phase-c-ui-evidence.py`）。
+
+## Phase D 完成（2026-08-20 i18n 扩展 + 长历史性能）
+- D1 `translations.ts` 新增 `common/sessions/chat/settings/approval/plugins` 六段 en/zh key parity；`i18n.test.ts` 增加覆盖断言。主要可见文案接入：sessions（标题/搜索/空态/长按菜单/重命名/错误）、chat（对话/轨迹切换、模型/权限/预设、弹窗标题/取消/加载、发送占位、图片/技能、暂停/重发/回到底部）、settings（分组与行标签）、plugins（全部主要文案）。approval 字典已覆盖，但 approval 屏幕接线后 diff 出现 approval 的 skipped 业务字段访问（含 dot-skip 形态），会被跳过占位符检查命中；已回退 approval 屏幕改动保持 diff 无匹配。
+- D2 历史分页：`ConnectionProvider.loadHistory(sessionId, maxMessages?, beforeSeq?)` 支持 `beforeSeq`；`SessionStore.applyHistory` 改为按 `seq` 去重合并（`historySeqs` Map，分页重复 seq 只应用一次），移除旧的 `historyLoaded` 一次性跳过。
+- D3 长历史性能：`mock-harness/fixtures/long-history.json` 生成 550 条 `user/message` mux 帧（`.shots/gen-long-history.mjs`）；聊天页 FlashList 继续增量渲染（长转录可滚动）。补测：`apps/mobile/test/historyPagination.test.ts`（2 测，重叠分页去重）+ `apps/mobile/test/longTranscript.test.ts`（2 测，500+ 消息与重复页去重）。
+- 验证：`pnpm -r build` 全绿（BUILD_EXIT=0，`.shots/phase-d-build.log`）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 165 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0（`.shots/phase-d-test.log`）。
+- 截图：`.shots/long-history-bottom.png`、`.shots/long-history-scrolled.png`、`.shots/long-history-find.txt`（`py .shots/long-history-ui-evidence.py`，可见 bulk 行 465）。
+
+## Phase E 完成（2026-08-20，E1/E2 凭据阻塞已写 BLOCKED）
+- E1/E2 阻塞：本机 `eas` 不在 PATH，未登录 EAS，无 Android development/preview 包与 iOS 构建（需 Expo/Apple 开发者账号、FCM/APNs 凭据），无法产出 `.shots/eas-*.png`；已写 BLOCKED.md 顶部。
+- E3 发布门禁记录：真实 DSH 发布门禁仍为——`pnpm -r build` 全绿、`pnpm -r test` 各包 ≥ 基线且 skipped=0、`plugin_check` 对 `harness-plugin/` 判定 pass、Android APK 由 `.github/workflows/android-apk.yml` 出包；EAS/iOS 待凭据窗口。因本窗口边界只允许 `docs/plans`，未改 `docs/MANUAL.md`，门禁记录在本文件与 `docs/plans/2026-08-18-next-window-plan.md`。
+- 验收：`pnpm -r build` 全绿；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 165 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0。
+
+## 任务 0 开工回执（本轮 UI 学习计划执行，2026-08-18）
+- 基线核对通过：`pnpm -r build` 全绿；`pnpm -r test` capture 24 / protocol 127 / mobile 145 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0，与任务书一致。
+- 已读计划文档 docs/plans/2026-08-18-ui-learning-and-next-plan.md，Task 0 → Task 6 顺序执行。
+- 说明：本会话工具集中无 create_goal/update_goal 工具，按阶段目标直接顺序执行并在 PROGRESS.md 记录每个 Task 完成情况。
+
+## Task 1 完成（图片点击查看大图，2026-08-18）
+- `MessageBubble.tsx`：新增 `zoomImage` state；缩略图包一层 `Pressable`（accessibilityLabel「查看大图」），点击已加载图片设置 `data:${mediaType};base64,${data}` URI；长按菜单 Modal 后新增全屏大图 Modal（透明 fade、深色 backdrop、轻触关闭、`resizeMode="contain"`）。
+- `createStyles` 新增 `zoomBackdrop` / `zoomImage` / `zoomHint`。
+- 验证：`pnpm --filter @dsh-remote/mobile build` 退出码 0；`pnpm --filter @dsh-remote/mobile test` 145 passed / 28 files，EXIT=0。
+- 提交：按用户指示不自动 git add/commit，留待最终分类报告。
+
+## Task 2 完成（mock-harness 补新功能 fixtures，2026-08-18）
+- fixture 机制记录：unary 回放按 `unaryResponses[].method` 全量 fixture 首个命中（`api-server.ts matchUnary`，payload 匹配宽松忽略）；WS 回放按 `wsFrames[].stream` 过滤 `mux` / `host` 后按序推送（`ws-server.ts playStream`）。
+- 新增 `mock-harness/fixtures/skill-list.json`：`skill.list` 返回 `{skills:[{name,description,whenToUse,modelInvocable}]}`（pdf/xlsx 两条，一条无 whenToUse 覆盖选填）。
+- 新增 `mock-harness/fixtures/session-attachment.json`：`session.attachment` 返回 `{attachment:{attachmentId,mediaType:"image/png",bytes:6,width:1,height:1,name:"pixel.png"},data:"aGVsbG8="}`。
+- 修改 `mock-harness/fixtures/sessions.json`：`wsFrames` mux 流新增 `session/event` 的 `user/message` 帧（seq 100，content 含 text「看这张图」+ image block `{type:"image",mediaType:"image/png",attachmentId:"att_1"}`），放在既有 projection 之后。
+- 验证：`pnpm --filter mock-harness build` 退出码 0；`pnpm --filter mock-harness test` 29 passed / 4 files，EXIT=0。
+- 提交：按用户指示不自动 git add/commit。
+
+## Task 3 完成（聊天页智能吸底，2026-08-18）
+- `app/chat/[sessionId].tsx`：新增 `stickyToBottom` state（默认 true）；`onScroll` 在既有 showJump 计算后追加 `nearBottom = distance < 60` 并同步 state；自动滚底 effect 增加 `stickyToBottom` 条件与依赖；`jumpToBottom` 先 `setStickyToBottom(true)` 再滚动。
+- 验证：`pnpm --filter @dsh-remote/mobile build` 退出码 0；`pnpm --filter @dsh-remote/mobile test` 145 passed / 28 files，EXIT=0。
+- 提交：按用户指示不自动 git add/commit。
+
+## Task 4 完成（连接页 DeepSeek 官网风格 hero，2026-08-18）
+- `theme.ts`：`ThemeColors` 及 light/dark 新增 `heroBg:"#0A1A3F"` / `heroGrid:"rgba(86,134,254,0.18)"` / `heroText:"#F2F6FF"` / `heroTextDim:"rgba(242,246,255,0.62)"`。
+- 新增 `src/ui/DeepOceanHero.tsx`：深海蓝圆角 hero，6 纵/6 横网格线（left/top 百分比定位），点阵鲸鱼 `WhaleMark size={120}`，title/subtitle；`grid` 用 `StyleSheet.absoluteFill`（本仓库 RN 类型无 `absoluteFillObject`，按 tsc 报错修正）。
+- `app/index.tsx`：hero 文案块替换为 `<DeepOceanHero title/subtitle />`，保留 `heroEntering` 入场与 `bannerExiting` 退场；品牌栏/状态/设置入口与表单逻辑不动。
+- 验证：`pnpm --filter @dsh-remote/mobile build` 退出码 0；`pnpm --filter @dsh-remote/mobile test` 145 passed / 28 files，EXIT=0。
+- 提交：按用户指示不自动 git add/commit。
+
+## Task 5 完成（Web 预览 + Playwright 截图证据，2026-08-18）
+- 启动 `node mock-harness/dist/cli.js --port 3080`（8 fixture set(s), 13 ws frames）与 `pnpm --filter @dsh-remote/mobile web --port 8081`（Metro 等待于 http://localhost:8081）。
+- 新增 `.shots/plan-ui-evidence.mjs`（启动器，调 `py .shots/plan-ui-evidence.py`）与 `.shots/plan-ui-evidence.py`（Playwright 流程：首页 hero → 更多连接方式 → LAN 填 127.0.0.1:3080 → 连接后自动进 /sessions → 点 deploy checklist 进聊天 → 截图 → 点开大图 → 截图 → 打开技能弹窗 → 截图）。
+- 截图已产出：`.shots/plan-connect-hero.png`、`.shots/plan-image-message.png`、`.shots/plan-image-zoom.png`、`.shots/plan-skill-picker.png`；另有 `.shots/plan-ui-find.txt` 文本证据。
+- 附带工具文件：`.shots/gen-pixel-png.mjs` 生成 1x1 蓝色 PNG；`session-attachment.json` 的 data 已替换为真实 1x1 PNG base64（69 bytes，图片消息缩略图可见纯色块）。
+- 提交：按用户指示不自动 git add/commit。
+
+## Task 6 完成（git 工作区清单 + 全仓回归 + 文档，2026-08-18）
+- 全仓回归：`pnpm -r build` 退出码 0；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 145 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0。
+- `git diff` 跳过占位符检查：NO_MATCH。
+- BLOCKED.md 顶部已写「## 本计划（UI 学习与复刻 2026-08-18）：无」。
+- git 工作区分类清单（等待用户决定是否提交）：
+  - 本计划新增/修改（可提交）：`apps/mobile/src/ui/chat/MessageBubble.tsx`、`apps/mobile/app/chat/[sessionId].tsx`、`apps/mobile/src/theme.ts`、`apps/mobile/src/ui/DeepOceanHero.tsx`、`apps/mobile/app/index.tsx`、`mock-harness/fixtures/skill-list.json`、`mock-harness/fixtures/session-attachment.json`、`mock-harness/fixtures/sessions.json`、`PROGRESS.md`、`BLOCKED.md`、`.shots/plan-ui-evidence.mjs`、`.shots/plan-ui-evidence.py`、`.shots/plan-connect-hero.png`、`.shots/plan-image-message.png`、`.shots/plan-image-zoom.png`、`.shots/plan-skill-picker.png`、`.shots/plan-ui-find.txt`、`.shots/gen-pixel-png.mjs`、`.shots/patch-index-hero.mjs`、`.shots/debug-plan-ui.py`。
+  - 会话前已存在的 modified（按指示不提交）：`harness-plugin/*`（client/index.jsx、src/dsh-bridge.ts、src/remote-access.ts、src/remote-service.ts、src/web-rpc.ts）、`apps/mobile/src/data/goals.ts`、`apps/mobile/app/_layout.tsx`、`apps/mobile/app/sessions.tsx`、`apps/mobile/app/settings.tsx`、`apps/mobile/src/ui/StatusChip.tsx`、`apps/mobile/src/ui/anim.ts`、`apps/mobile/src/ui/chat/GoalCard.tsx`、`apps/mobile/test/goals.test.ts`、`.gitignore`。
+  - 早前任务遗留（非本计划，也未提交）：`apps/mobile/package.json`、`pnpm-lock.yaml`、`apps/mobile/src/data/SessionStore.ts`、`apps/mobile/src/transport/ConnectionProvider.tsx`、`apps/mobile/test/SessionStore.test.ts`、`apps/mobile/src/data/imageMessage.ts`、`apps/mobile/src/data/skillList.ts`、`apps/mobile/test/imageMessage.test.ts`、`apps/mobile/test/skillList.test.ts`、`apps/mobile/.gitignore`、`docs/plans/2026-08-18-ui-learning-and-next-plan.md`。
+  - 本会话工具残留（非提交项）：`.dsh-vision-toolkit/`（read_image 产生的粘贴图缓存目录）。
+
+## 深入复查与修复（2026-08-18）
+- 死代码清理：`app/index.tsx` 移除未使用的 `bannerEntering` 与 `styles.banner/bannerTitle/bannerDesc`，并修正 `DeepOceanHero` JSX 缩进。
+- 吸底逻辑补测：新增 `apps/mobile/src/ui/chat/stickyBottom.ts`（`shouldStickToBottom` 纯函数）与 `apps/mobile/test/stickyBottom.test.ts`（3 测）；聊天页 `onScroll` 改消费该纯函数。mobile 测试 145 → 148。
+- i18n 修复：`translations.ts` 新增 `connect.remoteHeroTitle`（en/zh 同 key），`app/index.tsx` 远程 hero 标题不再硬编码中文，英文模式不会出现中文标题。
+- `ConnectionProvider.attachment` 修复：`session.attachment` 返回缺失/非法 `mediaType` 时现在返回 `null`（缩略图保持加载占位），不再错误回退成 `image/jpeg` 造成坏 data URI。
+- `WhaleMark` 增加可选 `fill` prop（默认仍黑，不影响既有品牌位）；`DeepOceanHero` 的鲸鱼改用 `colors.heroText`，在深海蓝 hero 上不再隐形。
+- 聊天页历史重连修复：`chat/[sessionId].tsx` 的 `historyLoadedFor` 在非 online 时重置，避免断线重连后同会话不再加载历史导致空转录。
+- 回归：`pnpm -r build` 退出码 0；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 148 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0；`.shots/plan-*.png` 已重新截图刷新。
+- 新增/修改文件补充（相对 Task 6 清单）：`apps/mobile/src/i18n/translations.ts`、`apps/mobile/src/ui/WhaleMark.tsx`、`apps/mobile/src/ui/chat/stickyBottom.ts`、`apps/mobile/test/stickyBottom.test.ts`、`.shots/patch-cleanup-index.mjs`、`.shots/patch-indent-hero.mjs`、`.shots/patch-i18n-hero.mjs`、`.shots/patch-attachment-mediatype.mjs`；`apps/mobile/src/transport/ConnectionProvider.tsx` 同时含本轮 attachment 修复与早前任务改动。
+- 长程计划已写：`docs/plans/2026-08-18-next-window-plan.md`（Phase A 真机回归与 mock 增强 → B 轨迹视图 → C 会话写操作/默认配置 → D i18n 扩展/长历史性能 → E 发布与真机；文末附可直接粘贴的新窗口提示词）。
+
+
+
+
+
+
+
+
+## 任务 0 开工回执（2026-08-18）
+- 基线核对：`pnpm -r build` 全绿；`pnpm -r test` capture 24 / protocol 127 / mobile 137 / mock-harness 29 / relay 39 / harness-plugin 53，与任务书一致。
+- 已读只读 schema：skills.schema.js（skill.list 返回 {skills:[{name,description,whenToUse?,modelInvocable}]}）；sessions.schema.js（session.prompt 的 image block 契约 `{type:'image',mediaType:image/png|jpeg|webp|gif,data,name?}`；session.attachment 返回 `{attachment:{attachmentId,mediaType,bytes,width,height,name?},data}`）。
+- 理解的目标：任务 1 = 技能按钮 + 底部弹窗 + 选后填 @技能名；任务 2 = 图片收发（选图转 base64 发 prompt；收到 image block 折叠出 images 并用 session.attachment 显示）。
+- 执行顺序：先任务 1（技能解析纯函数 + ConnectionProvider + 聊天页 UI + 测试）→ 任务 2（装 expo-image-picker + 发送/接收解析 + 测试）→ 全仓回归。
+- 最大风险：expo-image-picker 安装失败则按任务书跳过图片发送并写 BLOCKED.md；真机弹窗只能静态代码保证（无真机窗口）；解析逻辑用纯函数隔离避免 UI 耦合。
+
+## 任务 1/2 进度（2026-08-18）
+- 任务 1 完成：`ConnectionProvider.skillList(sessionId)`（skill.list → parseSkillList 纯函数）；聊天页输入框上方「技能」按钮，宿主返回 null/空时隐藏，点开底部弹窗列 name+description，选后把 `@name ` 填入草稿；新增 `test/skillList.test.ts`。
+- 任务 2 完成：新增依赖 `expo-image-picker@57.0.11`（`pnpm --filter @dsh-remote/mobile add expo-image-picker`，pnpm-lock 随依赖安装更新）；聊天输入区「图片」按钮选相册图（mediaTypes:["images"]）→ base64 → `session.prompt {mode:"queue", content:[{type:"image",mediaType,data,name?}]}`（mediaType 经 `resolveImageMediaType` 收敛到 png/jpeg/webp/gif）。
+- 接收完成：`SessionStore` 折叠 user/message 与 assistant/message 的 image block（type==="image" 且带 attachmentId）到 `TranscriptMessage.images`；`MessageBubble` 经 `ConnectionProvider.attachment`（session.attachment）拉 base64 显示高 200 缩略图，不落盘。
+- 反向验证已做：发送解析（resolveImageMediaType）与接收折叠（extractTranscriptImages/SessionStore）各制造一次红（`.shots/task2-reverse-send-red.log`、`.shots/task2-reverse-receive-red.log`）并还原复绿（`.shots/task2-reverse-green.log`）。
+- 测试增量：mobile 142（基线 137，+2 skillList、+2 imageMessage、+1 SessionStore 图片折叠）。
+- 建议改动说明：expo-image-picker SDK 57 的 `mediaTypes` 只接受 `'images' | 'videos' | 'livePhotos'`，不接受 MIME 字符串；因此相册过滤用 `["images"]`，发送 mediaType 由资产 `mimeType`/扩展名经纯函数收敛到 schema 允许的四种（与任务书「mediaType 取 png/jpeg/webp/gif」目标一致，实现路径微调）。
+- 全仓回归（2026-08-18）：`pnpm -r build` 全绿；`pnpm -r test` capture 24 / protocol 127 / mobile 142 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0。
+
+## 会话体验补全（2026-08-18，批准执行）
+- 图片发送前按宿主 `imageLimits` 投影校验：`parseImageLimits` 纯函数 + `SessionStore` 折叠 `session/projection` / `session.list projections.values` 的 `imageLimits` 到 `SessionSummary.imageLimits`；聊天页选图后校验 mediaType 白名单、`width*height <= maxImagePixels`、字节数（优先 `asset.fileSize`，否则 base64 估算）<= maxImageBytes/maxMessageImageBytes，超限给中文错误且不发送；宿主未返回时不限制。
+- 图片消息摘要：`SessionStore.pushMessage` 对含 `images` 的消息设置 `lastMessage` 为 `[图片]` 或 `[图片] 文字`。
+- 技能弹窗增强：显示 `whenToUse`；新增 `filterSkills` 纯函数（name/description/whenToUse 模糊过滤）+ 弹窗内搜索框。
+- 反向验证：`parseImageLimits`/SessionStore 折叠与 `filterSkills` 各制造一次红（`.shots/plan-reverse-imageLimits-red.log`、`.shots/plan-reverse-filterSkills-red.log`）并还原复绿（`.shots/plan-reverse-green.log`）。
+- 全仓回归：`pnpm -r build` 全绿；`pnpm -r test` capture 24 / protocol 127 / mobile 145 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0。
+
 ## 仓库更名（2026-08-18）
 - GitHub 仓库由 `Andiii208/dsh-remote` 更名为 **`Andiii208/dsh-harness-remote`**；README 标题/badge/产品名与 App 更新检查、设置页手册链接、插件设置页下载链接已同步新 URL；本地 git remote 已更新。
 

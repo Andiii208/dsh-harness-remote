@@ -48,6 +48,44 @@ function matchUnary(fixtures: FixtureSet[], method: string): UnaryFixture | unde
   return undefined;
 }
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** Deep-equal for JSON payload matcher (lenient fixture request specs). */
+function jsonEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((v, i) => jsonEqual(v, b[i]));
+  }
+  if (isRecord(a) && isRecord(b)) {
+    const ka = Object.keys(a);
+    const kb = Object.keys(b);
+    if (ka.length !== kb.length) return false;
+    return ka.every((k) => jsonEqual(a[k], b[k]));
+  }
+  return false;
+}
+
+/** New playback branch: prefer a fixture whose `request`/`requestPayload` matches the envelope payload. */
+function matchUnaryRequest(
+  fixtures: FixtureSet[],
+  method: string,
+  payload: unknown,
+): UnaryFixture | undefined {
+  if (!isRecord(payload)) return undefined;
+  for (const f of fixtures) {
+    for (const u of f.unaryResponses) {
+      if (u.method !== method) continue;
+      const spec = (u as { request?: unknown }).request ?? (u as { requestPayload?: unknown }).requestPayload;
+      if (!isRecord(spec)) continue;
+      const matches = Object.entries(spec).every(([k, v]) => jsonEqual(payload[k], v));
+      if (matches) return u;
+    }
+  }
+  return undefined;
+}
+
 export interface ApiRequest {
   rpcId?: string;
   method?: string;
@@ -159,7 +197,7 @@ export function createApiHandler(
 
     // /api/<method> or typert /api/<namespace>/<method>.
     const method = path.slice("/api/".length);
-    const fixture = matchUnary(fixtures, method);
+    const fixture = matchUnaryRequest(fixtures, method, body.payload) ?? matchUnary(fixtures, method);
     if (!fixture) {
       sendJson(res, {
         rpcId,

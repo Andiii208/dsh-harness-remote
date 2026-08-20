@@ -1,0 +1,60 @@
+{
+  "meta": {
+    "baselineVersion": "0.1.0-rc.5",
+    "recordedAt": "2026-08-20T00:00:00.000Z",
+    "describe": { "name": "dsh", "version": "0.1.0-rc.5" }
+  },
+  "unaryResponses": [],
+  "wsFrames": [
+    {
+      "stream": "mux",
+      "frame": {
+        "type": "session/event",
+        "sessionId": "s1",
+        "event": { "type": "turn/start", "seq": 200, "time": 1787000100000 }
+      }
+    },
+    {
+      "stream": "mux",
+      "frame": {
+        "type": "session/event",
+        "sessionId": "s1",
+        "event": { "type": "step/end", "seq": 201, "time": 1787000100500 }
+      }
+    },
+    {
+      "stream": "mux",
+      "frame": {
+        "type": "session/event",
+        "sessionId": "s1",
+        "event": {
+          "type": "tool/call",
+          "seq": 202,
+          "time": 1787000101000,
+          "data": { "name": "read", "callId": "call-1", "arguments": { "path": "README.md" } }
+        }
+      }
+    },
+    {
+      "stream": "mux",
+      "frame": {
+        "type": "session/event",
+        "sessionId": "s1",
+        "event": {
+          "type": "tool/result",
+          "seq": 203,
+          "time": 1787000101800,
+          "data": { "name": "read", "callId": "call-1", "message": { "content": [{ "type": "text", "text": "# Harness Remote" }] } }
+        }
+      }
+    },
+    {
+      "stream": "mux",
+      "frame": {
+        "type": "session/event",
+        "sessionId": "s1",
+        "event": { "type": "turn/complete", "seq": 204, "time": 1787000102000 }
+      }
+    }
+  ]
+}
