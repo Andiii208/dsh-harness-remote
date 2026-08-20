@@ -20,10 +20,6 @@ export interface ThemeColors {
   separator: string;
   /** v8 别名：Board = separator（1px 分隔线/描边）。 */
   board: string;
-  /** 玻璃拟态卡片背景（半透明，叠加在 bg 上模拟磨砂）。 */
-  glass: string;
-  /** 玻璃卡片 1px 描边。 */
-  glassBorder: string;
   /** DeepSeek 官网 hero 深海蓝背景。 */
   heroBg: string;
   /** DeepSeek 官网 hero 网格线颜色。 */
@@ -68,8 +64,6 @@ const light: ThemeColors = {
   chip: "#F2F2F6",
   separator: "rgba(20,20,40,0.08)",
   board: "rgba(20,20,40,0.08)",
-  glass: "rgba(255,255,255,0.72)",
-  glassBorder: "rgba(20,20,40,0.06)",
   heroBg: "#0A1A3F",       // 深色：深海蓝；浅色同样深蓝（官网 hero 在浅色模式也常用深蓝）
   heroGrid: "rgba(86,134,254,0.18)",
   heroText: "#F2F6FF",
@@ -100,8 +94,6 @@ const dark: ThemeColors = {
   chip: "#1D1D24",
   separator: "rgba(255,255,255,0.07)",
   board: "rgba(255,255,255,0.07)",
-  glass: "rgba(20,20,28,0.72)",
-  glassBorder: "rgba(255,255,255,0.08)",
   heroBg: "#0A1A3F",       // 深色：深海蓝；浅色同样深蓝（官网 hero 在浅色模式也常用深蓝）
   heroGrid: "rgba(86,134,254,0.18)",
   heroText: "#F2F6FF",

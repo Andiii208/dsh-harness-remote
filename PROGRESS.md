@@ -1,13 +1,12 @@
 # PROGRESS
 
-## 2026-08-20 UI 精致度提升：流动深海背景 + 全局玻璃质感（进行中，待 APK 复验）
-- 方向确认：连接页 hero 保持深海蓝流动背景（浅/深色一致）；全局卡片/输入框/按钮加玻璃拟态层次（不新增依赖）。
-- 新增 `apps/mobile/src/ui/FlowingOcean.tsx`：SVG 径向渐变极光光晕（heroAuroraA/B/C）+ 鲸鱼呼吸辉光 + 星点闪烁，全部 Reanimated `useAnimatedProps` 驱动，尊重「减弱动态」（静态渲染）。
-- `DeepOceanHero.tsx` 接入 FlowingOcean，minHeight 240 + 1px 蓝色描边；`theme.ts` 新增 `glass/glassBorder/heroAuroraA/heroAuroraB/heroAuroraC/heroGlow` 令牌（浅/深色）。
-- 玻璃质感落地：`Field` 输入框改 `glass` 底 + 常驻 1px 描边 + 聚焦蓝光；`Button` ghost/danger 改玻璃底 + 描边，primary 加蓝色投影；`index.tsx` 连接卡/电脑端帮助卡/历史列表卡改玻璃底 + 描边 + 投影。
-- Web 验证：`.shots/ui-flow-evidence.py`（Playwright）截图 `.shots/ui-flow-home.png`、`.shots/ui-flow-sessions.png`，文案证据 `.shots/ui-flow-find.txt`。
-- 回归：`pnpm -r build` 全绿（BUILD_EXIT=0，`.shots/ui-flow-build.log`）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 165 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0（`.shots/ui-flow-test.log`）。
-- 待办：提交推送 → 重新出 APK → 模拟器验证新 UI 不闪退并截图。
+## 2026-08-20 UI 调整：保留 hero 流动深海背景，玻璃质感已回退
+- 用户反馈：玻璃质感与参考风格不符、显得廉价，要求回退。
+- 保留：`FlowingOcean.tsx`（深海流动光晕 + 呼吸辉光 + 星点）与 `DeepOceanHero` 接入；`theme.ts` 的 heroAurora/heroGlow 令牌。
+- 已回退：`glass/glassBorder` 主题令牌；`Field`/`Button`/`index.tsx` 卡片全部恢复为原有 `surface`/`surface2` 实底样式；`DeepOceanHero` 恢复原 minHeight/无描边。
+- Web 证据（回退后）：`.shots/ui-flow-home.png`、`.shots/ui-flow-sessions.png`。
+- 回归：`pnpm --filter @dsh-remote/mobile build/test` 通过（mobile 165）。
+- 待办：全仓回归 → 提交推送 → 重新出 APK → 模拟器验证。
 
 ## 2026-08-20 APK 真机闪退排查（已修复并验证）
 - 复现：本机模拟器 lovebuddy_api36 安装 v0.3.0 `app-release.apk` 成功，`am start` 后约 2s 内闪退；包名 `dev.dshremote.mobile`。

@@ -39,23 +39,17 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     wrap: { gap: 8 },
     input: {
       height: 46,
-      backgroundColor: colors.glass,
+      backgroundColor: colors.surface,
       borderRadius: radius.control,
       color: colors.text,
       paddingHorizontal: 16,
       paddingVertical: 0,
       fontSize: font.body,
-      borderWidth: 1,
-      borderColor: colors.glassBorder,
     },
     monoInput: { fontFamily: font.mono, fontSize: font.transcript },
     focused: {
+      borderWidth: 1,
       borderColor: colors.accent,
-      shadowColor: colors.accent,
-      shadowOpacity: 0.18,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 2,
     },
   });
 }
