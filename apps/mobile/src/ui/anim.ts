@@ -28,7 +28,7 @@ export const MOTION = {
   easing: EASE_OUT,
 } as const;
 
-function useReduceMotion(): boolean {
+export function useReduceMotion(): boolean {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
     let alive = true;

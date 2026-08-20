@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../theme-context";
 import { font, space } from "../theme";
 import { WhaleMark } from "./WhaleMark";
+import { FlowingOcean } from "./FlowingOcean";
 
 export function DeepOceanHero({ title, subtitle }: { title: string; subtitle?: string }) {
   const { colors } = useTheme();
@@ -10,6 +11,7 @@ export function DeepOceanHero({ title, subtitle }: { title: string; subtitle?: s
   const gridLines = Array.from({ length: 6 }, (_, i) => i);
   return (
     <View style={styles.hero}>
+      <FlowingOcean />
       <View style={styles.grid} pointerEvents="none">
         {gridLines.map((i) => (
           <View key={`v${i}`} style={[styles.gridV, { left: `${(i + 1) * 14}%` }]} />
@@ -35,8 +37,10 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       padding: space.x6,
       alignItems: "center",
       overflow: "hidden",
-      minHeight: 220,
+      minHeight: 240,
       justifyContent: "center",
+      borderWidth: 1,
+      borderColor: "rgba(86,134,254,0.25)",
     },
     grid: { ...StyleSheet.absoluteFill },
     gridV: { position: "absolute", top: 0, bottom: 0, width: 1, backgroundColor: colors.heroGrid },
