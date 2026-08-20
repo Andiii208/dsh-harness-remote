@@ -1,5 +1,14 @@
 # PROGRESS
 
+## 2026-08-20 Hero 方向调整：点阵鲸鱼 + 官网官方版（已选定，待出包验证）
+- 从官网 HTML 提取关键视觉：深色 hero、底部模糊径向光斑、网格、渐变描边徽章、canvas 粒子；我们对应补上「点阵鲸鱼 + 徽章 + 流动光晕」。
+- 新增 `apps/mobile/src/ui/DotWhaleMark.tsx`：SVG Pattern + Mask 生成官方点阵鲸鱼（不新增依赖）。
+- `DeepOceanHero.tsx` 增加 `variant`：`official`（默认，点阵鲸鱼 + `DEEPSEEK HARNESS · REMOTE` 徽章 + 网格）、`clarklevis`（点阵鲸鱼 + 底部涟漪弧线）、`minimal`（点阵鲸鱼 + 弱网格）。`index.tsx` 默认走 official。
+- 用户已选择 **A · official**；临时预览路由已删除。
+- 截图：`.shots/hero-variant-official.png`、`.shots/hero-variant-clarklevis.png`、`.shots/hero-variant-minimal.png`、`.shots/hero-variants-full.png`。
+- 回归：mobile build/test 通过（165）；全仓 build/test 见 `.shots/hero-official-build.log` / `.shots/hero-official-test.log`。
+- 待办：提交推送 → 重新出 APK → 模拟器验证。
+
 ## 2026-08-20 UI 调整：保留 hero 流动深海背景，玻璃质感已回退（已完成并验证）
 - 用户反馈：玻璃质感与参考风格不符、显得廉价，要求回退。
 - 保留：`FlowingOcean.tsx`（深海流动光晕 + 呼吸辉光 + 星点）与 `DeepOceanHero` 接入；`theme.ts` 的 heroAurora/heroGlow 令牌。
