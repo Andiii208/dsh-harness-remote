@@ -37,7 +37,7 @@ export interface RemoteStatus {
 }
 
 export interface RemoteAccessService {
-  start(mode?: RemoteAccessMode): Promise<RemoteStatus>;
+  start(mode?: RemoteAccessMode, dshBaseUrl?: string): Promise<RemoteStatus>;
   stop(): Promise<RemoteStatus>;
   status(): RemoteStatus;
 }
@@ -75,13 +75,39 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
   let handle: RemoteAccessHandle | null = null;
   let status: RemoteStatus = { ...EMPTY_STATUS };
   let startPromise: Promise<RemoteStatus> | null = null;
+  let dshRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
   const pushLog = (line: string): void => {
     status = { ...status, lastLogs: [...status.lastLogs.slice(-9), line] };
     options.onStatus?.(line);
   };
 
-  async function start(mode: RemoteAccessMode = "tunnel"): Promise<RemoteStatus> {
+  /** 定期重试 DSH API 探测（启动时未检测到 DSH 时的后备机制）。 */
+  const scheduleDshRetry = () => {
+    if (dshRetryTimer) clearTimeout(dshRetryTimer);
+    dshRetryTimer = setTimeout(async () => {
+      if (!handle) return;
+      // 如果已有明确 baseUrl 或已检测到，跳过
+      if (status.dshDetected || status.dshUrl) return;
+      try {
+        const { detectDshApiUrl } = await import("./dsh-bridge.js");
+        const baseUrl = await detectDshApiUrl(undefined, pushLog);
+        if (baseUrl && handle) {
+          pushLog(`延迟检测到 DSH API：${baseUrl}，正在建立桥接…`);
+          await handle.attachDsh(baseUrl);
+          status = { ...status, dshUrl: baseUrl, dshDetected: true };
+          pushLog(`已建立 DSH 桥接：${baseUrl}`);
+        } else {
+          // 仍未检测到，继续重试
+          scheduleDshRetry();
+        }
+      } catch {
+        scheduleDshRetry();
+      }
+    }, 5000);
+  };
+
+  async function start(mode: RemoteAccessMode = "tunnel", dshBaseUrl?: string): Promise<RemoteStatus> {
     if (startPromise) return startPromise;
     // 幂等：已按同模式运行则直接返回当前状态。
     if (status.running && status.mode === mode) return status;
@@ -96,6 +122,7 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
       try {
         const h = await startImpl({
           mode,
+          dshBaseUrl: dshBaseUrl ?? null,
           autoDetectDsh: options.autoDetectDsh ?? true,
           onStatus: pushLog,
           onPaired: (info) => {
@@ -119,6 +146,10 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
           dshDetected: h.dshUrl !== null,
           error: null,
         };
+        // 如果未检测到 DSH API，启动定期重试
+        if (!h.dshUrl && !dshBaseUrl) {
+          scheduleDshRetry();
+        }
         return status;
       } catch (err) {
         status = {
@@ -145,12 +176,16 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
   }
 
   async function stop(): Promise<RemoteStatus> {
+    if (dshRetryTimer) {
+      clearTimeout(dshRetryTimer);
+      dshRetryTimer = null;
+    }
     if (handle) {
       const h = handle;
       handle = null;
       await h.stop().catch(() => {});
     }
-    status = { ...status, running: false, starting: false, code: null, qrPayload: null, qrDataUrl: null, pairedDeviceId: null };
+    status = { ...status, running: false, starting: false, code: null, qrPayload: null, qrDataUrl: null, pairedDeviceId: null, dshUrl: null, dshDetected: false };
     return status;
   }
 

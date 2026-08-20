@@ -121,7 +121,9 @@ function RemoteSettingsTab({ rpcCall }) {
     setBusy(true);
     setError(null);
     try {
-      const s = await call(REMOTE_RPC_ENDPOINTS.start, { mode });
+      // 把 DSH Web 的 origin 传给插件，解决 DSH_WEB_URL 环境变量未设置时探测失败的问题
+      const dshBaseUrl = window.location.origin;
+      const s = await call(REMOTE_RPC_ENDPOINTS.start, { mode, dshBaseUrl });
       setStatus(s);
     } catch (err) {
       setError(err?.message ?? '开启失败');

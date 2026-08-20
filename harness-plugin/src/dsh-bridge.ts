@@ -92,6 +92,7 @@ export class DshBridge {
   private readonly onStatus?: (line: string) => void;
   private readonly onError?: (err: unknown) => void;
   private readonly sockets = new Set<WebSocket>();
+  private readonly reconnectTimers = new Set<ReturnType<typeof setTimeout>>();
   private unsubscribeRelay: (() => void) | null = null;
   private stopped = false;
   private readonly baseUrlValue: string;
@@ -126,6 +127,10 @@ export class DshBridge {
 
   stop(): void {
     this.stopped = true;
+    for (const timer of this.reconnectTimers) {
+      clearTimeout(timer);
+    }
+    this.reconnectTimers.clear();
     for (const socket of this.sockets) {
       try {
         socket.close();
@@ -225,11 +230,22 @@ export class DshBridge {
       this.handleWsMessage(ev.data);
     };
     socket.onerror = () => {
-      this.onStatus?.(`DSH 事件流出错（${path}）`);
+      this.onStatus?.(`DSH 事件流出错（${path}）——将在 5 秒后重连`);
     };
     socket.onclose = () => {
       this.sockets.delete(socket);
       this.onStatus?.(`DSH 事件流已断开（${path}）`);
+      // 自动重连，5 秒后尝试重新订阅
+      if (!this.stopped) {
+        const timer = setTimeout(() => {
+          this.reconnectTimers.delete(timer);
+          if (!this.stopped) {
+            this.onStatus?.(`正在重连 DSH 事件流（${path}）…`);
+            this.streamWs(path);
+          }
+        }, 5000);
+        this.reconnectTimers.add(timer);
+      }
     };
   }
 

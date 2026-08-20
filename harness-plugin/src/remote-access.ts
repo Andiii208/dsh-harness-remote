@@ -26,7 +26,7 @@ export interface RemoteAccessOptions {
   port?: number;
   /** 配对成功回调（宿主面板可弹提示）。 */
   onPaired?: (info: { deviceId: string }) => void;
-  /** 显式指定 DSH API baseUrl（如 http://127.0.0.1:56734）。 */
+  /** 显式指定 DSH API baseUrl（如 http://127.0.0.1:56734）。如果提供则跳过自动探测。 */
   dshBaseUrl?: string | null;
   /** 未显式指定 baseUrl 时，是否自动探测 DSH_WEB_URL / 默认端口。CLI 默认开启。 */
   autoDetectDsh?: boolean;
@@ -61,6 +61,8 @@ export interface RemoteAccessHandle {
   publicUrl: string | null;
   /** 关闭远程访问并释放 tunnel/relay/console/DSH 桥接资源。 */
   stop(): Promise<void>;
+  /** 延迟检测到 DSH API 后动态挂载桥接。 */
+  attachDsh(baseUrl: string): Promise<void>;
 }
 
 /** 选取一个适合手机访问的局域网 IPv4 地址（与 CLI 同策略）。 */
@@ -154,7 +156,10 @@ export async function startRemoteAccess(
     const qrPayload = buildRemotePairPayload({ addr: url, code, ...(mode === "lan" ? { port } : {}) });
 
     // DSH API 桥接：显式 baseUrl 优先；否则按选项自动探测。
-    const baseUrl = opts.dshBaseUrl ?? (opts.autoDetectDsh ? await detectDshApiUrl(undefined, opts.onStatus) : null);
+    // 如果有显式 baseUrl，直接用；跳过自动探测。
+    const baseUrl = opts.dshBaseUrl !== undefined && opts.dshBaseUrl !== null
+      ? opts.dshBaseUrl
+      : (opts.autoDetectDsh ? await detectDshApiUrl(undefined, opts.onStatus) : null);
     if (baseUrl) {
       bridge = new DshBridge({
         baseUrl,
@@ -168,7 +173,7 @@ export async function startRemoteAccess(
       opts.onStatus?.("未检测到 DSH API：会话列表将为空，手机端只能连接但看不到会话。");
     }
 
-    return {
+    const handle: RemoteAccessHandle = {
       host,
       port,
       url,
@@ -189,7 +194,22 @@ export async function startRemoteAccess(
         }
         await relay.stop();
       },
+      attachDsh: async (newBaseUrl: string) => {
+        if (bridge) return;
+        const normalized = newBaseUrl.replace(/\/+$/, "");
+        bridge = new DshBridge({
+          baseUrl: normalized,
+          relay: client,
+          getPeerId: () => peerId,
+          onStatus: opts.onStatus,
+          onError: (err) => opts.onStatus?.(`DSH 桥接错误：${err instanceof Error ? err.message : String(err)}`),
+        });
+        await bridge.start();
+        handle.dshUrl = normalized;
+        opts.onStatus?.(`已建立 DSH 桥接：${normalized}`);
+      },
     };
+    return handle;
   } catch (err) {
     bridge?.stop();
     client.close();

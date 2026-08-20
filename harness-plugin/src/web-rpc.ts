@@ -55,7 +55,12 @@ export function installRemoteRpc(ctx: RemoteRpcContext, service: RemoteAccessSer
             return ok(service.status());
           case REMOTE_RPC_ENDPOINTS.start: {
             const mode = payload?.mode === "lan" ? "lan" : "tunnel";
-            return ok(await service.start(mode));
+            // 允许客户端传递 DSH Web 的 base URL（如 http://127.0.0.1:54603），
+            // 避免环境变量 DSH_WEB_URL 未设置时探测失败。
+            // 只接受有效的 http(s) URL；否则回退到自动探测。
+            const rawBaseUrl = typeof payload?.dshBaseUrl === "string" ? payload.dshBaseUrl.trim() : "";
+            const dshBaseUrl = /^https?:\/\//i.test(rawBaseUrl) ? rawBaseUrl : undefined;
+            return ok(await service.start(mode, dshBaseUrl));
           }
           case REMOTE_RPC_ENDPOINTS.stop:
             return ok(await service.stop());
