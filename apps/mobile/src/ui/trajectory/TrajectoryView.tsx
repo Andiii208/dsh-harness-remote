@@ -1,15 +1,19 @@
 /**
- * TrajectoryView — 轨迹时间线（步骤类型图标、名称、耗时、参数/结果摘要，点开看详情）。
+ * TrajectoryView — 轨迹时间线：统计卡（Duration/Turns/Calls）+ 三泳道时间线
+ * + 步骤列表（类型图标、名称、耗时、参数/结果摘要，点开看详情）。
  */
 
 import { useMemo, useState, type MutableRefObject } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
+import Svg, { Rect } from "react-native-svg";
 import type { TranscriptStep } from "../../data/transcriptSteps";
 import { font, radius, space, type ThemeColors } from "../../theme";
 import { useTheme } from "../../theme-context";
 import { EmptyState } from "../EmptyState";
 import { formatStepDuration, stepStatusLabel, stepTypeIcon, stepTypeLabel } from "./trajectory";
+
+const LANE_KINDS = ["turn", "step", "tool"] as const;
 
 export function TrajectoryView({
   steps,
@@ -22,6 +26,29 @@ export function TrajectoryView({
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [detail, setDetail] = useState<TranscriptStep | null>(null);
 
+  const totalMs = useMemo(() => steps.reduce((a, s) => a + (s.durationMs ?? 0), 0), [steps]);
+  const turns = useMemo(() => steps.filter((s) => s.type === "turn").length, [steps]);
+  const calls = useMemo(() => steps.filter((s) => s.type === "tool").length, [steps]);
+
+  const header = useMemo(
+    () => (
+      <View style={styles.header}>
+        <View style={styles.statsRow}>
+          <Stat label="Duration" value={formatStepDuration(totalMs)} colors={colors} styles={styles} />
+          <Stat label="Turns" value={String(turns)} colors={colors} styles={styles} />
+          <Stat label="Calls" value={String(calls)} colors={colors} styles={styles} />
+        </View>
+        <View style={styles.lanesCard}>
+          <Text style={styles.lanesTitle}>TIMELINE</Text>
+          {LANE_KINDS.map((kind) => (
+            <Lane key={kind} kind={kind} steps={steps} colors={colors} />
+          ))}
+        </View>
+      </View>
+    ),
+    [colors, styles, steps, totalMs, turns, calls],
+  );
+
   return (
     <>
       <FlashList
@@ -30,6 +57,7 @@ export function TrajectoryView({
         contentContainerStyle={styles.content}
         data={steps}
         keyExtractor={(s) => s.id}
+        ListHeaderComponent={steps.length > 0 ? header : null}
         ListEmptyComponent={<EmptyState eyebrow="NO STEPS" text="暂无轨迹步骤——发送消息或运行工具后出现" />}
         renderItem={({ item }) => (
           <Pressable
@@ -92,10 +120,77 @@ export function TrajectoryView({
   );
 }
 
+function Stat({
+  label,
+  value,
+  colors,
+  styles,
+}: {
+  label: string;
+  value: string;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={styles.statCard}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
+function Lane({ kind, steps, colors }: { kind: "turn" | "step" | "tool"; steps: TranscriptStep[]; colors: ThemeColors }) {
+  const n = Math.max(steps.length, 1);
+  const fill =
+    kind === "turn" ? colors.traceBlue : kind === "step" ? colors.tracePurple : colors.traceOrange;
+  return (
+    <View style={laneStyles.row}>
+      <Text style={[laneStyles.label, { color: colors.textMuted }]}>{kind.toUpperCase()}</Text>
+      <View style={laneStyles.track}>
+        <Svg width="100%" height={6} viewBox={`0 0 100 6`} preserveAspectRatio="none">
+          {steps.map((s, i) =>
+            s.type === kind ? (
+              <Rect key={s.id} x={(i / n) * 100} y={0} width={Math.max(1.6, 100 / n - 1.2)} height={6} rx={3} fill={fill} opacity={0.9} />
+            ) : null,
+          )}
+        </Svg>
+      </View>
+    </View>
+  );
+}
+
+const laneStyles = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center", gap: 10 },
+  label: { width: 42, fontFamily: font.monoBold, fontSize: 9, letterSpacing: 1, textTransform: "uppercase" },
+  track: { flex: 1, height: 6, justifyContent: "center" },
+});
+
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     list: { flex: 1 },
     content: { padding: space.x4, gap: space.x2, paddingBottom: space.x6 },
+    header: { gap: space.x3, marginBottom: space.x2 },
+    statsRow: { flexDirection: "row", gap: space.x2 },
+    statCard: {
+      flex: 1,
+      backgroundColor: colors.surface,
+      borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: colors.separator,
+      padding: space.x3,
+      gap: 4,
+    },
+    statLabel: { color: colors.textMuted, fontFamily: font.monoBold, fontSize: font.eyebrow, letterSpacing: 1.2, textTransform: "uppercase" },
+    statValue: { color: colors.text, fontFamily: font.monoMedium, fontSize: 15 },
+    lanesCard: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: colors.separator,
+      padding: space.x4,
+      gap: 10,
+    },
+    lanesTitle: { color: colors.textMuted, fontFamily: font.monoBold, fontSize: font.eyebrow, letterSpacing: 1.4, textTransform: "uppercase" },
     row: {
       flexDirection: "row",
       alignItems: "flex-start",

@@ -3,14 +3,14 @@ import { StyleSheet, Text, type StyleProp, type TextStyle } from "react-native";
 import { font, tracking } from "../theme";
 import { useTheme } from "../theme-context";
 
-/** mono 眉标 v7：区块标签 / 状态行 / 数据前缀（SESSIONS · TARGET · OFFLINE）。 */
+/** mono 眉标 v9：区块标签 / 状态行 / 数据前缀（SESSIONS · TARGET · OFFLINE）。 */
 export function SectionLabel({
   children,
   tone = "muted",
   style,
 }: {
   children: string;
-  tone?: "muted" | "accent" | "danger" | "success";
+  tone?: "muted" | "accent" | "danger" | "success" | "mist";
   style?: StyleProp<TextStyle>;
 }) {
   const { colors } = useTheme();

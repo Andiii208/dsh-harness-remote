@@ -61,15 +61,22 @@ function OptionChip({ label, active, onPress }: { label: string; active: boolean
   const { colors } = useTheme();
   return (
     <Pressable
-      style={[optionStyles.chip, { backgroundColor: active ? colors.accent : colors.surface2 }]}
+      style={[optionStyles.chip, { backgroundColor: active ? colors.text : colors.surface2 }]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Text style={[optionStyles.chipText, { color: active ? "#FFFFFF" : colors.textMuted }]}>{label}</Text>
+      <Text style={[optionStyles.chipText, { color: active ? colors.bg : colors.textMuted }]}>{label}</Text>
     </Pressable>
   );
 }
+
+const PRESET_DESCRIPTIONS: Record<string, string> = {
+  standard: "功能完整的编码 Agent，支持文件编辑、Shell、文件与网页检索、Skills、计划、目标、子代理和工作流。",
+  code: "具备标准模式的全部能力，并通过 Code Mode SDK 呈现工具，让模型用一个 TypeScript 程序组合多步操作。",
+  minimal: "仅提供持久 bash 与 str_replace_editor 的双工具编码 Agent。",
+  cordis: "用于创建自定义 Agent preset：具备标准模式的全部能力，并提供运行时检查、插件实验和 preset 创作指导。",
+};
 
 const optionStyles = StyleSheet.create({
   chip: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
@@ -271,15 +278,21 @@ export default function SettingsScreen() {
                 <Text style={styles.rowLabel}>{t.settings.agentPreset}</Text>
                 <Text style={styles.rowValue}>{presets.find((p) => p.isDefault)?.name ?? "未设置默认"}</Text>
               </View>
-              <View style={styles.optionsRow}>
-                {presets.map((p) => (
-                  <OptionChip
-                    key={p.id}
-                    label={p.broken ? `${p.name}（不可用）` : p.name}
-                    active={p.isDefault}
-                    onPress={() => {}}
-                  />
-                ))}
+              <View style={styles.presetList}>
+                {presets.map((p) => {
+                  const desc = PRESET_DESCRIPTIONS[p.id] ?? p.trust;
+                  return (
+                    <View key={p.id} style={[styles.presetCard, p.isDefault && styles.presetCardActive]}>
+                      <View style={styles.presetCardHeader}>
+                        <Text style={styles.presetCardName}>{p.name}</Text>
+                        <Text style={styles.presetCardId}>{p.id}</Text>
+                        {p.isDefault && <Text style={styles.presetCardBadge}>当前使用</Text>}
+                      </View>
+                      {desc.length > 0 && <Text style={styles.presetCardDesc}>{desc}</Text>}
+                      {p.broken && <Text style={styles.presetCardBroken}>该预设存在配置错误，暂时不能设为默认值</Text>}
+                    </View>
+                  );
+                })}
               </View>
               <Text style={styles.hint}>会话内可在聊天页切换当前会话使用的 Agent 预设。</Text>
             </>
@@ -450,6 +463,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: "center",
       justifyContent: "space-between",
       gap: space.x3,
+      minHeight: 48,
       paddingVertical: space.x3,
       borderBottomWidth: 1,
       borderBottomColor: colors.separator,
@@ -459,6 +473,41 @@ function createStyles(colors: ThemeColors) {
     rowLabel: { color: colors.text, fontSize: font.body },
     rowValue: { color: colors.textMuted, fontSize: font.caption, flexShrink: 1, textAlign: "right" },
     optionsRow: { flexDirection: "row", flexWrap: "wrap", gap: space.x2, paddingVertical: space.x3, borderBottomWidth: 1, borderBottomColor: colors.separator },
+    presetList: { paddingVertical: space.x3, gap: space.x2, borderBottomWidth: 1, borderBottomColor: colors.separator },
+    presetCard: {
+      backgroundColor: colors.surface2,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.separator,
+      padding: 14,
+      gap: 8,
+    },
+    presetCardActive: { borderWidth: 1.5, borderColor: colors.text },
+    presetCardHeader: { flexDirection: "row", alignItems: "center", gap: space.x2 },
+    presetCardName: { color: colors.text, fontSize: font.body + 1, fontWeight: "600" },
+    presetCardId: {
+      color: colors.textMuted,
+      fontFamily: font.monoMedium,
+      fontSize: font.eyebrow,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      backgroundColor: colors.surface2,
+      borderRadius: radius.pill,
+      overflow: "hidden",
+    },
+    presetCardBadge: {
+      color: colors.bg,
+      backgroundColor: colors.text,
+      fontSize: font.eyebrow,
+      fontWeight: "600",
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: radius.pill,
+      overflow: "hidden",
+      marginLeft: "auto",
+    },
+    presetCardDesc: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
+    presetCardBroken: { color: colors.warn, fontSize: font.caption, fontWeight: "500" },
     contextBlock: { paddingVertical: space.x3, gap: space.x2, borderBottomWidth: 1, borderBottomColor: colors.separator },
     contextHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     progressTrack: { height: 4, borderRadius: 2, backgroundColor: colors.surface2, overflow: "hidden" },

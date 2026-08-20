@@ -94,6 +94,8 @@ function createStyles(colors: ThemeColors) {
     card: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: colors.separator,
       padding: space.x4,
       gap: space.x2,
     },

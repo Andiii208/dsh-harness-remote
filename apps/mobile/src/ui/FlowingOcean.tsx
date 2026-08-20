@@ -87,7 +87,7 @@ export function FlowingOcean() {
 
       {/* 细碎星点：缓慢闪烁，模拟官网深海光尘 */}
       {STARS.map((s, i) => (
-        <StarDot key={`star-${i}`} x={s.x} y={s.y} r={s.r} duration={s.duration} reduced={reduced} />
+        <StarDot key={`star-${i}`} x={s.x} y={s.y} r={s.r} duration={s.duration} reduced={reduced} fill={colors.heroText} />
       ))}
     </Svg>
   );
@@ -100,6 +100,18 @@ const STARS = [
   { x: 74, y: 10, r: 0.35, duration: 4500 },
   { x: 14, y: 82, r: 0.45, duration: 4100 },
   { x: 92, y: 80, r: 0.5, duration: 3800 },
+  { x: 34, y: 8, r: 0.4, duration: 4400 },
+  { x: 58, y: 16, r: 0.5, duration: 3700 },
+  { x: 6, y: 52, r: 0.35, duration: 4800 },
+  { x: 96, y: 58, r: 0.45, duration: 4000 },
+  { x: 40, y: 92, r: 0.5, duration: 4300 },
+  { x: 68, y: 88, r: 0.4, duration: 3900 },
+  { x: 18, y: 34, r: 0.35, duration: 4600 },
+  { x: 84, y: 26, r: 0.55, duration: 3500 },
+  { x: 52, y: 72, r: 0.4, duration: 4200 },
+  { x: 28, y: 60, r: 0.45, duration: 4700 },
+  { x: 76, y: 52, r: 0.35, duration: 4100 },
+  { x: 46, y: 44, r: 0.4, duration: 3800 },
 ] as const;
 
 function AuroraBlob({
@@ -149,12 +161,14 @@ function StarDot({
   r,
   duration,
   reduced,
+  fill,
 }: {
   x: number;
   y: number;
   r: number;
   duration: number;
   reduced: boolean;
+  fill: string;
 }) {
   const opacity = useSharedValue(0.5);
 
@@ -171,5 +185,5 @@ function StarDot({
     opacity: opacity.value,
   }));
 
-  return <AnimatedCircle animatedProps={animatedProps} cx={x} cy={y} r={r} fill="#DCE8FF" />;
+  return <AnimatedCircle animatedProps={animatedProps} cx={x} cy={y} r={r} fill={fill} />;
 }

@@ -140,6 +140,8 @@ function createStyles(colors: ThemeColors) {
     card: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: colors.separator,
       paddingHorizontal: space.x4,
     },
     itemRow: {

@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -12,7 +12,6 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import Animated from "react-native-reanimated";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import * as ImagePicker from "expo-image-picker";
 import { useConnection } from "../../src/transport/ConnectionProvider";
@@ -23,7 +22,6 @@ import { filterSkills, type SkillEntry } from "../../src/data/skillList";
 import { estimateBase64Bytes, resolveImageMediaType } from "../../src/data/imageMessage";
 import { shouldStickToBottom } from "../../src/ui/chat/stickyBottom";
 import { font, radius, space } from "../../src/theme";
-import { useEntering } from "../../src/ui/anim";
 import { MessageBubble } from "../../src/ui/chat/MessageBubble";
 import { TrajectoryView } from "../../src/ui/trajectory/TrajectoryView";
 import { SkeletonRow } from "../../src/ui/SkeletonRow";
@@ -57,6 +55,7 @@ export default function ChatScreen() {
   const [presetLoading, setPresetLoading] = useState(false);
   const [skills, setSkills] = useState<SkillEntry[] | null>(null);
   const [showSkillPicker, setShowSkillPicker] = useState(false);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [skillQuery, setSkillQuery] = useState("");
   const [sendingImage, setSendingImage] = useState(false);
   const showJumpRef = useRef(false);
@@ -281,8 +280,8 @@ export default function ChatScreen() {
   const goalStatus = summary?.goalStatus;
   const goalLabel =
     goalStatus === "active" ? t.chat.goalRunning : goalStatus === "paused" ? t.chat.goalPaused : goalStatus === "completed" ? t.chat.goalCompleted : goalStatus;
-  const entering = useEntering(6, 200);
-  const fabEntering = useEntering(8, 160);
+  const turnCount = steps.filter((s) => s.type === "turn").length;
+  const stepCount = steps.length;
 
   // 当前选中模型所在分组与思考强度列表（原生 session.models 返回，不用写死）
   const currentModelGroup = modelsData?.groups.find((g) => g.id === modelsData?.current.provider);
@@ -377,6 +376,13 @@ export default function ChatScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={90}
     >
+      <Stack.Screen
+        options={{
+          title: summary?.title ?? id ?? "对话",
+          headerBackTitle: "返回",
+          headerRight: () => <ChatHeaderRight state={state} onPressMenu={() => setShowHeaderMenu(true)} />,
+        }}
+      />
       <View style={styles.switchBar}>
         <Pressable
           style={[styles.switchTabBtn, viewMode === "chat" && styles.switchTabBtnActive]}
@@ -415,46 +421,6 @@ export default function ChatScreen() {
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <View style={styles.sessionHeader}>
-              <View style={styles.sessionTitleRow}>
-                <Text style={styles.sessionTitle} numberOfLines={1}>
-                  {summary?.title ?? id}
-                </Text>
-                {goalStatus ? (
-                  <View style={styles.goalPill}>
-                    <Text style={styles.goalPillText}>{goalLabel}</Text>
-                  </View>
-                ) : null}
-              </View>
-              <View style={styles.sessionActions}>
-                <Pressable
-                  style={styles.sessionActionBtn}
-                  onPress={openModelPicker}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t.chat.chooseModel}
-                >
-                  <Text style={styles.sessionActionText}>{t.chat.model}</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.sessionActionBtn}
-                  onPress={openPermissionPicker}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t.chat.choosePermission}
-                >
-                  <Text style={styles.sessionActionText}>{permissionCurrent ? `${t.chat.permission} · ${permissionCurrent}` : t.chat.permission}</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.sessionActionBtn}
-                  onPress={() => void openPresetPicker()}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t.chat.choosePreset}
-                >
-                  <Text style={styles.sessionActionText}>{t.chat.preset}</Text>
-                </Pressable>
-              </View>
-
               {activeJobs.length > 0 && (
                 <View style={styles.jobsRow}>
                   <Text style={styles.jobsText} numberOfLines={1}>
@@ -522,9 +488,9 @@ export default function ChatScreen() {
           </View>
         }
         renderItem={({ item, index }) => (
-          <Animated.View entering={entering}>
+          <View>
             <MessageBubble m={item} live={index === messages.length && item.id === live?.id} sessionId={id} />
-          </Animated.View>
+          </View>
         )}
         onScroll={onScroll}
         scrollEventThrottle={64}
@@ -552,12 +518,64 @@ export default function ChatScreen() {
         </ScrollView>
       </View>
       {showJump && (
-        <Animated.View entering={fabEntering} style={styles.jumpFabWrap}>
+        <View style={styles.jumpFabWrap}>
           <Pressable style={styles.jumpFab} onPress={jumpToBottom} accessibilityRole="button" accessibilityLabel={t.chat.jumpToBottom}>
             <Text style={styles.jumpFabText}>↓</Text>
           </Pressable>
-        </Animated.View>
+        </View>
       )}
+
+      {/* 会话头部菜单 */}
+      <Modal visible={showHeaderMenu} transparent animationType="fade" onRequestClose={() => setShowHeaderMenu(false)}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowHeaderMenu(false)} accessibilityRole="button" accessibilityLabel="关闭菜单" />
+          <View style={styles.menuPanel}>
+            <Text style={styles.menuTitle}>会话</Text>
+            <Pressable
+              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+              onPress={() => { setShowHeaderMenu(false); void openModelPicker(); }}
+              accessibilityRole="button"
+              accessibilityLabel={t.chat.chooseModel}
+            >
+              <Text style={styles.modelItemName}>{t.chat.model}</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+              onPress={() => { setShowHeaderMenu(false); openPermissionPicker(); }}
+              accessibilityRole="button"
+              accessibilityLabel={t.chat.choosePermission}
+            >
+              <Text style={styles.modelItemName}>{permissionCurrent ? `${t.chat.permission} · ${permissionCurrent}` : t.chat.permission}</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+              onPress={() => { setShowHeaderMenu(false); void openPresetPicker(); }}
+              accessibilityRole="button"
+              accessibilityLabel={t.chat.choosePreset}
+            >
+              <Text style={styles.modelItemName}>{t.chat.preset}</Text>
+            </Pressable>
+            {online && (
+              <Pressable
+                style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+                onPress={() => { setShowHeaderMenu(false); void loadHistory(id, 500); }}
+                accessibilityRole="button"
+                accessibilityLabel="重新加载历史"
+              >
+                <Text style={styles.modelItemName}>重新加载历史</Text>
+              </Pressable>
+            )}
+            <Pressable
+              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+              onPress={() => setShowHeaderMenu(false)}
+              accessibilityRole="button"
+              accessibilityLabel={t.common.cancel}
+            >
+              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       {/* 模型选择器弹窗 */}
       <Modal visible={showModelPicker} transparent animationType="fade" onRequestClose={() => setShowModelPicker(false)}>
@@ -745,6 +763,19 @@ export default function ChatScreen() {
       </Modal>
 
       <View style={styles.inputBar}>
+        {(turnCount > 0 || stepCount > 0) && (
+          <View style={styles.statsPillWrap}>
+            <Pressable
+              style={({ pressed }) => [styles.statsPill, pressed && styles.statsPillPressed]}
+              onPress={() => switchView("trajectory")}
+              accessibilityRole="button"
+              accessibilityLabel={`${turnCount} 轮 · ${stepCount} 步，查看轨迹`}
+            >
+              <Text style={styles.statsPillText}>{turnCount} 轮 · {stepCount} 步</Text>
+              <Text style={styles.statsPillChevron}>⌃</Text>
+            </Pressable>
+          </View>
+        )}
         {live && (
           <View style={styles.pauseRow}>
             <Pressable
@@ -826,22 +857,31 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     screen: { flex: 1, backgroundColor: colors.bg },
     switchBar: {
       flexDirection: "row",
-      gap: space.x2,
-      paddingHorizontal: space.x4,
-      paddingTop: space.x3,
-      paddingBottom: space.x2,
+      marginHorizontal: 66,
+      marginTop: space.x3,
+      marginBottom: space.x2,
+      backgroundColor: colors.surface2,
+      borderRadius: 10,
+      padding: 2,
     },
     switchTabBtn: {
-      backgroundColor: colors.surface2,
-      borderRadius: radius.pill,
-      paddingHorizontal: 14,
-      paddingVertical: 5,
+      flex: 1,
+      alignItems: "center",
+      borderRadius: 8,
+      paddingVertical: 6,
+    },
+    switchTabBtnActive: {
+      backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.separator,
+      shadowColor: "#000",
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 1 },
+      elevation: 2,
     },
-    switchTabBtnActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
-    switchTabText: { color: colors.textMuted, fontSize: font.caption, fontWeight: "500" },
-    switchTabTextActive: { color: colors.accent, fontWeight: "600" },
+    switchTabText: { color: colors.textMuted, fontSize: 13, fontWeight: "500" },
+    switchTabTextActive: { color: colors.text, fontWeight: "600" },
     viewContainer: { flex: 1 },
     swiper: { flex: 1 },
     swiperContent: { flexGrow: 1 },
@@ -859,9 +899,10 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       flexWrap: "wrap",
     },
     sessionTitle: {
-      color: colors.textMuted,
-      fontSize: font.caption,
-      fontWeight: "500",
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: "600",
+      letterSpacing: -0.3,
     },
     sessionActions: {
       flexDirection: "row",
@@ -871,8 +912,10 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     sessionActionBtn: {
       backgroundColor: colors.surface2,
       borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.separator,
       paddingHorizontal: 10,
-      paddingVertical: 3,
+      paddingVertical: 4,
     },
     sessionActionText: {
       color: colors.accent,
@@ -1032,15 +1075,35 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       maxHeight: 120,
     },
     send: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-      backgroundColor: colors.accent,
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: colors.ocean,
       alignItems: "center",
       justifyContent: "center",
     },
     sendDisabled: { opacity: 0.4 },
     sendText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600", textAlign: "center", textAlignVertical: "center", lineHeight: 20 },
+    statsPillWrap: { alignItems: "center", marginBottom: 2 },
+    statsPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.separator,
+      paddingHorizontal: 16,
+      paddingVertical: 9,
+      shadowColor: "#000",
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 1,
+    },
+    statsPillPressed: { opacity: 0.7 },
+    statsPillText: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.monoMedium },
+    statsPillChevron: { color: colors.textDim, fontSize: 12, fontWeight: "600" },
     sendError: { color: colors.danger, fontSize: font.caption, flexShrink: 1 },
     sendErrorRow: { flexDirection: "row", alignItems: "center", gap: space.x3 },
     retryLink: { color: colors.accent, fontSize: font.caption, fontWeight: "600" },
@@ -1062,4 +1125,36 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     },
     jumpFabText: { color: colors.textMuted, fontSize: 16, fontWeight: "600" },
   });
+}
+
+function ChatHeaderRight({ state, onPressMenu }: { state: string; onPressMenu: () => void }) {
+  const { colors } = useTheme();
+  const dotColor =
+    state === "online"
+      ? colors.success
+      : state === "offline"
+        ? colors.danger
+        : state === "connecting" || state === "backoff"
+          ? colors.warn
+          : colors.textDim;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <View
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: dotColor,
+          shadowColor: dotColor,
+          shadowOpacity: 0.65,
+          shadowRadius: 5,
+          shadowOffset: { width: 0, height: 0 },
+          elevation: 2,
+        }}
+      />
+      <Pressable onPress={onPressMenu} hitSlop={8} accessibilityRole="button" accessibilityLabel="会话菜单">
+        <Text style={{ color: colors.text, fontSize: 18, fontWeight: "600", lineHeight: 22 }}>⋯</Text>
+      </Pressable>
+    </View>
+  );
 }

@@ -1,45 +1,27 @@
 /**
  * ConnectionBanner — 连接状态横幅。
- * 迁移自 Cindy 的 ConnectionBanner 结构：
- * - 普通断线 1.2s 静默窗口后再显示，避免快速重连时闪一下。
- * - 有错误分类（lastError）时立即显示标题 + 一句原因 + 动作按钮。
+ * - 只在 连接中 / 重试中 / 已放弃 / 有错误 时出现；普通离线不显示（避免与 header 状态重复）。
+ * - v9：双画布变体（paper / hero）。
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useConnection } from "../transport/ConnectionProvider";
 import { radius, space } from "../theme";
 import { useTheme } from "../theme-context";
 import { AppText } from "./AppText";
 
-const OFFLINE_DELAY_MS = 1_200;
-
-export function ConnectionBanner() {
+export function ConnectionBanner({ variant = "paper" }: { variant?: "paper" | "hero" }) {
   const { state, lastError, givenUp, retry, stopRetrying } = useConnection();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [offlineLongEnough, setOfflineLongEnough] = useState(false);
 
-  const offline = state !== "online";
-  useEffect(() => {
-    if (!offline) {
-      setOfflineLongEnough(false);
-      return;
-    }
-    const t = setTimeout(() => setOfflineLongEnough(true), OFFLINE_DELAY_MS);
-    return () => clearTimeout(t);
-  }, [offline]);
-
-  const visible =
-    lastError !== null ||
-    state === "connecting" ||
-    (offline && offlineLongEnough) ||
-    givenUp;
-
+  const visible = lastError !== null || state === "connecting" || state === "backoff" || givenUp;
   if (!visible) return null;
 
-  const tone = lastError || givenUp ? "danger" : state === "connecting" || state === "backoff" ? "warn" : "neutral";
-  const dotColor = tone === "danger" ? colors.danger : tone === "warn" ? colors.warn : colors.textDim;
+  const hero = variant === "hero";
+  const tone = lastError || givenUp ? "danger" : "warn";
+  const dotColor = tone === "danger" ? colors.danger : colors.warn;
 
   let title: string;
   let hint: string | null = null;
@@ -54,24 +36,33 @@ export function ConnectionBanner() {
   } else if (state === "backoff") {
     title = "连接断开，正在重试…";
   } else {
-    title = "未连接";
+    return null;
   }
 
+  const heroTint =
+    hero && tone === "danger"
+      ? { backgroundColor: "rgba(229,72,77,0.08)", borderColor: "rgba(229,72,77,0.18)" }
+      : hero && tone === "warn"
+        ? { backgroundColor: "rgba(255,173,31,0.08)", borderColor: "rgba(255,173,31,0.18)" }
+        : null;
+
   return (
-    <View style={styles.banner}>
+    <View style={[styles.banner, hero && styles.bannerHero, heroTint]}>
       <View style={[styles.dot, { backgroundColor: dotColor }]} />
       <View style={styles.body}>
-        <AppText variant="caption" style={styles.title}>{title}</AppText>
-        {hint ? <AppText variant="caption" tone="muted" style={styles.hint}>{hint}</AppText> : null}
+        <AppText variant="caption" style={[styles.title, hero && { color: colors.heroText }]}>{title}</AppText>
+        {hint ? (
+          <AppText variant="caption" tone="muted" style={[styles.hint, hero && { color: colors.heroTextDim }]}>{hint}</AppText>
+        ) : null}
       </View>
       {state === "backoff" && (
         <Pressable onPress={() => void stopRetrying()} hitSlop={8} accessibilityRole="button" accessibilityLabel="停止重试">
-          <AppText variant="caption" tone="accent" style={styles.action}>停止</AppText>
+          <AppText variant="caption" tone="accent" style={[styles.action, hero && { color: colors.mist }]}>停止</AppText>
         </Pressable>
       )}
       {givenUp && (
         <Pressable onPress={() => retry()} hitSlop={8} accessibilityRole="button" accessibilityLabel="重试连接">
-          <AppText variant="caption" tone="accent" style={styles.action}>重试</AppText>
+          <AppText variant="caption" tone="accent" style={[styles.action, hero && { color: colors.mist }]}>重试</AppText>
         </Pressable>
       )}
     </View>
@@ -88,6 +79,11 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       borderRadius: radius.card,
       paddingHorizontal: space.x4,
       paddingVertical: space.x3,
+    },
+    bannerHero: {
+      backgroundColor: colors.heroCard,
+      borderWidth: 1,
+      borderColor: colors.heroStroke,
     },
     dot: { width: 7, height: 7, borderRadius: 4 },
     body: { flex: 1, gap: 2 },

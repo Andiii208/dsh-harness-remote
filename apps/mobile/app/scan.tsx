@@ -151,26 +151,26 @@ export default function ScanScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    screen: { flex: 1, backgroundColor: colors.bg },
+    screen: { flex: 1, backgroundColor: colors.navy },
     camera: { flex: 1 },
     frame: { flex: 1, alignItems: "center", justifyContent: "center" },
     corner: {
       position: "absolute",
       width: 44,
       height: 44,
-      borderColor: colors.accent,
+      borderColor: "#FFFFFF",
       borderWidth: 3,
     },
     cornerTL: { top: "38%", left: "22%", borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
     cornerTR: { top: "38%", right: "22%", borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
     cornerBL: { bottom: "38%", left: "22%", borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
     cornerBR: { bottom: "38%", right: "22%", borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
-    overlay: { padding: space.x5, paddingBottom: space.x7, gap: space.x3, backgroundColor: "rgba(10,12,16,0.55)" },
-    overlayTitle: { color: colors.text, fontSize: font.body + 1, fontWeight: "600", textAlign: "center" },
-    overlayHint: { color: colors.textMuted, fontSize: font.caption, textAlign: "center" },
+    overlay: { padding: space.x5, paddingBottom: space.x7, gap: space.x3, backgroundColor: "rgba(4,10,20,0.55)" },
+    overlayTitle: { color: colors.heroText, fontSize: font.body + 1, fontWeight: "600", textAlign: "center" },
+    overlayHint: { color: colors.heroTextDim, fontSize: font.caption, textAlign: "center" },
     error: { color: colors.danger, fontSize: font.caption, textAlign: "center" },
     cancel: { alignItems: "center", paddingVertical: space.x3 },
-    cancelText: { color: colors.textMuted, fontSize: font.body, fontWeight: "600" },
+    cancelText: { color: colors.mist, fontSize: font.body, fontWeight: "600" },
     card: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,

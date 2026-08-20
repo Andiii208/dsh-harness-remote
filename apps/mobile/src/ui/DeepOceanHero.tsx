@@ -77,18 +77,19 @@ function RippleArcs() {
 function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
   return StyleSheet.create({
     hero: {
+      position: "relative",
       backgroundColor: colors.heroBg,
       borderRadius: 20,
       padding: space.x6,
       alignItems: "center",
       overflow: "hidden",
-      minHeight: 220,
+      minHeight: 236,
       justifyContent: "center",
     },
     grid: { ...StyleSheet.absoluteFill },
     gridV: { position: "absolute", top: 0, bottom: 0, width: 1, backgroundColor: colors.heroGrid },
     gridH: { position: "absolute", left: 0, right: 0, height: 1, backgroundColor: colors.heroGrid },
-    whale: { opacity: 0.95, marginBottom: space.x3 },
+    whale: { opacity: 0.95, marginBottom: 10 },
     pill: {
       marginBottom: space.x3,
       paddingHorizontal: 10,
@@ -106,7 +107,15 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       letterSpacing: 1.4,
       opacity: 0.9,
     },
-    title: { color: colors.heroText, fontFamily: font.displayBold, fontSize: font.title, textAlign: "center" },
-    subtitle: { color: colors.heroTextDim, fontSize: font.caption, textAlign: "center", marginTop: space.x1 },
+    title: {
+      color: colors.heroText,
+      fontFamily: font.displayBold,
+      fontSize: 26,
+      fontWeight: "700",
+      letterSpacing: -0.6,
+      textAlign: "center",
+      lineHeight: 32,
+    },
+    subtitle: { color: colors.heroTextDim, fontSize: 14, textAlign: "center", marginTop: 6 },
   });
 }

@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, type ViewStyle } from "
 import { control, font, radius } from "../theme";
 import { useTheme } from "../theme-context";
 
-export type ButtonTone = "primary" | "ghost" | "danger";
+export type ButtonTone = "primary" | "ghost" | "danger" | "hero";
 
 interface ButtonProps {
   label: string;
@@ -16,7 +16,7 @@ interface ButtonProps {
   style?: ViewStyle;
 }
 
-/** 统一按钮 v8：primary（DeepSeek 蓝）/ ghost / danger-ghost；禁用 opacity 0.4；支持 loading。 */
+/** 统一按钮 v9：primary（DeepSeek 蓝）/ ghost / danger-ghost / hero（品牌画布半透明）；禁用 opacity 0.4；支持 loading。 */
 export function Button({ label, onPress, tone = "primary", disabled, loading, full, style }: ButtonProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -35,9 +35,17 @@ export function Button({ label, onPress, tone = "primary", disabled, loading, fu
       accessibilityState={{ busy: loading === true, disabled: blocked }}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={tone === "primary" ? "#FFFFFF" : colors.text} />
+        <ActivityIndicator size="small" color={tone === "primary" || tone === "hero" ? "#FFFFFF" : colors.text} />
       ) : (
-        <Text style={[styles.text, tone !== "primary" && styles.textGhost, tone === "danger" && styles.textDanger]}>{label}</Text>
+        <Text
+          style={[
+            styles.text,
+            tone === "hero" ? styles.textHero : tone !== "primary" ? styles.textGhost : null,
+            tone === "danger" && styles.textDanger,
+          ]}
+        >
+          {label}
+        </Text>
       )}
     </Pressable>
   );
@@ -55,12 +63,14 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     primary: { backgroundColor: colors.accent },
     ghost: { backgroundColor: colors.surface2 },
     danger: { backgroundColor: colors.surface2 },
+    hero: { backgroundColor: colors.heroCardStrong },
     disabled: { opacity: 0.4 },
     full: { width: "100%" },
     pressed: { transform: [{ scale: 0.98 }], opacity: 0.85 },
     pressedPrimary: { backgroundColor: colors.accent },
     pressedGhost: { backgroundColor: colors.surface2 },
     text: { color: "#FFFFFF", fontSize: font.body + 1, fontWeight: "600" },
+    textHero: { color: colors.heroText },
     textGhost: { color: colors.text, fontWeight: "600" },
     textDanger: { color: colors.danger },
   });

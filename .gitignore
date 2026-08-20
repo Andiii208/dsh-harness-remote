@@ -36,6 +36,8 @@ Thumbs.db
 .shots/
 dist-web/
 dist-web-v7/
+dist-web-v9/
+.dsh-vision-toolkit/
 
 # packaged plugin tarballs & scratch visualizations
 *.tgz

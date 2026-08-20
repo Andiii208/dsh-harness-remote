@@ -1,26 +1,35 @@
 import { useMemo, useState } from "react";
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
-import { control, font, radius } from "../theme";
+import { font, radius } from "../theme";
 import { useTheme } from "../theme-context";
 import { SectionLabel } from "./SectionLabel";
 
 interface FieldProps extends TextInputProps {
   label?: string;
   mono?: boolean;
+  /** paper = 阅读画布；hero = 品牌画布（半透明白 + 白描边，聚焦 ocean）。 */
+  variant?: "paper" | "hero";
 }
 
-/** 输入容器 v7：label（mono 眉标）+ 输入框；聚焦时 accent 描边 + accentSoft 外环。 */
-export function Field({ label, mono, style, onFocus, onBlur, ...rest }: FieldProps) {
+/** 输入容器 v9：label（mono 眉标）+ 输入框；品牌画布与阅读画布双变体。 */
+export function Field({ label, mono, variant = "paper", style, onFocus, onBlur, ...rest }: FieldProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [focused, setFocused] = useState(false);
+  const hero = variant === "hero";
   return (
     <View style={styles.wrap}>
-      {label ? <SectionLabel>{label}</SectionLabel> : null}
+      {label ? <SectionLabel tone={hero ? "mist" : "muted"}>{label}</SectionLabel> : null}
       <TextInput
         {...rest}
-        style={[styles.input, mono && styles.monoInput, focused && styles.focused, style]}
-        placeholderTextColor={colors.textDim}
+        style={[
+          styles.input,
+          hero ? styles.inputHero : styles.inputPaper,
+          mono && styles.monoInput,
+          focused && (hero ? styles.focusedHero : styles.focusedPaper),
+          style,
+        ]}
+        placeholderTextColor={hero ? colors.heroTextDim : colors.textDim}
         onFocus={(e) => {
           setFocused(true);
           onFocus?.(e);
@@ -39,17 +48,24 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     wrap: { gap: 8 },
     input: {
       height: 46,
-      backgroundColor: colors.surface,
       borderRadius: radius.control,
-      color: colors.text,
       paddingHorizontal: 16,
       paddingVertical: 0,
       fontSize: font.body,
+      borderWidth: 1,
+    },
+    inputPaper: {
+      backgroundColor: colors.surface2,
+      borderColor: colors.separator,
+      color: colors.text,
+    },
+    inputHero: {
+      backgroundColor: colors.heroInput,
+      borderColor: colors.heroStroke,
+      color: colors.heroText,
     },
     monoInput: { fontFamily: font.mono, fontSize: font.transcript },
-    focused: {
-      borderWidth: 1,
-      borderColor: colors.accent,
-    },
+    focusedPaper: { borderColor: colors.accent },
+    focusedHero: { borderColor: colors.ocean },
   });
 }

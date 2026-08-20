@@ -27,6 +27,8 @@ export const en = {
     start: "Get started",
   },
   connect: {
+    heroTitle: "Explore the unexplored",
+    heroSubtitle: "DeepSeek Harness Preview",
     remoteHeroTitle: "Your phone, connected to your computer",
     remoteBannerTitle: "Remote to my computer",
     remoteBannerDesc: "Connect from anywhere. Scan the QR code on your computer, or type the address and 6-digit code.",
@@ -51,9 +53,11 @@ export const en = {
     enterSessions: "Open sessions →",
   },
   sessions: {
+    heroTitle: "Explore the unexplored",
+    heroSubtitle: "DeepSeek Harness Preview",
     title: "Sessions",
     backToConnect: "‹ Connect",
-    newSession: "+ New session",
+    newSession: "New session",
     searchLabel: "Search",
     searchPlaceholder: "Search title / workspace / last message",
     doneSearch: "Done",
@@ -210,6 +214,8 @@ export const zhCN: TranslationKey = {
     start: "开始使用",
   },
   connect: {
+    heroTitle: "探索未至之境",
+    heroSubtitle: "DeepSeek Harness 预览版",
     remoteHeroTitle: "手机远程连接我的电脑",
     remoteBannerTitle: "远程连接我的电脑",
     remoteBannerDesc: "走到哪儿都能连。扫电脑上的二维码，或手动输入地址和 6 位码。",
@@ -234,9 +240,11 @@ export const zhCN: TranslationKey = {
     enterSessions: "进入会话 →",
   },
   sessions: {
+    heroTitle: "探索未至之境",
+    heroSubtitle: "DeepSeek Harness 预览版",
     title: "会话",
     backToConnect: "‹ 连接",
-    newSession: "＋ 新会话",
+    newSession: "新会话",
     searchLabel: "搜索",
     searchPlaceholder: "搜索标题 / workspace / 最近消息",
     doneSearch: "完成",
