@@ -1,11 +1,13 @@
 # PROGRESS
 
-## 2026-08-20 APK 真机闪退排查（根因已定位，待新 APK 验证）
+## 2026-08-20 APK 真机闪退排查（已修复并验证）
 - 复现：本机模拟器 lovebuddy_api36 安装 v0.3.0 `app-release.apk` 成功，`am start` 后约 2s 内闪退；包名 `dev.dshremote.mobile`。
 - 关键 logcat：`FATAL EXCEPTION: main`，`com.facebook.jni.CppException: [Worklets] Tried to synchronously call a Remote Function. Called "anonymous" on the UI Runtime.`，堆栈指向 `timing/onFrame/step/valueSetter...`（证据 `.shots/crash-logcat.txt`、`.shots/crash-logcat-filtered.txt`）。
 - 根因：`apps/mobile/src/ui/anim.ts` 从 `react-native` 导入 `Easing`，并把 `Easing.bezier(...)` 传入 `FadeInDown/FadeOut` 的 `.easing()`；release 包 Reanimated 在 UI Runtime 同步调用该 JS 闭包时触发 worklets 崩溃。修复：`Easing` 改从 `react-native-reanimated` 导入（worklet 安全）。
 - 回归：`pnpm -r build` 全绿（BUILD_EXIT=0，`.shots/apk-fix-build.log`）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 165 / mock-harness 29 / relay 39 / harness-plugin 53，skipped=0（`.shots/apk-fix-test.log`）。
-- 下一步：提交推送 → 触发 `android-apk.yml` 出 v0.3.0 APK → 模拟器安装验证不闪退 + 截图证据。
+- 出包：已提交推送（83cb389）→ 触发 `android-apk.yml`（run 32330750667）→ workflow 22m11s 成功 → Release v0.3.0 的 `app-release.apk` 已更新（asset updatedAt 2026-08-20T04:30:18Z）。
+- 模拟器验证：安装新 APK 后 `am start -W` 成功，进程持续存活（pid 3317），`logcat -d -b crash` 为 0 字节（`.shots/apk-fix-logcat.txt`）；UI 从 onboarding → 主页 → 连接 mock-harness（127.0.0.1:3080）→「在线」→「进入会话」看到 2 个 mock 会话，全程无闪退。
+- 截图证据：`.shots/apk-home.png`（onboarding）、`.shots/apk-main.png`（主页）、`.shots/apk-more.png`（LAN 连接页）、`.shots/apk-home-online2.png`（在线主页）、`.shots/apk-sessions.png`（会话列表）。
 
 ## 任务 0 开工回执（2026-08-20 新窗口：Phase A→E 长程计划）
 - 已读：PROGRESS.md、BLOCKED.md、docs/plans/2026-08-18-next-window-plan.md、docs/plans/2026-08-18-ui-learning-and-next-plan.md（Global Constraints）。

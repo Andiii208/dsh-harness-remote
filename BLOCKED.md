@@ -1,6 +1,6 @@
-## 2026-08-20 APK 闪退排查（已定位，待新 APK 验证）
+## 2026-08-20 APK 闪退排查（已关闭/已修复）
 
-- **v0.3.0 APK 真机安装后闪退**：模拟器已复现。根因：`apps/mobile/src/ui/anim.ts` 将 `react-native` 的 `Easing.bezier` 传入 Reanimated `FadeInDown/FadeOut` 的 `.easing()`，release 包在 UI Runtime 同步调用该 JS 闭包触发 `[Worklets] Tried to synchronously call a Remote Function` 崩溃。修复：`Easing` 改从 `react-native-reanimated` 导入。待 CI 新 APK 在模拟器验证不闪退后关闭本条。
+- ~~**v0.3.0 APK 真机安装后闪退**~~ → **已关闭（2026-08-20）**：模拟器已复现。根因：`apps/mobile/src/ui/anim.ts` 将 `react-native` 的 `Easing.bezier` 传入 Reanimated `FadeInDown/FadeOut` 的 `.easing()`，release 包在 UI Runtime 同步调用该 JS 闭包触发 `[Worklets] Tried to synchronously call a Remote Function` 崩溃。修复：`Easing` 改从 `react-native-reanimated` 导入。CI 新 APK（run 32330750667）已安装到模拟器验证不闪退：onboarding → 主页 → 连接 mock-harness →「在线」→「进入会话」全程存活，`logcat -d -b crash` 为 0 字节，截图 `.shots/apk-home.png` / `.shots/apk-sessions.png`。
 
 ## 2026-08-20 新窗口（Phase A→E）阻塞记录
 
