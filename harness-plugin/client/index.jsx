@@ -42,15 +42,16 @@ const styles = {
     border: 'none',
     background: 'var(--dsw-alias-button-primary-fill, var(--dsw-alias-brand-primary,#4f6ef7))',
     color: '#fff',
-    height: 36,
-    padding: '0 16px',
+    height: 38,
+    padding: '0 18px',
     borderRadius: 999,
     fontSize: 13,
     fontWeight: 500,
+    width: '100%',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginBottom: 8,
   },
   btn: {
     font: 'inherit',
@@ -58,20 +59,56 @@ const styles = {
     border: '1px solid var(--dsw-alias-button-ghost-active-border, var(--dsw-alias-border-l2,#d1d5db))',
     background: 'var(--dsw-alias-bg-layer-1,#fff)',
     color: 'var(--dsw-alias-label-primary,inherit)',
-    height: 36,
-    padding: '0 16px',
+    height: 38,
+    padding: '0 18px',
     borderRadius: 999,
     fontSize: 13,
+    width: '100%',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  qrWrap: {
+    background: '#fff',
+    padding: 14,
+    borderRadius: 16,
+    display: 'inline-block',
+    margin: '10px 0 12px',
+    boxShadow: '0 4px 18px rgba(0,0,0,0.10)',
+  },
   qr: {
-    width: 220,
-    height: 220,
+    width: 216,
+    height: 216,
+    display: 'block',
+  },
+  codeRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    background: 'var(--dsw-alias-bg-layer-2,#f5f6f8)',
     borderRadius: 10,
-    border: '1px solid var(--dsw-alias-border-l2,#e5e7eb)',
-    margin: '8px 0',
+    padding: '9px 12px',
+    marginBottom: 8,
+  },
+  codeText: {
+    fontFamily: 'ui-monospace,Menlo,monospace',
+    fontSize: 13,
+    wordBreak: 'break-all',
+    color: 'var(--dsw-alias-label-primary,inherit)',
+    flex: 1,
+  },
+  copyBtn: {
+    font: 'inherit',
+    cursor: 'pointer',
+    border: '1px solid var(--dsw-alias-border-l2,#d1d5db)',
+    background: 'transparent',
+    color: 'var(--dsw-alias-label-secondary,#6b7280)',
+    height: 26,
+    padding: '0 10px',
+    borderRadius: 999,
+    fontSize: 11,
+    flexShrink: 0,
   },
   warn: {
     color: 'var(--dsw-alias-state-warn-primary,#b45309)',
@@ -148,6 +185,22 @@ function RemoteSettingsTab({ rpcCall }) {
   const running = status?.running === true;
   const starting = status?.starting === true;
 
+  const copyText = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      /* 剪贴板不可用时静默（设置页 iframe 可能限制） */
+    }
+  };
+
+  const codeRow = (label, value, mono = true) =>
+    h('div', { style: styles.codeRow },
+      h('div', { style: { ...styles.codeText, fontFamily: mono ? undefined : 'inherit' } }, `${label}${value ? '' : '：——'}`),
+      value
+        ? h('button', { style: styles.copyBtn, onClick: () => void copyText(value) }, '复制')
+        : null,
+    );
+
   return h(
     'div',
     { style: styles.card },
@@ -162,12 +215,13 @@ function RemoteSettingsTab({ rpcCall }) {
             h('div', { style: { fontSize: 13, fontWeight: 500, color: 'var(--dsw-alias-label-primary,inherit)' } },
               status.mode === 'lan' ? '局域网模式' : '公网模式（任何网络可连）'),
             status.qrDataUrl
-              ? h('img', { src: status.qrDataUrl, alt: '手机连接二维码', style: styles.qr })
+              ? h('div', { style: styles.qrWrap },
+                  h('img', { src: status.qrDataUrl, alt: '手机连接二维码', style: styles.qr }))
               : null,
-            h('div', { style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary,#6b7280)', marginBottom: 6 } },
+            h('div', { style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary,#6b7280)', marginBottom: 8 } },
               '手机 App 扫码连接，或在「远程连接」里手动输入：'),
-            h('div', { style: styles.code }, status.host ?? ''),
-            h('div', { style: styles.code }, `6 位码：${status.code ?? '——'}`),
+            codeRow('地址', status.host ?? ''),
+            codeRow('6 位码', status.code ?? ''),
           ),
           h('div', { style: styles.block },
             status.dshDetected

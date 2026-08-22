@@ -1,6 +1,6 @@
 {
   "name": "dsh-harness-remote",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "dsh-harness-remote 电脑端插件：DSH 设置页一键开启手机远程（cloudflared 公网隧道 + 中继 + 6 位配对码）。",
   "type": "module",
   "main": "./lib/index.js",

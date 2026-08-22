@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Network from "expo-network";
+import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
 import { useEntering, useExiting } from "../src/ui/anim";
 import { useConnection } from "../src/transport/ConnectionProvider";
@@ -300,7 +301,7 @@ export default function ConnectScreen() {
             </View>
           </View>
 
-          <ConnectionBanner />
+          <ConnectionBanner variant="hero" />
 
           {(describeName.length > 0 || (online && relayPeerId)) && (
             <View style={styles.stateRow}>
@@ -450,22 +451,11 @@ export default function ConnectScreen() {
               full
             />
           ) : mode === "remote" && !showManual ? (
-            <>
-              <Button
-                label={t.connect.scanConnect}
-                onPress={() => { void haptic("light"); router.push("/scan"); }}
-                full
-              />
-              <Pressable
-                style={styles.manualToggle}
-                onPress={() => setShowManual(true)}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="手动输入地址和 6 位码"
-              >
-                <Text style={styles.linkText}>{t.connect.manualToggle}</Text>
-              </Pressable>
-            </>
+            <Button
+              label={t.connect.scanConnect}
+              onPress={() => { void haptic("light"); router.push("/scan"); }}
+              full
+            />
           ) : (
             <>
               <Button
@@ -483,24 +473,45 @@ export default function ConnectScreen() {
           {connectError.length > 0 && <Text style={styles.connectError}>{connectError}</Text>}
 
           {mode === "remote" && !online && (
-            <Pressable style={styles.moreRow} onPress={() => setShowPcHelp((v) => !v)} accessibilityRole="button" accessibilityLabel="电脑端怎么开">
-              <Text style={styles.moreLink}>{showPcHelp ? t.connect.collapseManual : t.connect.pcHelp}</Text>
-            </Pressable>
-          )}
-
-          {showPcHelp && mode === "remote" && !online && (
-            <View style={styles.pcHelpCard}>
-              <Text style={styles.pcHelpTitle}>{t.connect.pcHelpTitle}</Text>
-              <Text style={styles.pcHelpStep}>{t.connect.pcHelpStep1}</Text>
-              <Text style={styles.pcHelpStep}>{t.connect.pcHelpStep2}</Text>
-              <Text style={styles.pcHelpStep}>{t.connect.pcHelpStep3}</Text>
+            <View style={styles.linksCard}>
+              {!showManual && (
+                <Pressable
+                  style={({ pressed }) => [styles.linkRow, pressed && styles.linkRowPressed]}
+                  onPress={() => setShowManual(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="手动输入地址和 6 位码"
+                >
+                  <Text style={styles.linkRowText}>{t.connect.manualToggle}</Text>
+                  <Text style={styles.linkRowChevron}>›</Text>
+                </Pressable>
+              )}
+              <Pressable
+                style={({ pressed }) => [styles.linkRow, pressed && styles.linkRowPressed]}
+                onPress={() => setShowPcHelp((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel="电脑端怎么开"
+              >
+                <Text style={styles.linkRowText}>{showPcHelp ? t.connect.collapseManual : t.connect.pcHelp}</Text>
+                <Text style={styles.linkRowChevron}>{showPcHelp ? "⌄" : "›"}</Text>
+              </Pressable>
+              {showPcHelp && (
+                <View style={styles.pcHelpInner}>
+                  <Text style={styles.pcHelpTitle}>{t.connect.pcHelpTitle}</Text>
+                  <Text style={styles.pcHelpStep}>{t.connect.pcHelpStep1}</Text>
+                  <Text style={styles.pcHelpStep}>{t.connect.pcHelpStep2}</Text>
+                  <Text style={styles.pcHelpStep}>{t.connect.pcHelpStep3}</Text>
+                </View>
+              )}
+              <Pressable
+                style={({ pressed }) => [styles.linkRow, styles.linkRowLast, pressed && styles.linkRowPressed]}
+                onPress={() => { void haptic("light"); setMode("lan"); }}
+                accessibilityRole="button"
+                accessibilityLabel="更多连接方式"
+              >
+                <Text style={styles.linkRowText}>{t.connect.moreConnections}</Text>
+                <Text style={styles.linkRowChevron}>›</Text>
+              </Pressable>
             </View>
-          )}
-
-          {mode === "remote" && !online && (
-            <Pressable style={styles.moreRow} onPress={() => { void haptic("light"); setMode("lan"); }} accessibilityRole="button" accessibilityLabel="更多连接方式">
-              <Text style={styles.moreLink}>{t.connect.moreConnections}</Text>
-            </Pressable>
           )}
 
           {showList ? (
@@ -546,7 +557,7 @@ export default function ConnectScreen() {
           )}
 
           {online && (
-            <Pressable style={styles.linkRow} onPress={() => router.push("/sessions")} accessibilityRole="link" accessibilityLabel="进入会话">
+            <Pressable style={styles.enterRow} onPress={() => router.push("/sessions")} accessibilityRole="link" accessibilityLabel="进入会话">
               <Text style={styles.link}>{t.connect.enterSessions}</Text>
             </Pressable>
           )}
@@ -560,7 +571,7 @@ export default function ConnectScreen() {
           )}
 
           <View style={styles.flexSpacer} />
-          <Text style={styles.version}>v0.3.0 · harness remote</Text>
+          <Text style={styles.version}>v{Constants.expoConfig?.version ?? "0.3.1"} · harness remote</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -634,15 +645,6 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     portField: { width: 96 },
     advancedRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     linkText: { color: colors.mist, fontSize: font.body, fontWeight: "500" },
-    manualToggle: { alignItems: "center", paddingVertical: space.x2 },
-    pcHelpCard: {
-      backgroundColor: colors.heroCard,
-      borderRadius: radius.card,
-      borderWidth: 1,
-      borderColor: colors.heroStroke,
-      padding: space.x5,
-      gap: space.x2,
-    },
     pcHelpTitle: { color: colors.heroText, fontSize: font.body + 1, fontWeight: "600" },
     pcHelpStep: { color: colors.heroTextDim, fontSize: font.caption, lineHeight: 18 },
     savedToken: { color: colors.heroTextDim, fontSize: font.caption },
@@ -654,8 +656,34 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     quickLink: { color: colors.mist, fontSize: font.body, fontWeight: "500" },
     quickSeparator: { color: colors.heroTextDim, fontSize: font.body },
     connectError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
-    moreRow: { alignItems: "center", paddingVertical: 2 },
-    moreLink: { color: colors.accent, fontSize: font.body, fontWeight: "500" },
+    linksCard: {
+      backgroundColor: colors.heroCard,
+      borderRadius: radius.card,
+      borderWidth: 1,
+      borderColor: colors.heroStroke,
+      overflow: "hidden",
+    },
+    linkRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: space.x4,
+      paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.heroStroke,
+    },
+    linkRowPressed: { opacity: 0.7 },
+    linkRowLast: { borderBottomWidth: 0 },
+    linkRowText: { color: colors.mist, fontSize: font.body, fontWeight: "500" },
+    linkRowChevron: { color: colors.heroTextDim, fontSize: font.title, fontWeight: "400" },
+    pcHelpInner: {
+      paddingHorizontal: space.x4,
+      paddingBottom: space.x3,
+      gap: space.x1,
+      backgroundColor: "rgba(0,0,0,0.18)",
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.heroStroke,
+    },
     listCard: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,
@@ -688,7 +716,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     historyButton: { alignItems: "center", paddingVertical: 2 },
     discoverError: { color: colors.warn, fontSize: font.caption, textAlign: "center" },
     discoverHint: { color: colors.textMuted, fontSize: font.caption, textAlign: "center", lineHeight: 18 },
-    linkRow: { alignItems: "center", paddingVertical: space.x2 },
+    enterRow: { alignItems: "center", paddingVertical: space.x2 },
     link: { color: colors.accent, fontSize: font.body },
     hint: { fontSize: font.caption, color: colors.textMuted, lineHeight: 18, textAlign: "center" },
     version: { color: colors.textDim, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },

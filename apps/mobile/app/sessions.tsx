@@ -342,7 +342,9 @@ export default function SessionsScreen() {
               accessibilityRole="button"
               accessibilityLabel="选择工作区"
             >
-              <FolderIcon color={colors.mist} />
+              <View style={styles.workspaceIconWrap}>
+                <FolderIcon color={colors.mist} />
+              </View>
               <View style={styles.workspaceBody}>
                 <Text style={styles.workspaceTitle} numberOfLines={1}>{workspaceCardTitle}</Text>
                 <Text style={styles.workspacePath} numberOfLines={1}>{workspaceCardPath}</Text>
@@ -353,15 +355,13 @@ export default function SessionsScreen() {
 
             {/* 新建会话 */}
             <Pressable
-              style={({ pressed }) => [styles.newSession, pressed && styles.rowPressed]}
+              style={({ pressed }) => [styles.newSession, pressed && styles.newSessionPressed]}
               onPress={() => void onCreate()}
               disabled={state !== "online"}
               accessibilityRole="button"
               accessibilityLabel={t.sessions.newSession}
             >
-              <View style={styles.newSessionPlus}>
-                <Text style={styles.newSessionPlusText}>+</Text>
-              </View>
+              <Text style={styles.newSessionPlusText}>＋</Text>
               <Text style={styles.newSessionText}>{t.sessions.newSession}</Text>
             </Pressable>
 
@@ -581,8 +581,18 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
     },
     workspaceCardPressed: { backgroundColor: "rgba(255,255,255,0.09)" },
     workspaceIcon: { fontSize: 20 },
+    workspaceIconWrap: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: "rgba(255,255,255,0.08)",
+      borderWidth: 1,
+      borderColor: colors.heroStroke,
+      alignItems: "center",
+      justifyContent: "center",
+    },
     workspaceBody: { flex: 1, gap: 2 },
-    workspaceTitle: { color: colors.heroText, fontSize: 15, fontWeight: "600" },
+    workspaceTitle: { color: colors.heroText, fontSize: 16, fontWeight: "600", letterSpacing: -0.2 },
     workspacePath: { color: colors.heroTextDim, fontSize: 12, fontFamily: font.mono },
     workspaceDot: { width: 7, height: 7, borderRadius: 4 },
     workspaceChevron: { color: colors.heroTextDim, fontSize: 13, fontWeight: "600" },
@@ -590,23 +600,19 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      gap: 10,
-      backgroundColor: colors.heroCardStrong,
-      borderRadius: 18,
-      height: 44,
-      borderWidth: 1,
-      borderColor: colors.heroStroke,
-    },
-    newSessionPlus: {
-      width: 28,
-      height: 28,
+      gap: 8,
+      backgroundColor: colors.ocean,
       borderRadius: 14,
-      backgroundColor: "rgba(255,255,255,0.10)",
-      alignItems: "center",
-      justifyContent: "center",
+      height: 48,
+      shadowColor: colors.ocean,
+      shadowOpacity: 0.35,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
     },
-    newSessionPlusText: { color: colors.heroText, fontSize: 16, fontWeight: "600", lineHeight: 18 },
-    newSessionText: { color: colors.heroText, fontSize: 15, fontWeight: "600" },
+    newSessionPressed: { opacity: 0.85 },
+    newSessionPlusText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600", lineHeight: 20 },
+    newSessionText: { color: "#FFFFFF", fontSize: 15, fontWeight: "600" },
     sessionsHead: {
       flexDirection: "row",
       alignItems: "center",
@@ -619,42 +625,46 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
       flexDirection: "row",
       alignItems: "center",
       gap: space.x2,
-      backgroundColor: "rgba(255,173,31,0.10)",
+      backgroundColor: colors.heroCard,
       borderWidth: 1,
-      borderColor: "rgba(255,173,31,0.25)",
+      borderColor: colors.heroStroke,
       borderRadius: radius.pill,
       paddingHorizontal: 12,
       paddingVertical: 8,
       alignSelf: "flex-start",
     },
     pendingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.amber },
-    pendingText: { color: colors.heroText, fontSize: 13, fontWeight: "500", letterSpacing: -0.1 },
+    pendingText: { color: colors.mist, fontSize: 13, fontWeight: "500", letterSpacing: -0.1 },
     refreshError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
     groupHeaderRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       paddingTop: space.x3,
-      paddingBottom: space.x1,
+      paddingBottom: space.x2,
+      paddingHorizontal: 2,
     },
-    groupHeader: { color: colors.mist, fontSize: 13, fontWeight: "500" },
-    groupCount: { color: colors.heroTextDim, fontSize: 11, fontFamily: font.mono },
+    groupHeader: { color: colors.mist, fontFamily: font.monoBold, fontSize: font.eyebrow, letterSpacing: 1.4, textTransform: "uppercase" },
+    groupCount: { color: colors.heroTextDim, fontSize: font.eyebrow, fontFamily: font.mono },
     row: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 11,
-      paddingVertical: 12,
-      paddingHorizontal: 4,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.heroDivider,
+      gap: 12,
+      backgroundColor: colors.heroCard,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.heroStroke,
+      paddingVertical: 13,
+      paddingHorizontal: 14,
+      marginBottom: 8,
     },
-    rowPressed: { backgroundColor: "rgba(255,255,255,0.06)" },
-    rowDot: { width: 7, height: 7, borderRadius: 4 },
+    rowPressed: { backgroundColor: "rgba(255,255,255,0.09)" },
+    rowDot: { width: 8, height: 8, borderRadius: 4 },
     rowBody: { flex: 1, gap: 3 },
     rowHeader: { flexDirection: "row", alignItems: "center", gap: space.x2 },
-    rowTitle: { color: colors.heroText, fontSize: (font.section + 1) * scale, fontWeight: "500", letterSpacing: -0.2, flexShrink: 1 },
+    rowTitle: { color: colors.heroText, fontSize: 16 * scale, fontWeight: "600", letterSpacing: -0.2, flexShrink: 1 },
     rowMeta: { flexDirection: "row", alignItems: "center", gap: space.x2 },
-    rowId: { color: "rgba(242,246,255,0.42)", fontSize: 11, fontFamily: font.mono, flexShrink: 1 },
+    rowId: { color: "rgba(242,246,255,0.40)", fontSize: 11, fontFamily: font.mono, flexShrink: 1 },
     rowPreview: { color: colors.heroTextDim, fontSize: font.caption * scale, lineHeight: 18 * scale, letterSpacing: 0.1 },
     time: { color: "rgba(242,246,255,0.48)", fontSize: 11, fontFamily: font.mono },
     pressure: { fontSize: font.eyebrow, fontFamily: font.mono, letterSpacing: 0.2 },

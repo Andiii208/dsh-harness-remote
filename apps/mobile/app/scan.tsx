@@ -23,6 +23,7 @@ export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -36,7 +37,9 @@ export default function ScanScreen() {
     if (!connecting) return;
     if (state === "online") {
       setConnecting(false);
-      router.replace("/sessions");
+      setSuccess(true);
+      const timer = setTimeout(() => router.replace("/sessions"), 900);
+      return () => clearTimeout(timer);
     } else if (givenUp || (state === "offline" && lastError)) {
       setConnecting(false);
       setError(lastError?.hint ?? "连接失败，请返回重试");
@@ -113,7 +116,15 @@ export default function ScanScreen() {
           <View style={[styles.corner, styles.cornerBR]} />
         </View>
         <View style={styles.overlay}>
-          {connecting ? (
+          {success ? (
+            <>
+              <View style={styles.successBadge}>
+                <Text style={styles.successCheck}>✓</Text>
+              </View>
+              <Text style={styles.overlayTitle}>已连接</Text>
+              <Text style={styles.overlayHint}>正在进入会话列表…</Text>
+            </>
+          ) : connecting ? (
             <>
               <Text style={styles.overlayTitle}>正在连接…</Text>
               <Text style={styles.overlayHint}>连接成功会自动进入会话列表</Text>
@@ -166,6 +177,21 @@ function createStyles(colors: ThemeColors) {
     cornerBL: { bottom: "38%", left: "22%", borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
     cornerBR: { bottom: "38%", right: "22%", borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
     overlay: { padding: space.x5, paddingBottom: space.x7, gap: space.x3, backgroundColor: "rgba(4,10,20,0.55)" },
+    successBadge: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: colors.success,
+      alignSelf: "center",
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: colors.success,
+      shadowOpacity: 0.4,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 6,
+    },
+    successCheck: { color: "#FFFFFF", fontSize: 26, fontWeight: "700", lineHeight: 30 },
     overlayTitle: { color: colors.heroText, fontSize: font.body + 1, fontWeight: "600", textAlign: "center" },
     overlayHint: { color: colors.heroTextDim, fontSize: font.caption, textAlign: "center" },
     error: { color: colors.danger, fontSize: font.caption, textAlign: "center" },
