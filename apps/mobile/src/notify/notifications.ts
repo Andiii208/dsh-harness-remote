@@ -51,6 +51,12 @@ export function notificationParams(ev: NotificationEvent): NotificationParams {
         body: truncate(`会话 ${ev.sessionId ?? ""} 的目标受阻，请关注`),
         data: { kind: ev.kind, sessionId: ev.sessionId ?? "", route: `chat/${ev.sessionId ?? ""}` },
       };
+    case "context-pressure":
+      return {
+        title: "上下文压力",
+        body: truncate(`会话 ${ev.sessionId ?? ""} 上下文用量达到 ${ev.percent ?? 0}%`),
+        data: { kind: ev.kind, sessionId: ev.sessionId ?? "", route: `chat/${ev.sessionId ?? ""}` },
+      };
     default:
       return { title: "dsh-remote", body: "", data: {} };
   }

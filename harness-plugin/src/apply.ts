@@ -2,7 +2,8 @@
  * apply.ts — DSH bundle 插件入口（host 侧）。
  *
  * 行为（对齐 dsh-pocket）：
- * - 插件加载即自动开启远程访问（默认公网 tunnel 模式，零配置）。
+ * - 插件加载后**默认不自动开启公网隧道**（安全默认）；用户可在 DSH 设置页
+ *   「手机远程」手动开启公网/局域网访问。
  * - 注册 loopback RPC 通道 `dsh-harness-remote`，设置页由此读取状态/启停。
  * - ctx.effect 注册清理：插件卸载时关闭 relay/tunnel/console/DSH 桥接。
  *
@@ -63,8 +64,9 @@ export function apply(
 
   const disposeRpc = (internals.installRpc ?? installRemoteRpc)(ctx, service, logger);
 
-  // 零配置：插件加载即开远程（默认公网）。失败只记日志，不拖垮 DSH 启动。
-  if (internals.autoStart !== false) {
+  // 安全默认：插件加载不自动开公网隧道；只有显式 autoStart:true（或测试注入）才自动启动。
+  // 用户可在 DSH 设置页「手机远程」手动开启公网/局域网访问。
+  if (internals.autoStart === true) {
     void service.start(config.mode ?? "tunnel").catch((err: unknown) => {
       logger.warn?.(`dsh-harness-remote: 自动开启远程失败：${err instanceof Error ? err.message : String(err)}`);
     });

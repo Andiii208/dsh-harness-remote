@@ -43,6 +43,7 @@ export function MessageBubble({ m, live, sessionId }: { m: TranscriptMessage; li
   const [pluginNotice, setPluginNotice] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const [thinkingOpen, setThinkingOpen] = useState(false);
   const [pluginCommands, setPluginCommands] = useState<PluginCommand[]>([]);
   const [imageData, setImageData] = useState<Record<string, { mediaType: string; data: string }>>({});
   const [zoomImage, setZoomImage] = useState<{ uri: string } | null>(null);
@@ -186,6 +187,23 @@ export function MessageBubble({ m, live, sessionId }: { m: TranscriptMessage; li
               })}
             </View>
           )}
+          {m.thinking !== undefined && (
+            <View style={styles.thinkingBlock}>
+              <Pressable
+                onPress={() => setThinkingOpen((v) => !v)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={thinkingOpen ? "折叠思考过程" : "展开思考过程"}
+              >
+                <Text style={styles.thinkingHeader}>{thinkingOpen ? "▾ 思考" : "▸ 思考"}</Text>
+              </Pressable>
+              {thinkingOpen && (
+                <Text style={styles.thinkingText} selectable>
+                  {m.thinking}
+                </Text>
+              )}
+            </View>
+          )}
           {segments.map((seg, i) =>
             seg.code ? (
               <View key={i} style={[styles.codeBlock, isTool && styles.codeBlockTool]}>
@@ -318,6 +336,16 @@ function createStyles(colors: ThemeColors, scale: number) {
     },
     imageThumbLoading: { alignItems: "center", justifyContent: "center" },
     imageThumbLoadingText: { color: colors.textMuted, fontSize: font.body },
+    thinkingBlock: {
+      backgroundColor: colors.codeBg,
+      borderRadius: 9,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      marginVertical: 3,
+      gap: 6,
+    },
+    thinkingHeader: { color: colors.textDim, fontSize: 11, fontFamily: font.mono, fontWeight: "500" },
+    thinkingText: { color: colors.textMuted, fontSize: (font.body - 1) * scale, lineHeight: 18 * scale },
     roleTagTool: { color: colors.warn },
     text: { color: colors.text, fontSize: (font.body + 1) * scale, lineHeight: 22 * scale },
     textUser: { color: colors.msgSelfText },

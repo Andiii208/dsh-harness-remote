@@ -2,16 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { approvalHistoryStore } from "../../src/data/approvalHistoryStoreAdapter";
 import type { ApprovalHistoryEntry } from "../../src/data/approvalHistoryStore";
+import { useI18n } from "../../src/i18n";
 import { font, radius, space, type ThemeColors } from "../../src/theme";
 import { useTheme } from "../../src/theme-context";
 
-function resultLabel(result: unknown): string {
+function resultLabel(result: unknown, t: { approved: string; rejected: string; skipped: string; answered: string }): string {
   if (!result || typeof result !== "object") return String(result ?? "");
   const r = result as Record<string, unknown>;
-  if (r.approved === true) return "已批准";
-  if (r.approved === false) return "已拒绝";
-  if (r.skipped === true) return "已跳过";
-  if (typeof r.answer === "string") return `已回答：${r.answer}`;
+  if (r.approved === true) return t.approved;
+  if (r.approved === false) return t.rejected;
+  if (r.skipped === true) return t.skipped;
+  if (typeof r.answer === "string") return `${t.answered}：${r.answer}`;
   return JSON.stringify(result);
 }
 
@@ -24,7 +25,7 @@ function formatTime(ms: number): string {
   });
 }
 
-function HistoryRow({ entry, colors }: { entry: ApprovalHistoryEntry; colors: ThemeColors }) {
+function HistoryRow({ entry, colors, t }: { entry: ApprovalHistoryEntry; colors: ThemeColors; t: { approvalKind: string; questionKind: string; noDescription: string; approved: string; rejected: string; skipped: string; answered: string } }) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isApproval = entry.kind === "approval";
   return (
@@ -33,14 +34,14 @@ function HistoryRow({ entry, colors }: { entry: ApprovalHistoryEntry; colors: Th
         <View style={styles.kindWrap}>
           <View style={[styles.kindDot, { backgroundColor: isApproval ? colors.warn : colors.accent }]} />
           <Text style={[styles.kindTag, { color: isApproval ? colors.warn : colors.accent }]}>
-            {isApproval ? "审批" : "提问"}
+            {isApproval ? t.approvalKind : t.questionKind}
           </Text>
         </View>
         <Text style={styles.time}>{formatTime(entry.respondedAt)}</Text>
       </View>
-      <Text style={styles.prompt} numberOfLines={2}>{entry.prompt || "（无描述）"}</Text>
+      <Text style={styles.prompt} numberOfLines={2}>{entry.prompt || t.noDescription}</Text>
       <View style={styles.rowBottom}>
-        <Text style={styles.result}>{resultLabel(entry.result)}</Text>
+        <Text style={styles.result}>{resultLabel(entry.result, t)}</Text>
         <Text style={styles.rpcId}>{entry.rpcId}</Text>
       </View>
     </View>
@@ -49,6 +50,7 @@ function HistoryRow({ entry, colors }: { entry: ApprovalHistoryEntry; colors: Th
 
 export default function ApprovalHistoryScreen() {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [entries, setEntries] = useState<ApprovalHistoryEntry[]>([]);
 
@@ -59,17 +61,17 @@ export default function ApprovalHistoryScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <Text style={styles.title}>历史</Text>
-        <Text style={styles.subtitle}>{entries.length} 条</Text>
+        <Text style={styles.title}>{t.approval.historyTitle}</Text>
+        <Text style={styles.subtitle}>{entries.length} {t.approval.entries}</Text>
       </View>
       {entries.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>还没有处理记录</Text>
+          <Text style={styles.emptyText}>{t.approval.noHistory}</Text>
         </View>
       ) : (
         <View style={styles.list}>
           {entries.map((e) => (
-            <HistoryRow key={`${e.rpcId}-${e.respondedAt}`} entry={e} colors={colors} />
+            <HistoryRow key={`${e.rpcId}-${e.respondedAt}`} entry={e} colors={colors} t={t.approval} />
           ))}
         </View>
       )}

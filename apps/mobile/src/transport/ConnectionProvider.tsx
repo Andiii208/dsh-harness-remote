@@ -81,7 +81,7 @@ export interface ConnectionApi {
   /** Relay 配对成功后对方的 consoleId（仅 relay 模式在线配对时非空）。 */
   relayPeerId: string | null;
   disconnect(): void;
-  sendMessage(sessionId: string, text: string): Promise<void>;
+  sendMessage(sessionId: string, text: string, promptMode?: "queue" | "steer"): Promise<void>;
   /** 发送图片消息（session.prompt image block，mode:"queue"）。 */
   sendImageMessage(sessionId: string, image: { mediaType: ImageMediaType; data: string; name?: string }): Promise<void>;
   /** 读取图片附件 base64（session.attachment）；失败返回 null。 */
@@ -261,7 +261,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         setGivenUp(true);
       },
       onNotification: (n) => {
-        setNotifications((prev) => [...prev.slice(-49), n]);
+        setNotifications((prev) => [...prev.slice(-49), { ...n, receivedAt: Date.now() }]);
         if (notificationsEnabledRef.current) void notificationService.present(n); // 开关门控
       },
     });
@@ -307,13 +307,14 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     if (p) void connect(p.host, p.port, p.token, p.pairCode);
   }, [connect]);
 
-  const sendMessage = useCallback(async (sessionId: string, text: string) => {
+  const sendMessage = useCallback(async (sessionId: string, text: string, promptMode: "queue" | "steer" = "queue") => {
     const c = pipelineRef.current?.loop.connection;
     if (!c) throw new Error("OFFLINE: not connected"); // 离线反馈（评审 #15）
     // 真实 DSH rc.7 的 session.prompt 契约：mode + content 数组（text part）。
+    // H4：普通消息默认 queue（进入排队/工具循环），composer 可切 steer。
     await c.unary("session.prompt", {
       sessionId,
-      mode: "steer",
+      mode: promptMode,
       content: [{ type: "text", text }],
     });
   }, []);

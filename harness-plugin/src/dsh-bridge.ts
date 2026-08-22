@@ -19,6 +19,7 @@ import {
   makeRpcId,
   type RelayEnvelope,
 } from "@dsh-remote/protocol";
+import { execFile as nodeExecFile } from "node:child_process";
 import type { RelayClient } from "./relay-client.js";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -53,8 +54,8 @@ export interface DshBridgeHandle {
 }
 
 /** 用 host.describe 快速探测 DSH API 是否可达。 */
-export async function probeDshApi(baseUrl: string, fetchImpl?: typeof fetch): Promise<boolean> {
-  const client = new RpcClient({ baseUrl, timeoutMs: 3000, fetchImpl });
+export async function probeDshApi(baseUrl: string, fetchImpl?: typeof fetch, timeoutMs = 3000): Promise<boolean> {
+  const client = new RpcClient({ baseUrl, timeoutMs, fetchImpl });
   try {
     const r = await client.unary("host.describe", {});
     return r.ok;
@@ -63,20 +64,72 @@ export async function probeDshApi(baseUrl: string, fetchImpl?: typeof fetch): Pr
   }
 }
 
+/**
+ * 解析 `netstat -ano -p tcp` 输出中的回环监听端口。
+ * 只接受 127.0.0.1 / 0.0.0.0 / [::1] / [::] 的 LISTENING 行。
+ */
+export function parseLoopbackListeningPorts(netstatOutput: string): number[] {
+  const ports = new Set<number>();
+  for (const rawLine of String(netstatOutput ?? "").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!/LISTENING/i.test(line)) continue;
+    const columns = line.split(/\s+/);
+    const local = columns[1] ?? "";
+    const match = local.match(/^(?:127\.0\.0\.1|0\.0\.0\.0|\[::1\]|\[::\]):(\d+)$/);
+    if (!match) continue;
+    const port = Number(match[1]);
+    if (Number.isInteger(port) && port > 0 && port <= 65535) ports.add(port);
+  }
+  return [...ports].sort((a, b) => a - b);
+}
+
+/**
+ * 枚举当前机器上的回环 TCP 监听端口（Windows 用 netstat）。
+ * 失败/非 Windows 时返回空数组，调用方回退历史端口。
+ */
+export function getLoopbackListeningPorts(timeoutMs = 5000): Promise<number[]> {
+  return new Promise((resolve) => {
+    nodeExecFile(
+      "netstat",
+      ["-ano", "-p", "tcp"],
+      { timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 },
+      (err, stdout) => {
+        if (err) {
+          resolve([]);
+          return;
+        }
+        resolve(parseLoopbackListeningPorts(String(stdout ?? "")));
+      },
+    );
+  });
+}
+
 /** 从常见环境变量/默认端口里挑一个可达的 DSH API baseUrl。 */
 export async function detectDshApiUrl(
   fetchImpl?: typeof fetch,
   onStatus?: (line: string) => void,
 ): Promise<string | null> {
-  const candidates: string[] = [];
+  const candidates: Array<{ base: string; timeoutMs: number }> = [];
   const envUrl = process.env.DSH_API_URL ?? process.env.DSH_WEB_URL;
-  if (envUrl) candidates.push(envUrl.replace(/\/+$/, ""));
-  candidates.push("http://127.0.0.1:56734", "http://127.0.0.1:3080");
+  if (envUrl) candidates.push({ base: envUrl.replace(/\/+$/, ""), timeoutMs: 3000 });
+
+  // Windows 兜底：枚举 DSH Desktop 进程实际监听的 127.0.0.1 端口，逐个探活。
+  const loopbackPorts = await getLoopbackListeningPorts();
+  for (const port of loopbackPorts) {
+    candidates.push({ base: `http://127.0.0.1:${port}`, timeoutMs: 1500 });
+  }
+
+  // 历史兼容端口，放在动态探测之后。
+  candidates.push(
+    { base: "http://127.0.0.1:56734", timeoutMs: 1500 },
+    { base: "http://127.0.0.1:3080", timeoutMs: 1500 },
+  );
+
   const seen = new Set<string>();
-  for (const base of candidates) {
+  for (const { base, timeoutMs } of candidates) {
     if (seen.has(base)) continue;
     seen.add(base);
-    if (await probeDshApi(base, fetchImpl)) {
+    if (await probeDshApi(base, fetchImpl, timeoutMs)) {
       onStatus?.(`已连接 DSH API：${base}`);
       return base;
     }

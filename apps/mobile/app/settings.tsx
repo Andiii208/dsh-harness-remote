@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import Constants from "expo-constants";
-import type { HostSettings } from "@dsh-remote/protocol";
-import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
+import { useConnection } from "../src/transport/ConnectionProvider";
 import { useI18n } from "../src/i18n";
-import { defaultsFromHostSettings } from "../src/ui/settingsDefaults";
+import { defaultsFromSettingsNamespaces } from "../src/ui/settingsDefaults";
+import { modelsPermissionsVisible, pluginsRowVisible } from "../src/ui/settingsVisibility";
 import { autoReconnectStore } from "../src/discovery/autoReconnectStoreAdapter";
 import { isExpoGo } from "../src/notify/expoEnv";
 import { useAppSettings } from "../src/data/appSettingsContext";
@@ -85,17 +85,22 @@ const optionStyles = StyleSheet.create({
 
 export default function SettingsScreen() {
   const { colors, preference, setPreference } = useTheme();
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
+  const stateLabel = (s: typeof state) =>
+    s === "online" ? t.common.stateOnline
+      : s === "offline" ? t.common.stateOffline
+        : s === "backoff" ? t.common.stateBackoff
+          : t.common.stateConnecting;
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { state, describe, lastEndpoint, notifications, disconnect, notificationsEnabled, setNotificationsEnabled, settingsDescribe, settingsMutate, agentPresetList, pluginList, hostSettingsGet, hostSettingsSet } = useConnection();
+  const { state, describe, lastEndpoint, notifications, disconnect, notificationsEnabled, setNotificationsEnabled, settingsDescribe, settingsMutate, agentPresetList, pluginList } = useConnection();
   const { fontSize, setFontSize } = useAppSettings();
   const router = useRouter();
   const [autoReconnect, setAutoReconnect] = useState(true);
   const [settingsInfo, setSettingsInfo] = useState<{ writable: boolean; hasDocument: boolean; namespaces: Array<{ ns: string; value: unknown; revision: number; applies: string }> } | null>(null);
-  const [hostSettings, setHostSettings] = useState<HostSettings | null>(null);
   const [presets, setPresets] = useState<Array<{ id: string; name: string; isDefault: boolean; trust: string; broken?: string }>>([]);
   const [presetRead, setPresetRead] = useState(false);
   const [pluginCount, setPluginCount] = useState(0);
+  const [pluginRead, setPluginRead] = useState(false);
   const [updateState, setUpdateState] = useState<{ status: "idle" | "checking" | "new" | "latest" | "error"; message: string; url?: string }>({
     status: "idle",
     message: "",
@@ -104,17 +109,6 @@ export default function SettingsScreen() {
   useEffect(() => {
     void autoReconnectStore.enabled().then(setAutoReconnect);
   }, []);
-
-  useEffect(() => {
-    if (state !== "online") return;
-    let alive = true;
-    void hostSettingsGet().then((s) => {
-      if (alive) setHostSettings(s);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [state, hostSettingsGet]);
 
   useEffect(() => {
     let alive = true;
@@ -142,7 +136,10 @@ export default function SettingsScreen() {
   useEffect(() => {
     let alive = true;
     void pluginList().then((list) => {
-      if (alive) setPluginCount(list?.plugins.length ?? 0);
+      if (alive) {
+        setPluginCount(list?.plugins.length ?? 0);
+        setPluginRead(true);
+      }
     });
     return () => {
       alive = false;
@@ -158,20 +155,43 @@ export default function SettingsScreen() {
       ? `${(describe as { name?: string }).name ?? ""} ${(describe as { version?: string }).version ?? ""}`.trim()
       : "—";
 
-  const defaults = defaultsFromHostSettings(hostSettings);
+  const defaults = defaultsFromSettingsNamespaces(settingsInfo?.namespaces, settingsInfo?.writable !== false);
 
+  const modelNs = settingsInfo?.namespaces.find((n) => n.ns === "agent-default-model");
   const applyDefaultModel = async (model: string) => {
-    if (!defaults.writable) return;
+    if (!modelNs) return;
     void haptic("light");
-    const ok = await hostSettingsSet({ model });
-    if (ok) setHostSettings((prev) => (prev ? { ...prev, model } : prev));
+    const ok = await settingsMutate(
+      modelNs.ns,
+      [{ op: "set", path: ["model"], value: model }],
+      modelNs.revision,
+    );
+    if (ok) {
+      setSettingsInfo((prev) => prev ? {
+        ...prev,
+        namespaces: prev.namespaces.map((n) => n.ns === modelNs.ns
+          ? { ...n, value: { ...(n.value as Record<string, unknown>), model }, revision: n.revision + 1 }
+          : n),
+      } : prev);
+    }
   };
 
   const applyDefaultThinking = async (thinking: string) => {
-    if (!defaults.writable) return;
+    if (!modelNs) return;
     void haptic("light");
-    const ok = await hostSettingsSet({ thinking });
-    if (ok) setHostSettings((prev) => (prev ? { ...prev, thinking } : prev));
+    const ok = await settingsMutate(
+      modelNs.ns,
+      [{ op: "set", path: ["reasoningEffort"], value: thinking }],
+      modelNs.revision,
+    );
+    if (ok) {
+      setSettingsInfo((prev) => prev ? {
+        ...prev,
+        namespaces: prev.namespaces.map((n) => n.ns === modelNs.ns
+          ? { ...n, value: { ...(n.value as Record<string, unknown>), reasoningEffort: thinking }, revision: n.revision + 1 }
+          : n),
+      } : prev);
+    }
   };
 
   const permissionNs = settingsInfo?.namespaces.find((n) => n.ns === "permission");
@@ -234,7 +254,7 @@ export default function SettingsScreen() {
           <Text style={styles.rowLabel}>{t.settings.status}</Text>
           <StatusChip
             tone={state === "online" ? "success" : state === "offline" ? "danger" : "warn"}
-            label={STATE_LABEL[state] ?? state}
+            label={stateLabel(state)}
           />
         </View>
         <Row label={t.settings.targetHost} value={lastEndpoint ? `${lastEndpoint.host}:${lastEndpoint.port}` : t.common.notSet} />
@@ -264,13 +284,22 @@ export default function SettingsScreen() {
             thumbColor={colors.text}
           />
         </View>
-        <Row label={t.settings.unreadEvents} value={notifications.length > 0 ? `${notifications.length}` : t.settings.none} />
+        <PressableRow
+          label={t.settings.unreadEvents}
+          value={notifications.length > 0 ? `${notifications.length}` : t.settings.none}
+          onPress={() => router.push("/events" as never)}
+        />
         <Text style={styles.hint}>
           {isExpoGo() ? "Expo Go 不支持本地通知——此开关在 Expo Go 下不可用，development build 中生效。" : "关闭后仍会在应用内记录事件，只是不弹系统通知。"}
         </Text>
       </Group>
 
-      {settingsInfo !== null || presetRead ? (
+      {modelsPermissionsVisible({
+        online: state === "online",
+        settingsInfoPresent: settingsInfo !== null,
+        presetRead,
+        presetCount: presets.length,
+      }) ? (
         <Group eyebrow={t.settings.modelsPermissions}>
           {presetRead && presets.length > 0 && (
             <>
@@ -324,7 +353,7 @@ export default function SettingsScreen() {
         </Group>
       ) : null}
 
-      {hostSettings !== null && (
+      {modelNs !== undefined && (
         <Group eyebrow={t.settings.defaults}>
           {defaults.models.length > 0 && (
             <>
@@ -344,7 +373,7 @@ export default function SettingsScreen() {
                   ))}
                 </View>
               )}
-              <Text style={styles.hint}>新会话默认使用的模型；读不到 host.settings.get 时此分组自动隐藏。</Text>
+              <Text style={styles.hint}>新会话默认使用的模型；读不到 settings.describe 的 agent-default-model 命名空间时此分组自动隐藏。</Text>
             </>
           )}
 
@@ -374,14 +403,16 @@ export default function SettingsScreen() {
         </Group>
       )}
 
-      <Group eyebrow={t.settings.plugins}>
-        <PressableRow
-          label="用户插件"
-          value={pluginCount > 0 ? `${pluginCount} 个可用` : "读不到自动隐藏"}
-          onPress={() => router.push("/plugins" as never)}
-          last
-        />
-      </Group>
+      {pluginsRowVisible(pluginRead, pluginCount) && (
+        <Group eyebrow={t.settings.plugins}>
+          <PressableRow
+            label="用户插件"
+            value={`${pluginCount} 个可用`}
+            onPress={() => router.push("/plugins" as never)}
+            last
+          />
+        </Group>
+      )}
 
       <Group eyebrow={t.settings.display}>
         <View style={styles.row}>
@@ -406,6 +437,24 @@ export default function SettingsScreen() {
           ))}
         </View>
         <Text style={styles.hint}>默认浅色；深色模式适合夜间使用，跟随系统会随手机外观自动切换。</Text>
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>语言 / Language</Text>
+          <Text style={styles.rowValue}>{locale === "zh-CN" ? "中文" : "English"}</Text>
+        </View>
+        <View style={styles.optionsRow}>
+          {(["zh-CN", "en"] as const).map((lang) => (
+            <OptionChip
+              key={lang}
+              label={lang === "zh-CN" ? "中文" : "English"}
+              active={locale === lang}
+              onPress={() => {
+                void haptic("light");
+                setLocale(lang);
+              }}
+            />
+          ))}
+        </View>
+        <Text style={styles.hint}>中英界面切换立即生效并保存在本机。</Text>
         <View style={styles.row}>
           <Text style={styles.rowLabel}>字体大小</Text>
           <Text style={styles.rowValue}>{fontSize === "small" ? "小" : fontSize === "large" ? "大" : "标准"}</Text>

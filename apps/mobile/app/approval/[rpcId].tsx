@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useConnection } from "../../src/transport/ConnectionProvider";
+import { useI18n } from "../../src/i18n";
 import { font, radius, space, type ThemeColors } from "../../src/theme";
 import { Field } from "../../src/ui/Field";
 import { Button } from "../../src/ui/Button";
@@ -12,6 +13,7 @@ export default function ApprovalScreen() {
   const { rpcId } = useLocalSearchParams<{ rpcId: string }>();
   const id = Array.isArray(rpcId) ? rpcId[0] : rpcId;
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { pending, respond } = useConnection();
   const router = useRouter();
@@ -40,9 +42,9 @@ export default function ApprovalScreen() {
     return (
       <View style={styles.screen}>
         <View style={styles.card}>
-          <Text style={styles.doneTitle}>已处理</Text>
-          <Text style={styles.prompt}>该请求已处理或不存在</Text>
-          <Button label="返回" onPress={() => router.back()} full />
+          <Text style={styles.doneTitle}>{t.approval.processed}</Text>
+          <Text style={styles.prompt}>{t.approval.notFound}</Text>
+          <Button label={t.approval.back} onPress={() => router.back()} full />
         </View>
       </View>
     );
@@ -62,11 +64,11 @@ export default function ApprovalScreen() {
           <View style={styles.kindRow}>
             <View style={styles.kindWrap}>
               <View style={[styles.kindDot, { backgroundColor: rail }]} />
-              <Text style={[styles.kindTag, { color: rail }]}>{isApproval ? "审批" : "提问"}</Text>
+              <Text style={[styles.kindTag, { color: rail }]}>{isApproval ? t.approval.approvalKind : t.approval.questionKind}</Text>
             </View>
             {id && <Text style={styles.rpcId}>{id}</Text>}
           </View>
-          <Text style={styles.prompt}>{String(payload.prompt ?? (isApproval ? "允许执行？" : "请回答"))}</Text>
+          <Text style={styles.prompt}>{String(payload.prompt ?? (isApproval ? t.approval.allowExec : t.approval.pleaseAnswer))}</Text>
 
           {isApproval ? (
             <>
@@ -81,26 +83,26 @@ export default function ApprovalScreen() {
                 </View>
               )}
               <View style={styles.buttonRow}>
-                <Button label="批准" onPress={() => done({ approved: true })} disabled={busy} style={styles.flex} />
-                <Button tone="danger" label="拒绝" onPress={() => done({ approved: false })} disabled={busy} style={styles.flex} />
+                <Button label={t.approval.approve} onPress={() => done({ approved: true })} disabled={busy} style={styles.flex} />
+                <Button tone="danger" label={t.approval.reject} onPress={() => done({ approved: false })} disabled={busy} style={styles.flex} />
               </View>
             </>
           ) : (
             <>
               <Field
-                placeholder="回答…"
+                placeholder={t.approval.answerPlaceholder}
                 value={answer}
                 onChangeText={setAnswer}
                 multiline
                 style={styles.answerInput}
               />
               <Button
-                label="提交回答"
+                label={t.approval.submitAnswer}
                 onPress={() => done({ answer: answer.trim() })}
                 disabled={!answer.trim() || busy}
                 full
               />
-              <Button tone="danger" label="跳过" onPress={() => done({ skipped: true })} disabled={busy} full />
+              <Button tone="danger" label={t.approval.skip} onPress={() => done({ skipped: true })} disabled={busy} full />
             </>
           )}
         </View>

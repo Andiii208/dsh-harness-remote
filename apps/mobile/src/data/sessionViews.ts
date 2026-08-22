@@ -37,8 +37,8 @@ export function groupByWorkspace(sessions: SessionSummary[]): SessionGroup[] {
   return [...groups.entries()]
     .map(([workspace, list]) => ({ workspace, sessions: list }))
     .sort((a, b) => {
-      const aMax = Math.max(...a.sessions.map((s) => s.updatedAt));
-      const bMax = Math.max(...b.sessions.map((s) => s.updatedAt));
+      const aMax = Math.max(...a.sessions.map((s) => s.sortKey ?? s.updatedAt));
+      const bMax = Math.max(...b.sessions.map((s) => s.sortKey ?? s.updatedAt));
       return bMax - aMax;
     });
 }
@@ -51,10 +51,15 @@ export function pressureTier(percent: number): PressureTier {
   return "normal";
 }
 
-const DAY_NAMES = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+const DAY_NAMES_ZH = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
-/** 会话时间格式：今天 HH:mm / 昨天 / 一周内周X / 更早 M/D。 */
-export function formatSessionTime(ms: number, now: number = Date.now()): string {
+/** 会话时间格式：今天 HH:mm / 昨天 / 一周内周X / 更早 M/D。weekday/yesterday 名称可注入翻译。 */
+export function formatSessionTime(
+  ms: number,
+  now: number = Date.now(),
+  weekdays: string[] = DAY_NAMES_ZH,
+  yesterdayLabel: string = "昨天",
+): string {
   const nowDate = new Date(now);
   const thenDate = new Date(ms);
   const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
@@ -62,7 +67,7 @@ export function formatSessionTime(ms: number, now: number = Date.now()): string 
   if (dayDiff <= 0) {
     return thenDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
-  if (dayDiff === 1) return "昨天";
-  if (dayDiff < 7) return DAY_NAMES[thenDate.getDay()] ?? "";
+  if (dayDiff === 1) return yesterdayLabel;
+  if (dayDiff < 7) return weekdays[thenDate.getDay()] ?? "";
   return `${thenDate.getMonth() + 1}/${thenDate.getDate()}`;
 }

@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Network from "expo-network";
 import { StatusBar } from "expo-status-bar";
 import { useEntering, useExiting } from "../src/ui/anim";
-import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
+import { useConnection } from "../src/transport/ConnectionProvider";
 import { isRelayUrl, toRelayWsUrl } from "../src/transport/relayMode";
 import { tokenStore } from "../src/data/secureStoreAdapter";
 import { hostStore } from "../src/discovery/hostStoreAdapter";
@@ -23,7 +23,7 @@ import { onboardingStore } from "../src/discovery/onboardingStoreAdapter";
 import { registerPairDeepLink } from "../src/discovery/pairLink";
 import { discoverHosts, type DiscoveredHost } from "../src/discovery/discover";
 import { font, radius, space } from "../src/theme";
-import { DeepOceanHero } from "../src/ui/DeepOceanHero";
+import { DeepOceanBackground } from "../src/ui/DeepOceanBackground";
 import { HarnessMark } from "../src/ui/HarnessMark";
 import { StatusChip, type StatusTone } from "../src/ui/StatusChip";
 import { Field } from "../src/ui/Field";
@@ -46,7 +46,12 @@ type ConnectMode = "remote" | "lan";
 export default function ConnectScreen() {
   const { state, describe, relayPeerId, connect, disconnect } = useConnection();
   const { t } = useI18n();
-  const { colors, isDark } = useTheme();
+  const stateLabel = (s: typeof state) =>
+    s === "online" ? t.common.stateOnline
+      : s === "offline" ? t.common.stateOffline
+        : s === "backoff" ? t.common.stateBackoff
+          : t.common.stateConnecting;
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -269,7 +274,8 @@ export default function ConnectScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar style={isDark ? "light" : "dark"} />
+      <DeepOceanBackground whale />
+      <StatusBar style="light" />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -279,9 +285,9 @@ export default function ConnectScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <HarnessMark size={26} tone="ink" />
+            <HarnessMark size={26} tone="hero" />
             <View style={styles.headerRight}>
-              <StatusChip tone={STATE_TONE[state] ?? "neutral"} label={STATE_LABEL[state] ?? state} />
+              <StatusChip tone={STATE_TONE[state] ?? "neutral"} label={stateLabel(state)} variant="hero" />
               <Pressable
                 onPress={() => router.push("/settings")}
                 hitSlop={8}
@@ -303,12 +309,12 @@ export default function ConnectScreen() {
             </View>
           )}
 
-          <View>
-            <DeepOceanHero
-              title={t.connect.heroTitle}
-              subtitle={t.connect.heroSubtitle}
-              variant="clarklevis"
-            />
+          <View style={styles.heroBlock}>
+            <View style={styles.heroPill}>
+              <Text style={styles.heroPillText}>DEEPSEEK HARNESS · REMOTE</Text>
+            </View>
+            <Text style={styles.heroTitle}>{t.connect.heroTitle}</Text>
+            <Text style={styles.heroSubtitle}>{t.connect.heroSubtitle}</Text>
           </View>
 
           {mode === "lan" && (
@@ -320,7 +326,7 @@ export default function ConnectScreen() {
           {!(mode === "remote" && !showManual && !online) && (
             <View key={`form-${mode}`} style={styles.card}>
               <View style={styles.cardHead}>
-                <SectionLabel>
+                <SectionLabel tone="mist">
                   {mode === "remote" ? t.connect.remoteBannerTitle : t.connect.lanBannerTitle}
                 </SectionLabel>
                 <Text style={styles.cardDesc}>
@@ -331,6 +337,7 @@ export default function ConnectScreen() {
               {mode === "remote" ? (
                 <>
                   <Field
+                    variant="hero"
                     label={t.connect.addressLabel}
                     placeholder={t.connect.addressPlaceholder}
                     autoCapitalize="none"
@@ -341,6 +348,7 @@ export default function ConnectScreen() {
                     editable={!online}
                   />
                   <Field
+                    variant="hero"
                     label={t.connect.codeLabel}
                     placeholder={t.connect.codePlaceholder}
                     keyboardType="number-pad"
@@ -365,6 +373,7 @@ export default function ConnectScreen() {
                   <View style={styles.fieldsRow}>
                     <View style={styles.hostField}>
                       <Field
+                        variant="hero"
                         label="电脑 IP"
                         placeholder="192.168.1.5"
                         autoCapitalize="none"
@@ -377,6 +386,7 @@ export default function ConnectScreen() {
                     </View>
                     <View style={styles.portField}>
                       <Field
+                        variant="hero"
                         label="端口"
                         placeholder="3080"
                         keyboardType="number-pad"
@@ -397,6 +407,7 @@ export default function ConnectScreen() {
 
                   {showToken && (
                     <Field
+                      variant="hero"
                       label="安全码"
                       placeholder="可选"
                       autoCapitalize="none"
@@ -558,7 +569,7 @@ export default function ConnectScreen() {
 
 function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
   return StyleSheet.create({
-    screen: { flex: 1, backgroundColor: colors.bg },
+    screen: { flex: 1, backgroundColor: colors.navy },
     flex: { flex: 1 },
     content: { paddingHorizontal: 20, paddingBottom: space.x4, gap: 16, flexGrow: 1 },
     flexSpacer: { flex: 1, minHeight: 24 },
@@ -568,53 +579,80 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.heroCard,
       borderWidth: 1,
-      borderColor: colors.separator,
+      borderColor: colors.heroStroke,
       alignItems: "center",
       justifyContent: "center",
     },
     headerIconBtnPressed: { opacity: 0.7 },
-    headerIconText: { color: colors.text, fontSize: 17, fontWeight: "600" },
+    headerIconText: { color: colors.heroText, fontSize: 17, fontWeight: "600" },
+    heroBlock: { alignItems: "center", paddingTop: space.x4, gap: 8 },
+    heroPill: {
+      paddingHorizontal: 10,
+      paddingTop: 5,
+      paddingBottom: 4,
+      borderRadius: 8,
+      backgroundColor: "rgba(0,0,0,0.25)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.18)",
+    },
+    heroPillText: {
+      color: colors.heroText,
+      fontSize: 9,
+      fontFamily: font.monoMedium,
+      letterSpacing: 1.4,
+      opacity: 0.9,
+    },
+    heroTitle: {
+      color: colors.heroText,
+      fontFamily: font.displayBold,
+      fontSize: 26,
+      fontWeight: "700",
+      letterSpacing: -0.6,
+      textAlign: "center",
+      lineHeight: 32,
+    },
+    heroSubtitle: { color: colors.heroTextDim, fontSize: 14, textAlign: "center" },
     stateRow: { flexDirection: "row", alignItems: "center", gap: space.x3, flexWrap: "wrap" },
-    describe: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono, flexShrink: 1 },
+    describe: { color: colors.heroTextDim, fontSize: font.caption, fontFamily: font.mono, flexShrink: 1 },
     pairedConsole: { color: colors.success, fontSize: 11, fontFamily: font.mono, letterSpacing: 0.2, flexShrink: 1 },
     backRow: { alignItems: "flex-start", paddingVertical: 2 },
-    backLink: { color: colors.accent, fontSize: font.body, fontWeight: "500" },
+    backLink: { color: colors.mist, fontSize: font.body, fontWeight: "500" },
     card: {
-      backgroundColor: colors.surface,
+      backgroundColor: colors.heroCard,
       borderRadius: radius.card,
       borderWidth: 1,
-      borderColor: colors.separator,
+      borderColor: colors.heroStroke,
       padding: space.x5,
       gap: 14,
     },
     cardHead: { gap: 6 },
-    cardDesc: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
+    cardDesc: { color: colors.heroTextDim, fontSize: font.caption, lineHeight: 18 },
     fieldsRow: { flexDirection: "row", gap: space.x3 },
     hostField: { flex: 1 },
     portField: { width: 96 },
     advancedRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-    linkText: { color: colors.accent, fontSize: font.body, fontWeight: "500" },
+    linkText: { color: colors.mist, fontSize: font.body, fontWeight: "500" },
     manualToggle: { alignItems: "center", paddingVertical: space.x2 },
     pcHelpCard: {
-      backgroundColor: colors.surface,
+      backgroundColor: colors.heroCard,
       borderRadius: radius.card,
       borderWidth: 1,
-      borderColor: colors.separator,
+      borderColor: colors.heroStroke,
       padding: space.x5,
       gap: space.x2,
     },
-    pcHelpTitle: { color: colors.text, fontSize: font.body + 1, fontWeight: "600" },
-    pcHelpStep: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
-    savedToken: { color: colors.textMuted, fontSize: font.caption },
+    pcHelpTitle: { color: colors.heroText, fontSize: font.body + 1, fontWeight: "600" },
+    pcHelpStep: { color: colors.heroTextDim, fontSize: font.caption, lineHeight: 18 },
+    savedToken: { color: colors.heroTextDim, fontSize: font.caption },
     clearToken: { alignItems: "flex-start" },
     textPressed: { opacity: 0.6 },
     clearTokenText: { color: colors.danger, fontSize: font.caption },
-    relayHint: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },
+    relayHint: { color: colors.heroTextDim, fontSize: font.caption, lineHeight: 18 },
     quickRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.x3 },
-    quickLink: { color: colors.accent, fontSize: font.body, fontWeight: "500" },
-    quickSeparator: { color: colors.textDim, fontSize: font.body },
+    quickLink: { color: colors.mist, fontSize: font.body, fontWeight: "500" },
+    quickSeparator: { color: colors.heroTextDim, fontSize: font.body },
     connectError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
     moreRow: { alignItems: "center", paddingVertical: 2 },
     moreLink: { color: colors.accent, fontSize: font.body, fontWeight: "500" },

@@ -1,5 +1,58 @@
 # PROGRESS
 
+## Phase 5 完成（2026-08-22 收尾与发布门禁）
+- P5-1 全仓回归全绿：`pnpm -r build`（BUILD_EXIT=0，`.shots/phase5-final-build.log`）；`pnpm -r typecheck`（TYPECHECK_EXIT=0，`.shots/phase5-final-typecheck.log`，期间修复 `RemoteAccessHandle.attachDsh` 可选化以通过测试类型检查）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 180 / relay 39 / harness-plugin 55 / mock-harness 29，skipped=0（`.shots/phase5-final-test.log`）。
+- P5-2 全页面 Playwright 证据：浅色 `phase5-connect-light.png` / `phase5-sessions-light.png` / `phase5-chat-light.png` / `phase5-trajectory-light.png` / `phase5-settings-light.png` / `phase5-events-light.png` / `phase5-plugins-light.png` / `phase5-approval-light.png`；深色 `phase5-dark-connect.png` / `phase5-dark-sessions.png` / `phase5-dark-chat.png` / `phase5-dark-trajectory.png` / `phase5-dark-settings.png` / `phase5-dark-approval.png` / `phase5-dark-plugins.png` / `phase5-dark-events.png`（脚本 `.shots/phase5-ui-evidence.py`、`.shots/phase5-dark-extra.py`）。
+- P5-3 文档收尾：`PROGRESS.md` 已追加全部阶段记录；`BLOCKED.md` 更新（真实 DSH 已校准，移除过时阻塞，保留 iOS/EAS/真机推送阻塞）；`README.md`/`docs/SECURITY.md` 记录插件默认不自动开公网隧道。
+- P5-4 真实 DSH 核心链路（本机 `DSH_WEB_URL=http://127.0.0.1:60576`，DSH Desktop 2.0.1 / CLI 0.1.0-rc.7）验证通过，证据：连接/会话列表（`.shots/real-dsh-settings-summary-2026-08-22.txt` session.list 197 项）、聊天历史（`.shots/real-dsh-chunk-shapes-2026-08-22.txt`、`.shots/real-dsh-reasoning-delta-2026-08-22.txt`、`.shots/real-dsh-history-inspect-2026-08-22.txt`）、发消息 queue 模式（`.shots/real-dsh-prompt-queue-2026-08-22.txt` accepted）、权限切换（`.shots/real-dsh-commands-execute-2026-08-22.txt` `/permission workspace-write` 并恢复）、默认模型读写（`.shots/real-dsh-default-model-write-2026-08-22.txt` 写回并恢复）；settings.mutate 接受 expectedRevision（`.shots/real-dsh-mutate-verify-2026-08-22.txt`、`.shots/real-dsh-permission-write-2026-08-22.txt`）。
+- 完成定义核对：Phase 0–5 全部完成；build/typecheck/test 全绿且测试数 ≥ 基线（mobile 180 ≥ 165，harness 55 ≥ 53）；通知分类器真实 DSH 三种帧格式有单测；i18n 可切换；连接页与 sessions 页 v9 品牌画布；composer 控制行齐全；插件默认不自动开公网隧道；`docs/COMPATIBILITY.md` 已更新为 2026-08-22 实测矩阵。
+
+## Phase 4 完成（2026-08-22 视觉统一 v9 与体验 M2、L1、L3、L4、L6）
+- P4-1 (M2) 连接首页整屏品牌画布：`index.tsx` 改用 `DeepOceanBackground` 全屏深蓝背景，hero 文案（pill + title + subtitle）直排；header 品牌元素改 hero 变体（HarnessMark hero / heroCard 图标钮）；表单卡改 `heroCard/heroStroke`，`Field` 全部 `variant="hero"`；StatusBar 固定 light。
+- P4-2 (L1) 轨迹泳道按 `durationMs/totalMs` 分段：`trajectory.ts` 新增 `laneSegments`/`buildTrajectoryRows`；`TrajectoryView` 泳道改分段渲染，并增加 Turn 分组头（Turn 头 + 步骤行）。mobile 测试 +3（trajectory）。
+- P4-3 (L3) 工作区 Sheet：保留按已列出工作区筛选；当前宿主未提供目录浏览能力，Sheet 内显示「当前宿主未提供目录浏览能力」并隐藏浏览入口。
+- P4-4 (L6) `EmptyState`/`SkeletonRow` 增加 `variant="hero"` 深色变体，sessions 空态/骨架已切换为 hero 变体。
+- P4-5 (L4) 插件默认不自动开公网隧道：`apply.ts` 改为仅 `autoStart === true` 时自动启动；DSH 设置页「手机远程」手动开启/停止按钮保持；CLI `dsh-remote remote` 保持显式开启。`docs/SECURITY.md` 与 `README.md` 已记录安全默认与手动开启步骤。
+- 验收：`pnpm -r build` 全绿（BUILD_EXIT=0，`.shots/phase4-build.log`）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 180 / relay 39 / harness-plugin 55 / mock-harness 29，skipped=0（`.shots/phase4-test.log`）。
+
+## Phase 3 完成（2026-08-22 通知与 i18n 收尾 N2、M1、M10、M11、L2）
+- P3-1 (N2) 通知分类器兼容真实 DSH 三种格式：`session/event` 对象帧（`f.event.type` + seq 去重）、`session/projection` 的 `{key,value}` 形式（goal/contextPressure）、`approval/requested`/`question/requested` 直接帧；新增 `context-pressure` 事件（contextPressure.percent ≥85）。mobile 测试 +3（classifier）。
+- P3-2 (M1) i18n 收尾：设置页「显示」新增语言切换（zh-CN / en，`setLocale` 持久化）；审批三页（index/[rpcId]/history）全部接 `useI18n`；`formatSessionTime` 支持注入 `weekdays`/`yesterdayLabel`，sessions 页传入 `t.common.weekdays`；`STATE_LABEL` 在 index/sessions/settings 全部改为 t 驱动的 `stateLabel`。
+- P3-3 (L2) 应用内事件列表页：新增 `app/events.tsx`；设置页「未读事件 N」改为可点击进入列表（类型图标+标题+时间+跳转）；`NotificationEvent` 增加 `receivedAt`。
+- P3-4 (M10) 插件入口：`plugin.list` 读取完成且返回插件时才显示设置页插件行（纯函数 `pluginsRowVisible`）；插件页空态文案更新为「当前 DSH 未提供插件清单」。mobile 测试 +2（settingsVisibility）。
+- P3-5 (M11) 设置页「模型与权限」组：离线或无任何数据时整组隐藏（纯函数 `modelsPermissionsVisible`）。
+- 新增文件：`apps/mobile/src/ui/settingsVisibility.ts`、`apps/mobile/app/events.tsx`、`apps/mobile/test/settingsVisibility.test.ts`；mobile 测试 172 → 177。
+- 验收：`pnpm -r build` 全绿（BUILD_EXIT=0，`.shots/phase3-build.log`）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 177 / relay 39 / harness-plugin 55 / mock-harness 29，skipped=0（`.shots/phase3-test.log`）。
+
+## Phase 2 完成（2026-08-22 聊天核心功能补全 M3–M8）
+- P2-1 (M3) composer 控制行：权限盾牌（弹 Sheet）、预设/模型名+思考等级胶囊（弹模型 Sheet）、queue/steer 模式胶囊、上下文环（点击弹用量 Sheet，展示 contextPercent/tokenUsage）；header「⋯」菜单只留「重新加载历史」。
+- P2-2 (M4) `/` 命令面板：输入 `/` 自动弹出（`/permission`、`/queue`、`/steer`，无能力隐藏 permission）；选择后 `/permission` 打开权限 Sheet，`/queue`、`/steer` 切换发送模式。纯函数 `availableCommands` 可测。
+- P2-3 (M4) `@` 触发技能：输入 `@` 自动打开技能选择（复用 picker）；`pickSkill` 修复重复 `@`。
+- P2-4 (M8) 队列编辑：队列横幅新增「编辑」按钮，弹输入框后经 `session.updateQueue` 的 `{kind:"edit", content:[{type:"text",text}]}` 真编辑。纯函数 `queueEditPayload` 可测。
+- P2-5 (M5) 历史分页 UI：`TranscriptMessage` 增加 `seq`，`SessionStore` 在历史/实时事件折叠时写入 seq；聊天页滚动到顶自动 `loadHistory(id, 500, beforeSeq)`（beforeSeq 取当前最早 seq），顶部显示「正在加载历史…」。
+- P2-6 (M6) 后台任务 Sheet：胶囊可点击弹出任务列表（状态/耗时/详情）；宿主未提供停止 RPC，面板只读并说明。
+- P2-7 (M7) todos/plan 渲染：目标卡下渲染 todos checkbox 行（只读）、`plan` 投影显示「计划模式」眉标；目标编辑 Sheet 调 `goal.edit`。
+- 新增 `apps/mobile/src/ui/chat/composerCommands.ts` + `apps/mobile/test/composerCommands.test.ts`（2 测）。mobile 测试 170 → 172。
+- 验收：`pnpm -r build` 全绿（BUILD_EXIT=0，`.shots/phase2-build.log`）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 172 / relay 39 / harness-plugin 55 / mock-harness 29，skipped=0（`.shots/phase2-test.log`）。
+
+## Phase 1 完成（2026-08-22 数据与消息正确性 H1–H3、M9）
+- P1-1 (H1) `SessionStore` 排序与展示分离：`SessionSummary` 新增 `sortKey`（touchSession 单调 tick，排序唯一事实）与 `serverUpdatedAt`（服务器毫秒，仅展示）；`applySessionList` 不再用服务器 `updatedAt` 覆盖排序字段（`updatedAt` 字段仍保留服务器值供兼容）；`getSessions` 与 `groupByWorkspace` 改按 `sortKey ?? updatedAt`。单测：先 `applySessionList`（毫秒时间戳）再实时事件，旧会话正确排到顶部（mobile +1）。
+- P1-2 (H2) 实时事件 seq 登记：`applyEvent` 遇到 `session/event` 对象帧先按 `event.seq` 登记 `historySeqs` 并跳过重复；`applyHistory` 分页去重逻辑保持不变。单测：实时 seq 1 → 重载历史含 seq 1/2，无重复（mobile +1）。
+- P1-3 (H3) 流式暂停冻结快照：聊天页新增 `pausedData` state；暂停时把 `messages + live` 冻结，暂停期间部分内容仍可见；恢复/新一轮流式时清空。Playwright 证据将在 Phase 5 统一刷新（`.shots/`）。
+- P1-4 (M9) 思考过程折叠：`SessionStore` 折叠真实 DSH `assistant/chunk` 的 `block-start(blockType:"reasoning")` 与 `reasoning-delta`（chunk.text）到 `TranscriptMessage.thinking`；`assistant/message` 落地时携带 `thinking`；`MessageBubble` 新增默认折叠的「思考」块（▸/▾ 思考）。真实 DSH 历史探测：15669 个 `reasoning-delta` 帧，`chunk:{type:"reasoning-delta",index,text}`（`.shots/real-dsh-chunk-shapes-2026-08-22.txt`、`.shots/real-dsh-reasoning-delta-2026-08-22.txt`）。单测：reasoning 折叠进 thinking（mobile +1）。
+- 验收：`pnpm -r build` 全绿（BUILD_EXIT=0，`.shots/phase1-build.log`）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 170 / relay 39 / harness-plugin 55 / mock-harness 29，skipped=0（`.shots/phase1-test.log`）。
+
+## Phase 0 完成（2026-08-22 真实宿主接缝校准与修复）
+- 基线核对通过：`pnpm -r build` 全绿（BUILD_EXIT=0，`.shots/baseline-2026-08-22-build.log`）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 165 / relay 39 / harness-plugin 53 / mock-harness 29，skipped=0（`.shots/baseline-2026-08-22-test.log`）。
+- P0-1 `docs/COMPATIBILITY.md` 已更新为 2026-08-22 实测矩阵：DSH Desktop 2.0.1 + CLI 0.1.0-rc.7，API 动态端口（实测 `http://127.0.0.1:60576`），`host.describe.version="0.0.1"`；`host.settings.get/set`、`plugin.list` 404；`session.search` 部署禁用；`settings.mutate` 接受 `expectedRevision`；`commands/execute` 成功路径已实测。
+- P0-2 `settings.mutate` 真实成功路径：实测同值 set（`agent-default-model`/`permission`）与真实 `permission.defaultPreset` 写入（danger-full-access → workspace-write → 恢复 danger-full-access）均成功，返回完整 ns（`.shots/real-dsh-mutate-verify-2026-08-22.txt`、`.shots/real-dsh-permission-write-2026-08-22.txt`）。
+- P0-3 默认模型/思考强度改走 `settings.describe`：真实 DSH 命名空间 `agent-default-model` 含 `{provider, model, reasoningEffort?}`，模型清单来自 `llm-deepseek.models[]`。实测默认模型写回并恢复（deepseek-v4-pro-0813 → deepseek-v4-flash + reasoningEffort medium → 恢复）（`.shots/real-dsh-default-model-write-2026-08-22.txt`）。`apps/mobile/src/ui/settingsDefaults.ts` 新增 `defaultsFromSettingsNamespaces`；`settings.tsx` 默认配置组改为读 `settings.describe`，`host.settings.get/set` 路径不再用于默认配置（探测不到隐藏）。mobile 测试 165 → 167（settingsDefaults +2）。
+- P0-4 `commands/execute` 成功路径：新会话 `session.create` → `/help` 返回 `{ok:true}`；`/permission` 读取返回 `{commandId,result:{kind:"success",text:"current preset danger-full-access..."}}`；`/permission workspace-write` 与恢复 `danger-full-access` 均成功（`.shots/real-dsh-commands-execute-2026-08-22.txt`）。`executeCommand` 解析无需改动。
+- P0-5 `dsh-bridge` 探测策略补强：新增 `parseLoopbackListeningPorts`（解析 `netstat -ano -p tcp` 回环 LISTENING 端口）与 `getLoopbackListeningPorts`；`detectDshApiUrl` 现按 `DSH_WEB_URL/DSH_API_URL` → 动态回环端口逐个 `host.describe` 探活 → 历史兼容 56734/3080。harness-plugin 测试 53 → 55（dsh-bridge parse +2）。
+- P0-6 `session.prompt` 默认 `mode:"queue"`：`ConnectionProvider.sendMessage` 签名改为 `sendMessage(sessionId, text, promptMode: "queue"|"steer" = "queue")`；真实 DSH 新会话发一条 queue 模式无害文本，`session.prompt` 返回 `{accepted:true}`，`session.history` 可见 `agent/inbox/spliced` 帧（`.shots/real-dsh-prompt-queue-2026-08-22.txt`、`.shots/real-dsh-history-inspect-2026-08-22.txt`）。
+- 验收：`pnpm -r build` 全绿（BUILD_EXIT=0，`.shots/phase0-build.log`）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 167 / relay 39 / harness-plugin 55 / mock-harness 29，skipped=0（`.shots/phase0-test.log`）。
+- 真实 DSH 写操作均无害且已恢复：`permission.defaultPreset` 已恢复 `danger-full-access`；`agent-default-model` 已恢复原值并 unset 临时 `reasoningEffort`；仅新增 3 个空白会话（校准/命令/queue 冒烟），未删改任何用户会话。
+
 ## 2026-08-20 Hero 方向调整：点阵鲸鱼 + 官网官方版（已完成并验证）
 - 从官网 HTML 提取关键视觉：深色 hero、底部模糊径向光斑、网格、渐变描边徽章、canvas 粒子；我们对应补上「点阵鲸鱼 + 徽章 + 流动光晕」。
 - 新增 `apps/mobile/src/ui/DotWhaleMark.tsx`：SVG Pattern + Mask 生成官方点阵鲸鱼（不新增依赖）。

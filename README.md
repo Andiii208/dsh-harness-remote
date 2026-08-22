@@ -71,6 +71,8 @@ npx @deepseek-ai/dsh web
 ```
 
 > 电脑端需要 Node.js 与 DSH；手机 App 从 GitHub Releases 下载 `app-release.apk`。公网模式走 cloudflared 免费隧道，无需账号/服务器/公网 IP。
+>
+> 安全默认：插件加载后**不会自动开启公网隧道**。请打开 DSH 设置页 → 手机远程 → 手动点「开启公网访问」（或「仅局域网」）；CLI `dsh-remote remote` 仍为显式开启。
 
 ## 开发快速开始
 
@@ -85,7 +87,7 @@ pnpm --filter mock-harness build
 node mock-harness/dist/cli.js --port 3080
 
 # 开发调试用 CLI（启动 relay + 自动桥接本机 DSH + 打印 6 位配对码与二维码）
-# DSH API 探测顺序：$env:DSH_API_URL / $env:DSH_WEB_URL → 127.0.0.1:56734 → 127.0.0.1:3080。
+# DSH API 探测顺序：$env:DSH_API_URL / $env:DSH_WEB_URL → 本机回环监听端口逐个探活 → 127.0.0.1:56734 → 127.0.0.1:3080（历史兼容）。
 pnpm --filter dsh-harness-remote build
 node harness-plugin/dist/cli.js remote
 

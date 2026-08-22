@@ -16,11 +16,12 @@ import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import * as ImagePicker from "expo-image-picker";
 import { useConnection } from "../../src/transport/ConnectionProvider";
 import { useI18n } from "../../src/i18n";
-import type { TranscriptMessage } from "../../src/data/SessionStore";
+import type { QueueItem, TranscriptMessage } from "../../src/data/SessionStore";
 import type { TranscriptStep } from "../../src/data/transcriptSteps";
 import { filterSkills, type SkillEntry } from "../../src/data/skillList";
 import { estimateBase64Bytes, resolveImageMediaType } from "../../src/data/imageMessage";
 import { shouldStickToBottom } from "../../src/ui/chat/stickyBottom";
+import { availableCommands, queueEditPayload } from "../../src/ui/chat/composerCommands";
 import { font, radius, space } from "../../src/theme";
 import { MessageBubble } from "../../src/ui/chat/MessageBubble";
 import { TrajectoryView } from "../../src/ui/trajectory/TrajectoryView";
@@ -47,6 +48,16 @@ export default function ChatScreen() {
   const [stickyToBottom, setStickyToBottom] = useState(true);
   const [streamPaused, setStreamPaused] = useState(false);
   const [pauseHint, setPauseHint] = useState("");
+  const [pausedData, setPausedData] = useState<TranscriptMessage[] | null>(null);
+  const [promptMode, setPromptMode] = useState<"queue" | "steer">("queue");
+  const [showContextSheet, setShowContextSheet] = useState(false);
+  const [showJobsSheet, setShowJobsSheet] = useState(false);
+  const [showCommandPanel, setShowCommandPanel] = useState(false);
+  const [editQueueItem, setEditQueueItem] = useState<QueueItem | null>(null);
+  const [queueEditText, setQueueEditText] = useState("");
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [goalEditVisible, setGoalEditVisible] = useState(false);
+  const [goalEditText, setGoalEditText] = useState("");
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [modelsData, setModelsData] = useState<{ current: { provider: string; model: string; reasoningEffort?: string }; groups: Array<{ id: string; name: string; models: Array<{ id: string; name: string; reasoning?: { efforts?: Array<{ id: string; name: string }>; defaultEffort?: string } }> }> } | null>(null);
   const [showPermissionPicker, setShowPermissionPicker] = useState(false);
@@ -189,7 +200,10 @@ export default function ChatScreen() {
   };
 
   const pickSkill = (name: string) => {
-    setDraft((prev) => `${prev}${prev.length > 0 && !prev.endsWith(" ") ? " " : ""}@${name} `);
+    setDraft((prev) => {
+      const base = prev.endsWith("@") ? prev.slice(0, -1) : prev;
+      return `${base}${base.length > 0 && !base.endsWith(" ") ? " " : ""}@${name} `;
+    });
     setShowSkillPicker(false);
     void haptic("light");
   };
@@ -270,12 +284,90 @@ export default function ChatScreen() {
     }
   };
 
+  const online = state === "online";
+
+  const earliestSeq = messages.reduce<number | undefined>(
+    (min, m) => (m.seq !== undefined && (min === undefined || m.seq < min) ? m.seq : min),
+    undefined,
+  );
+
+  const handleDraftChange = (text: string) => {
+    setDraft(text);
+    if (text.endsWith("/") && online) setShowCommandPanel(true);
+    if (text.endsWith("@") && online && skills && skills.length > 0) {
+      setSkillQuery("");
+      setShowSkillPicker(true);
+    }
+    if (!text.endsWith("/") && !text.endsWith("@")) setShowCommandPanel(false);
+  };
+
+  const loadOlderHistory = async () => {
+    if (!id || !online || loadingHistory) return;
+    setLoadingHistory(true);
+    try {
+      await loadHistory(id, 500, earliestSeq);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const runQueueEdit = async () => {
+    if (!id || !editQueueItem) return;
+    const text = queueEditText.trim();
+    if (!text) return;
+    const ok = await updateQueue(id, editQueueItem.id, queueEditPayload(text));
+    if (ok) {
+      void haptic("light");
+      setEditQueueItem(null);
+    } else {
+      void haptic("error");
+    }
+  };
+
+  const runGoalEdit = async () => {
+    if (!id || !goalRef) return;
+    const objective = goalEditText.trim();
+    if (!objective) return;
+    const ok = await goals.edit(id, goalRef, { objective });
+    if (ok) {
+      setGoalStatus(id, summary?.goalStatus ?? "active");
+      setGoalEditVisible(false);
+      void haptic("light");
+    } else {
+      void haptic("error");
+    }
+  };
+
+  const formatJobDuration = (j: { startedAt: number; finishedAt?: number }) => {
+    const end = j.finishedAt ?? Date.now();
+    const ms = Math.max(0, end - j.startedAt);
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
+  };
+
+  const commandItems = availableCommands(online);
+
+  const pickCommand = (command: string) => {
+    setDraft((prev) => (prev.endsWith("/") ? prev.slice(0, -1) : prev));
+    setShowCommandPanel(false);
+    if (command === "permission") {
+      setShowPermissionPicker(true);
+    } else if (command === "queue") {
+      setPromptMode("queue");
+      void haptic("light");
+    } else if (command === "steer") {
+      setPromptMode("steer");
+      void haptic("light");
+    }
+  };
+
   useEffect(() => {
     setStreamPaused(false); // 新一轮流式开始时恢复渲染
     setPauseHint("");
+    setPausedData(null);
   }, [liveId]);
-  const data = streamPaused ? messages : live ? [...messages, live] : messages;
-  const online = state === "online";
+  const data = streamPaused ? (pausedData ?? messages) : live ? [...messages, live] : messages;
   const filteredSkills = skills ? filterSkills(skills, skillQuery) : [];
   const goalStatus = summary?.goalStatus;
   const goalLabel =
@@ -323,6 +415,8 @@ export default function ChatScreen() {
     }
     const nearBottom = shouldStickToBottom(distance);
     if (nearBottom !== stickyToBottom) setStickyToBottom(nearBottom);
+    // M5：滚动到顶自动向前翻页（beforeSeq 取当前最早 seq）。
+    if (contentOffset.y < 60) void loadOlderHistory();
   };
 
   const sendText = async (raw: string) => {
@@ -333,7 +427,7 @@ export default function ChatScreen() {
     setFailedDraft("");
     void haptic("light");
     try {
-      await sendMessage(id, text);
+      await sendMessage(id, text, promptMode);
     } catch (err) {
       setDraft(text);
       setFailedDraft(text);
@@ -354,12 +448,15 @@ export default function ChatScreen() {
   const togglePause = async () => {
     if (streamPaused) {
       setStreamPaused(false);
+      setPausedData(null);
       setPauseHint("");
       void haptic("light");
       return;
     }
     if (!id) return;
     void haptic("light");
+    // H3：暂停前把已显示的 live 内容冻结进快照，暂停期间不抹掉已显示部分。
+    setPausedData(live ? [...messages, live] : messages);
     try {
       await interruptStream(id);
       setStreamPaused(true);
@@ -421,13 +518,23 @@ export default function ChatScreen() {
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <View style={styles.sessionHeader}>
-              {activeJobs.length > 0 && (
+              {loadingHistory && (
                 <View style={styles.jobsRow}>
+                  <Text style={styles.jobsText}>正在加载历史…</Text>
+                </View>
+              )}
+              {activeJobs.length > 0 && (
+                <Pressable
+                  style={({ pressed }) => [styles.jobsRow, pressed && styles.modelItemPressed]}
+                  onPress={() => setShowJobsSheet(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="查看后台任务"
+                >
                   <Text style={styles.jobsText} numberOfLines={1}>
                     后台任务 · {activeJobs[0]?.label}
                     {activeJobs.length > 1 ? ` +${activeJobs.length - 1}` : ""}
                   </Text>
-                </View>
+                </Pressable>
               )}
 
               {summary?.goalObjective !== undefined || goalStatus !== undefined ? (
@@ -437,6 +544,19 @@ export default function ChatScreen() {
                       {goalStatus ? `${t.chat.goal} · ${goalLabel}` : t.chat.goal}
                     </Text>
                     <View style={styles.goalBarActions}>
+                      {goalRef ? (
+                        <Pressable
+                          onPress={() => {
+                            setGoalEditText(summary?.goalObjective ?? "");
+                            setGoalEditVisible(true);
+                          }}
+                          hitSlop={6}
+                          accessibilityRole="button"
+                          accessibilityLabel="编辑目标"
+                        >
+                          <Text style={styles.goalBarAction}>编辑</Text>
+                        </Pressable>
+                      ) : null}
                       {(goalStatus === "active" || goalStatus === "paused") && goalRef ? (
                         <>
                           {goalStatus === "active" ? (
@@ -455,10 +575,27 @@ export default function ChatScreen() {
                       ) : null}
                     </View>
                   </View>
+                  {summary?.plan !== undefined && (
+                    <View style={styles.planBadge}>
+                      <Text style={styles.planBadgeText}>计划模式</Text>
+                    </View>
+                  )}
                   {summary?.goalObjective !== undefined && (
                     <Text style={styles.goalBarObjective} numberOfLines={2}>
                       {summary.goalObjective}
                     </Text>
+                  )}
+                  {summary?.todos !== undefined && summary.todos.length > 0 && (
+                    <View style={styles.todosBlock}>
+                      {summary.todos.map((todo, i) => (
+                        <View key={`${todo.content}-${i}`} style={styles.todoRow}>
+                          <Text style={styles.todoCheck}>{todo.status === "completed" ? "☑" : "☐"}</Text>
+                          <Text style={[styles.todoText, todo.status === "completed" && styles.todoTextDone]} numberOfLines={2}>
+                            {todo.content}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
                   )}
                   {goalError.length > 0 && <Text style={styles.goalBarError}>{goalError}</Text>}
                 </View>
@@ -469,8 +606,21 @@ export default function ChatScreen() {
                   <Text style={styles.queueTitle}>{t.chat.queueTitle}</Text>
                   {queue.map((q) => (
                     <View key={q.id} style={styles.queueRow}>
-                      <Pressable style={{ flex: 1 }} onPress={() => setDraft(q.text)} accessibilityRole="button" accessibilityLabel="填入输入框">
+                      <Pressable
+                        style={{ flex: 1 }}
+                        onPress={() => setDraft(q.text)}
+                        accessibilityRole="button"
+                        accessibilityLabel="填入输入框"
+                      >
                         <Text style={styles.queueText} numberOfLines={1}>{q.text}</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => { setEditQueueItem(q); setQueueEditText(q.text); }}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel="编辑"
+                      >
+                        <Text style={styles.queueAction}>编辑</Text>
                       </Pressable>
                       {q.placement !== "steering" && (
                         <Pressable onPress={() => void doQueueAction(q.id, { kind: "steer" })} hitSlop={6} accessibilityRole="button" accessibilityLabel="立即执行">
@@ -531,30 +681,6 @@ export default function ChatScreen() {
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowHeaderMenu(false)} accessibilityRole="button" accessibilityLabel="关闭菜单" />
           <View style={styles.menuPanel}>
             <Text style={styles.menuTitle}>会话</Text>
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => { setShowHeaderMenu(false); void openModelPicker(); }}
-              accessibilityRole="button"
-              accessibilityLabel={t.chat.chooseModel}
-            >
-              <Text style={styles.modelItemName}>{t.chat.model}</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => { setShowHeaderMenu(false); openPermissionPicker(); }}
-              accessibilityRole="button"
-              accessibilityLabel={t.chat.choosePermission}
-            >
-              <Text style={styles.modelItemName}>{permissionCurrent ? `${t.chat.permission} · ${permissionCurrent}` : t.chat.permission}</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => { setShowHeaderMenu(false); void openPresetPicker(); }}
-              accessibilityRole="button"
-              accessibilityLabel={t.chat.choosePreset}
-            >
-              <Text style={styles.modelItemName}>{t.chat.preset}</Text>
-            </Pressable>
             {online && (
               <Pressable
                 style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
@@ -762,6 +888,157 @@ export default function ChatScreen() {
         </View>
       </Modal>
 
+      {/* M4：/ 命令面板 */}
+      <Modal visible={showCommandPanel} transparent animationType="fade" onRequestClose={() => setShowCommandPanel(false)}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowCommandPanel(false)} accessibilityRole="button" accessibilityLabel="关闭命令面板" />
+          <View style={styles.menuPanel}>
+            <Text style={styles.menuTitle}>命令</Text>
+            {commandItems.map((c) => (
+              <Pressable
+                key={c.id}
+                style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+                onPress={() => pickCommand(c.id)}
+                accessibilityRole="button"
+                accessibilityLabel={c.label}
+              >
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={styles.modelItemName}>{c.label}</Text>
+                  <Text style={styles.skillDescription}>{c.hint}</Text>
+                </View>
+              </Pressable>
+            ))}
+            <Pressable
+              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+              onPress={() => setShowCommandPanel(false)}
+            >
+              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* M3：上下文用量 Sheet */}
+      <Modal visible={showContextSheet} transparent animationType="fade" onRequestClose={() => setShowContextSheet(false)}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowContextSheet(false)} accessibilityRole="button" accessibilityLabel="关闭上下文用量" />
+          <View style={styles.menuPanel}>
+            <Text style={styles.menuTitle}>上下文用量</Text>
+            <View style={styles.contextSheetRow}>
+              <Text style={styles.modelItemName}>当前占用</Text>
+              <Text style={styles.contextSheetValue}>{summary?.contextPercent ?? 0}%</Text>
+            </View>
+            {summary?.tokenUsageTotal !== undefined && (
+              <View style={styles.contextSheetRow}>
+                <Text style={styles.modelItemName}>Token 总量</Text>
+                <Text style={styles.contextSheetValue}>{summary.tokenUsageTotal}</Text>
+              </View>
+            )}
+            <Text style={styles.skillDescription}>数据来自会话投影（contextPressure / tokenUsage），由宿主实时推送。</Text>
+            <Pressable
+              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+              onPress={() => setShowContextSheet(false)}
+            >
+              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* M6：后台任务 Sheet（只读；宿主未提供停止 RPC） */}
+      <Modal visible={showJobsSheet} transparent animationType="fade" onRequestClose={() => setShowJobsSheet(false)}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowJobsSheet(false)} accessibilityRole="button" accessibilityLabel="关闭后台任务" />
+          <View style={styles.menuPanel}>
+            <Text style={styles.menuTitle}>后台任务</Text>
+            {sessionJobs.length === 0 ? (
+              <Text style={styles.modelItemName}>暂无后台任务</Text>
+            ) : (
+              sessionJobs.map((j) => (
+                <View key={j.id} style={styles.jobSheetRow}>
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <Text style={styles.modelItemName}>{j.label}</Text>
+                    <Text style={styles.skillDescription}>{j.kind} · {j.status} · {formatJobDuration(j)}</Text>
+                    {j.detail !== undefined && <Text style={styles.skillDescription} numberOfLines={2}>{j.detail}</Text>}
+                  </View>
+                </View>
+              ))
+            )}
+            <Text style={styles.skillDescription}>宿主未提供任务停止能力，此面板为只读展示。</Text>
+            <Pressable
+              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+              onPress={() => setShowJobsSheet(false)}
+            >
+              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* M8：队列编辑 */}
+      <Modal visible={editQueueItem !== null} transparent animationType="fade" onRequestClose={() => setEditQueueItem(null)}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setEditQueueItem(null)} accessibilityRole="button" accessibilityLabel="关闭编辑" />
+          <View style={styles.menuPanel}>
+            <Text style={styles.menuTitle}>编辑排队消息</Text>
+            <TextInput
+              style={styles.skillSearch}
+              placeholder="输入新的消息内容"
+              placeholderTextColor={colors.textDim}
+              value={queueEditText}
+              onChangeText={setQueueEditText}
+              multiline
+            />
+            <Pressable
+              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+              onPress={() => void runQueueEdit()}
+              accessibilityRole="button"
+              accessibilityLabel="保存编辑"
+            >
+              <Text style={styles.modelItemName}>保存</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+              onPress={() => setEditQueueItem(null)}
+            >
+              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* M7：目标编辑 Sheet */}
+      <Modal visible={goalEditVisible} transparent animationType="fade" onRequestClose={() => setGoalEditVisible(false)}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setGoalEditVisible(false)} accessibilityRole="button" accessibilityLabel="关闭目标编辑" />
+          <View style={styles.menuPanel}>
+            <Text style={styles.menuTitle}>编辑目标</Text>
+            <TextInput
+              style={styles.skillSearch}
+              placeholder="输入新的目标描述"
+              placeholderTextColor={colors.textDim}
+              value={goalEditText}
+              onChangeText={setGoalEditText}
+              multiline
+            />
+            <Pressable
+              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+              onPress={() => void runGoalEdit()}
+              accessibilityRole="button"
+              accessibilityLabel="保存目标"
+            >
+              <Text style={styles.modelItemName}>保存</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+              onPress={() => setGoalEditVisible(false)}
+            >
+              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.inputBar}>
         {(turnCount > 0 || stepCount > 0) && (
           <View style={styles.statsPillWrap}>
@@ -801,6 +1078,61 @@ export default function ChatScreen() {
             )}
           </View>
         )}
+        {/* M3：composer 控制行——权限 / 模型 / 思考强度 / 上下文环 */}
+        <View style={styles.controlRow}>
+          <Pressable
+            style={({ pressed }) => [styles.controlChip, pressed && styles.modelItemPressed]}
+            onPress={openPermissionPicker}
+            disabled={!online}
+            accessibilityRole="button"
+            accessibilityLabel={`${t.chat.permission}${permissionCurrent ? ` ${permissionCurrent}` : ""}`}
+          >
+            <Text style={styles.controlChipText} numberOfLines={1}>
+              🛡 {permissionCurrent ?? t.chat.permission}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.controlChip, pressed && styles.modelItemPressed]}
+            onPress={() => void openPresetPicker()}
+            disabled={!online}
+            accessibilityRole="button"
+            accessibilityLabel={t.chat.choosePreset}
+          >
+            <Text style={styles.controlChipText} numberOfLines={1}>{t.chat.preset}</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.controlChip, pressed && styles.modelItemPressed]}
+            onPress={() => void openModelPicker()}
+            disabled={!online}
+            accessibilityRole="button"
+            accessibilityLabel={t.chat.chooseModel}
+          >
+            <Text style={styles.controlChipText} numberOfLines={1}>
+              {modelsData?.current.model
+                ? `${modelsData.current.model}${selectedReasoningEffort ? ` · ${selectedReasoningEffort}` : ""}`
+                : t.chat.model}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.controlChip, pressed && styles.modelItemPressed, promptMode === "steer" && styles.controlChipActive]}
+            onPress={() => setPromptMode((m) => (m === "queue" ? "steer" : "queue"))}
+            disabled={!online}
+            accessibilityRole="button"
+            accessibilityLabel={`发送模式 ${promptMode}`}
+          >
+            <Text style={styles.controlChipText}>{promptMode === "queue" ? "queue" : "steer"}</Text>
+          </Pressable>
+          {summary?.contextPercent !== undefined && (
+            <Pressable
+              style={({ pressed }) => [styles.contextRing, pressed && styles.modelItemPressed]}
+              onPress={() => setShowContextSheet(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`上下文用量 ${summary.contextPercent}%`}
+            >
+              <Text style={styles.contextRingText}>{summary.contextPercent}%</Text>
+            </Pressable>
+          )}
+        </View>
         <View style={styles.toolRow}>
           <Pressable
             style={({ pressed }) => [styles.toolChip, (pressed || !online || sendingImage) && styles.modelItemPressed]}
@@ -833,7 +1165,7 @@ export default function ChatScreen() {
             placeholder={online ? t.chat.sendPlaceholder : t.chat.offlinePlaceholder}
             placeholderTextColor={colors.textDim}
             value={draft}
-            onChangeText={setDraft}
+            onChangeText={handleDraftChange}
             editable={online}
             onSubmitEditing={send}
             returnKeyType="send"
@@ -938,6 +1270,66 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       alignSelf: "flex-start",
     },
     jobsText: { color: colors.textMuted, fontSize: font.eyebrow, fontFamily: font.mono },
+    controlRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    controlChip: {
+      backgroundColor: colors.surface,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.separator,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      maxWidth: 220,
+    },
+    controlChipActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+    controlChipText: { color: colors.text, fontSize: font.caption, fontWeight: "500" },
+    contextRing: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 2,
+      borderColor: colors.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.surface,
+    },
+    contextRingText: { color: colors.accent, fontSize: 10, fontWeight: "700", fontFamily: font.mono },
+    planBadge: {
+      alignSelf: "flex-start",
+      backgroundColor: colors.accentSoft,
+      borderRadius: radius.pill,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+    },
+    planBadgeText: { color: colors.accent, fontSize: font.eyebrow, fontWeight: "600" },
+    todosBlock: { gap: 4, marginTop: 2 },
+    todoRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+    todoCheck: { color: colors.accent, fontSize: font.body, lineHeight: 20 },
+    todoText: { color: colors.text, fontSize: font.caption, lineHeight: 20, flex: 1 },
+    todoTextDone: { color: colors.textDim, textDecorationLine: "line-through" },
+    contextSheetRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: colors.surface2,
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+    },
+    contextSheetValue: { color: colors.accent, fontSize: font.body, fontWeight: "700", fontFamily: font.mono },
+    jobSheetRow: {
+      backgroundColor: colors.surface2,
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
     goalBar: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,

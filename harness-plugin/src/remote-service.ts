@@ -94,7 +94,7 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
         const baseUrl = await detectDshApiUrl(undefined, pushLog);
         if (baseUrl && handle) {
           pushLog(`延迟检测到 DSH API：${baseUrl}，正在建立桥接…`);
-          await handle.attachDsh(baseUrl);
+          await handle.attachDsh?.(baseUrl);
           status = { ...status, dshUrl: baseUrl, dshDetected: true };
           pushLog(`已建立 DSH 桥接：${baseUrl}`);
         } else {

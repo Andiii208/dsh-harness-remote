@@ -61,8 +61,8 @@ export interface RemoteAccessHandle {
   publicUrl: string | null;
   /** 关闭远程访问并释放 tunnel/relay/console/DSH 桥接资源。 */
   stop(): Promise<void>;
-  /** 延迟检测到 DSH API 后动态挂载桥接。 */
-  attachDsh(baseUrl: string): Promise<void>;
+  /** 延迟检测到 DSH API 后动态挂载桥接（测试句柄可省略）。 */
+  attachDsh?(baseUrl: string): Promise<void>;
 }
 
 /** 选取一个适合手机访问的局域网 IPv4 地址（与 CLI 同策略）。 */

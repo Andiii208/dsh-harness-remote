@@ -1,3 +1,9 @@
+## 2026-08-22 修复与优化计划（Phase 0–5）：无未解决阻塞
+
+- 真实 DSH 校准已完成（DSH Desktop 2.0.1 / CLI 0.1.0-rc.7 / API 动态端口经 `DSH_WEB_URL` 注入）；`settings.mutate` 接受 `expectedRevision`；默认模型/权限写路径已实测并恢复；`commands/execute` 成功路径与 `/permission` 切换已实测。
+- 插件默认不自动开公网隧道已实现（设置页手动开启）；本计划不再有真实 DSH 校准类阻塞。
+- 仍保留的历史阻塞：iOS/EAS 发布与真机推送（见下方 Phase E 记录），本窗口未涉及。
+
 ## 2026-08-20 APK 闪退排查（已关闭/已修复）
 
 - ~~**v0.3.0 APK 真机安装后闪退**~~ → **已关闭（2026-08-20）**：模拟器已复现。根因：`apps/mobile/src/ui/anim.ts` 将 `react-native` 的 `Easing.bezier` 传入 Reanimated `FadeInDown/FadeOut` 的 `.easing()`，release 包在 UI Runtime 同步调用该 JS 闭包触发 `[Worklets] Tried to synchronously call a Remote Function` 崩溃。修复：`Easing` 改从 `react-native-reanimated` 导入。CI 新 APK（run 32330750667）已安装到模拟器验证不闪退：onboarding → 主页 → 连接 mock-harness →「在线」→「进入会话」全程存活，`logcat -d -b crash` 为 0 字节，截图 `.shots/apk-home.png` / `.shots/apk-sessions.png`。

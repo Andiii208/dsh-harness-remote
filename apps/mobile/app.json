@@ -8,12 +8,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#F7F7FA",
-    "newArchEnabled": true,
-    "splash": {
-      "backgroundColor": "#F7F7FA",
-      "resizeMode": "cover",
-      "image": "./assets/splash.png"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "dev.dshremote.mobile",
@@ -35,6 +29,11 @@
       "expo-notifications",
       "expo-background-task",
       "expo-router",
+      ["expo-splash-screen", {
+        "backgroundColor": "#F7F7FA",
+        "resizeMode": "cover",
+        "image": "./assets/splash.png"
+      }],
       [
         "expo-camera",
         {

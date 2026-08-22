@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useConnection } from "../../src/transport/ConnectionProvider";
+import { useI18n } from "../../src/i18n";
 import { font, radius, space, type ThemeColors } from "../../src/theme";
 import { Button } from "../../src/ui/Button";
 import { EmptyState } from "../../src/ui/EmptyState";
@@ -10,6 +11,7 @@ import { haptic } from "../../src/ui/haptics";
 
 export default function ApprovalListScreen() {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { pending, respond } = useConnection();
   const router = useRouter();
@@ -41,12 +43,12 @@ export default function ApprovalListScreen() {
       }
       const approved = (result as { approved?: boolean })?.approved === true;
       const skipped = (result as { skipped?: boolean })?.skipped === true;
-      setDone(skipped ? `已跳过 ${items.length} 项提问` : approved ? `已批准 ${items.length} 项` : `已拒绝 ${items.length} 项`);
+      setDone(skipped ? `${t.approval.batchSkipped} ${items.length} ${t.approval.items}` : approved ? `${t.approval.batchApproved} ${items.length} ${t.approval.items}` : `${t.approval.batchRejected} ${items.length} ${t.approval.items}`);
       void haptic("success");
       setSelected(new Set());
     } catch (err) {
       console.warn("[approval] batch failed", err);
-      setError("批量处理失败：连接异常");
+      setError(t.approval.batchFailed);
       void haptic("error");
     } finally {
       setBusy(false);
@@ -57,19 +59,19 @@ export default function ApprovalListScreen() {
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>待处理</Text>
-          <Text style={styles.subtitle}>{pending.length} 项</Text>
+          <Text style={styles.title}>{t.approval.pendingTitle}</Text>
+          <Text style={styles.subtitle}>{pending.length} {t.approval.items}</Text>
         </View>
 
         {pending.length === 0 ? (
-          <EmptyState eyebrow="ALL CLEAR" text="没有待处理的审批或提问" />
+          <EmptyState eyebrow={t.approval.allClearTitle} text={t.approval.noPending} />
         ) : (
           <View style={styles.list}>
             {pending.map((p) => {
               const payload = (p.payload ?? {}) as Record<string, unknown>;
               const isApproval = p.kind === "approval";
               const checked = selected.has(p.rpcId);
-              const prompt = String(payload.prompt ?? payload.question ?? payload.command ?? (isApproval ? "允许执行？" : "请回答"));
+              const prompt = String(payload.prompt ?? payload.question ?? payload.command ?? (isApproval ? t.approval.allowExec : t.approval.pleaseAnswer));
               return (
                 <Pressable
                   key={p.rpcId}
@@ -83,7 +85,7 @@ export default function ApprovalListScreen() {
                   delayLongPress={350}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked }}
-                  accessibilityLabel={`${isApproval ? "审批" : "提问"} ${prompt}`}
+                  accessibilityLabel={`${isApproval ? t.approval.approvalKind : t.approval.questionKind} ${prompt}`}
                 >
                   <View style={styles.check}>{checked && <Text style={styles.checkMark}>✓</Text>}</View>
                   <View style={styles.rowBody}>
@@ -91,7 +93,7 @@ export default function ApprovalListScreen() {
                       <View style={styles.kindWrap}>
                         <View style={[styles.kindDot, { backgroundColor: isApproval ? colors.warn : colors.accent }]} />
                         <Text style={[styles.kindTag, { color: isApproval ? colors.warn : colors.accent }]}>
-                          {isApproval ? "审批" : "提问"}
+                          {isApproval ? t.approval.approvalKind : t.approval.questionKind}
                         </Text>
                       </View>
                       <Text style={styles.rpcId}>{p.rpcId}</Text>
@@ -119,13 +121,13 @@ export default function ApprovalListScreen() {
               pressed && styles.pressedText,
             ]}
             accessibilityRole="button"
-            accessibilityLabel={`跳过所选提问 ${selectedQuestions.length} 项`}
+            accessibilityLabel={`${t.approval.skipSelected} ${selectedQuestions.length}`}
           >
-            <Text style={styles.skipText}>跳过所选提问 ({selectedQuestions.length})</Text>
+            <Text style={styles.skipText}>{t.approval.skipSelected} ({selectedQuestions.length})</Text>
           </Pressable>
           <View style={styles.buttonRow}>
             <Button
-              label={`批准所选 (${selectedApprovals.length})`}
+              label={`${t.approval.approveSelected} (${selectedApprovals.length})`}
               loading={busy}
               onPress={() => void runBatch(selectedApprovals, { approved: true })}
               disabled={busy || selectedApprovals.length === 0}
@@ -133,7 +135,7 @@ export default function ApprovalListScreen() {
             />
             <Button
               tone="danger"
-              label={`拒绝所选 (${selectedApprovals.length})`}
+              label={`${t.approval.rejectSelected} (${selectedApprovals.length})`}
               loading={busy}
               onPress={() => void runBatch(selectedApprovals, { approved: false })}
               disabled={busy || selectedApprovals.length === 0}

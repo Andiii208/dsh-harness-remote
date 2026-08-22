@@ -16,6 +16,10 @@ export interface SessionSummary {
   updatedAt: number;
   /** 最近一次活动的时间戳（Date.now()，用于列表相对时间显示）。 */
   lastActiveAt?: number;
+  /** 单调排序键（tick 尺度）。服务器 updatedAt 是毫秒尺度，不能混用。 */
+  sortKey?: number;
+  /** 服务器返回的 updatedAt（毫秒尺度），仅用于展示/对照，不参与排序。 */
+  serverUpdatedAt?: number;
   /** 会话是否在运行（host/session-status 帧更新）。 */
   running?: boolean;
   goalStatus?: string;
@@ -71,6 +75,10 @@ export interface TranscriptMessage {
   gap?: boolean;
   /** 图片消息：content block 折叠出的 attachmentId/mediaType 引用。 */
   images?: TranscriptImage[];
+  /** 思考过程（reasoning-delta 折叠），仅 DSH Desktop 新宿主。 */
+  thinking?: string;
+  /** 来源事件 seq（用于历史分页 beforeSeq 计算）。 */
+  seq?: number;
 }
 
 export interface PendingRequest {
@@ -213,7 +221,7 @@ export class SessionStore {
   }
 
   getSessions(): SessionSummary[] {
-    return [...this.sessions.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+    return [...this.sessions.values()].sort((a, b) => (b.sortKey ?? b.updatedAt) - (a.sortKey ?? a.updatedAt));
   }
 
   getTranscript(sessionId: string): TranscriptMessage[] {
@@ -288,7 +296,7 @@ export class SessionStore {
       }
       const ev = str(event.type);
       const data = event.data;
-      if (ev) this.applyDshEvent(sessionId, ev, data);
+      if (ev) this.applyDshEvent(sessionId, ev, data, seq);
     }
     // 确保 streaming 中没有残留的未完成消息
     const cur = this.streaming.get(sessionId);
@@ -315,12 +323,15 @@ export class SessionStore {
       const workspace = str(rec.workspace) ?? str(rec.cwd);
       const updatedAt = num(rec.updatedAt);
       const existing = this.sessions.get(id);
-      // 仅新增或字段变化时 touchSession（刷新不改变排序/时间，评审 #4）。
-      const changed = !existing || existing.title !== title || existing.workspace !== workspace;
-      const s = changed ? this.touchSession(id) : existing!;
+      // H1：服务器 updatedAt（毫秒）仅存为 serverUpdatedAt/updatedAt 展示值；
+      // 排序字段 sortKey 只在 touchSession（实时活动）时推进，不再被服务器时间覆盖。
+      const s = existing ?? this.touchSession(id);
       if (title !== undefined) s.title = title;
       if (workspace !== undefined) s.workspace = workspace;
-      if (updatedAt !== undefined) s.updatedAt = updatedAt;
+      if (updatedAt !== undefined) {
+        s.updatedAt = updatedAt;
+        s.serverUpdatedAt = updatedAt;
+      }
       if (values && isRecord(values.goal)) {
         const g = values.goal as Record<string, unknown>;
         const goalStatus = str(g.phase) ?? str(g.status);
@@ -379,8 +390,10 @@ export class SessionStore {
   private touchSession(id: string): SessionSummary {
     const existing = this.sessions.get(id);
     const s: SessionSummary = existing ?? { id, updatedAt: 0 };
-    // 严格单调递增，保证同一毫秒内的多次更新排序稳定
+    // 严格单调递增，保证同一毫秒内的多次更新排序稳定。
+    // sortKey 是排序唯一事实；updatedAt 保留旧字段（服务器 ms 或 tick）供视图兼容。
     this.tick += 1;
+    s.sortKey = this.tick;
     s.updatedAt = this.tick;
     s.lastActiveAt = Date.now();
     this.sessions.set(id, s);
@@ -593,8 +606,16 @@ export class SessionStore {
 
     // DSH Desktop / 新版宿主：event 是 { type, seq, time, data } 对象。
     if (isRecord(f.event)) {
+      // H2：实时事件带 seq 时登记到 historySeqs，后续重载历史可跳过同一 seq。
+      const seq = num(f.event.seq);
+      if (seq !== undefined) {
+        const seen = this.historySeqs.get(id) ?? new Set<number>();
+        this.historySeqs.set(id, seen);
+        if (seen.has(seq)) return;
+        seen.add(seq);
+      }
       const ev = str(f.event.type);
-      if (ev) this.applyDshEvent(id, ev, f.event.data);
+      if (ev) this.applyDshEvent(id, ev, f.event.data, seq);
       return;
     }
 
@@ -667,7 +688,7 @@ export class SessionStore {
   }
 
   /** DSH Desktop 事件折叠：user/message、assistant/chunk、assistant/message、turn/*。 */
-  private applyDshEvent(id: string, ev: string, data: unknown): void {
+  private applyDshEvent(id: string, ev: string, data: unknown, seq?: number): void {
     if (
       ev === "turn/start" ||
       ev === "turn/complete" ||
@@ -694,6 +715,7 @@ export class SessionStore {
             role: "user",
             content: text,
             ...(images.length > 0 ? { images } : {}),
+            ...(seq !== undefined ? { seq } : {}),
           });
         }
         break;
@@ -702,11 +724,33 @@ export class SessionStore {
         const chunk = isRecord(data) ? data.chunk : undefined;
         if (!isRecord(chunk)) break;
         const chunkType = str(chunk.type);
-        if (chunkType === "text-delta" || chunkType === "text") {
+        const cur0 = this.streaming.get(id);
+        const ensureSeq = (m: TranscriptMessage) => {
+          if (seq !== undefined && m.seq === undefined) m.seq = seq;
+        };
+        if (chunkType === "reasoning-delta") {
           const delta = str(chunk.text) ?? str(chunk.delta) ?? "";
-          const cur = this.streaming.get(id);
-          if (cur) cur.content += delta;
-          else this.streaming.set(id, { role: "assistant", content: delta });
+          if (cur0) {
+            ensureSeq(cur0);
+            cur0.thinking = `${cur0.thinking ?? ""}${delta}`;
+          } else {
+            this.streaming.set(id, { role: "assistant", content: "", thinking: delta, ...(seq !== undefined ? { seq } : {}) });
+          }
+        } else if (chunkType === "block-start" && str(chunk.blockType) === "reasoning") {
+          if (cur0) {
+            ensureSeq(cur0);
+            if (cur0.thinking === undefined) cur0.thinking = "";
+          } else {
+            this.streaming.set(id, { role: "assistant", content: "", thinking: "", ...(seq !== undefined ? { seq } : {}) });
+          }
+        } else if (chunkType === "text-delta" || chunkType === "text") {
+          const delta = str(chunk.text) ?? str(chunk.delta) ?? "";
+          if (cur0) {
+            ensureSeq(cur0);
+            cur0.content += delta;
+          } else {
+            this.streaming.set(id, { role: "assistant", content: delta, ...(seq !== undefined ? { seq } : {}) });
+          }
         }
         break;
       }
@@ -719,7 +763,9 @@ export class SessionStore {
           this.pushMessage(id, {
             role: "assistant",
             content: text,
+            ...(live?.thinking !== undefined ? { thinking: live.thinking } : {}),
             ...(images.length > 0 ? { images } : {}),
+            ...(seq !== undefined ? { seq } : {}),
           });
         } else if (live && live.content.length > 0) {
           this.pushMessage(id, live);
@@ -738,6 +784,7 @@ export class SessionStore {
           id: callId,
           role: "tool",
           content: `工具调用 · ${name}${argsText}`,
+          ...(seq !== undefined ? { seq } : {}),
         });
         break;
       }
@@ -747,7 +794,7 @@ export class SessionStore {
         const text = extractDshText(message);
         const truncated = text.length > 240 ? `${text.slice(0, 240)}…` : text;
         if (truncated.length > 0) {
-          this.pushMessage(id, { role: "tool", content: `工具结果 · ${truncated}` });
+          this.pushMessage(id, { role: "tool", content: `工具结果 · ${truncated}`, ...(seq !== undefined ? { seq } : {}) });
         }
         break;
       }

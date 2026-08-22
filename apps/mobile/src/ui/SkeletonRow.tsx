@@ -4,9 +4,9 @@ import { radius, space } from "../theme";
 import { useTheme } from "../theme-context";
 
 /** 列表首载骨架 v7：2 行条 + 140ms 透明度脉动；尊重系统「减弱动态」时静止。 */
-export function SkeletonRow() {
+export function SkeletonRow({ variant = "paper" }: { variant?: "paper" | "hero" }) {
   const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors, variant), [colors, variant]);
   const pulse = useRef(new Animated.Value(0.6)).current;
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
@@ -35,14 +35,15 @@ export function SkeletonRow() {
   );
 }
 
-function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
+function createStyles(colors: ReturnType<typeof useTheme>["colors"], variant: "paper" | "hero") {
+  const hero = variant === "hero";
   return StyleSheet.create({
     row: {
-      backgroundColor: colors.surface,
+      backgroundColor: hero ? colors.heroCard : colors.surface,
       borderRadius: radius.card,
       padding: space.x4,
       gap: space.x2,
     },
-    bar: { height: 10, borderRadius: 5, backgroundColor: colors.surface2 },
+    bar: { height: 10, borderRadius: 5, backgroundColor: hero ? colors.heroCardStrong : colors.surface2 },
   });
 }

@@ -5,12 +5,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FlashList } from "@shopify/flash-list";
 import Svg, { Path } from "react-native-svg";
 import { StatusBar } from "expo-status-bar";
-import { useConnection, STATE_LABEL } from "../src/transport/ConnectionProvider";
+import { useConnection } from "../src/transport/ConnectionProvider";
 import { useI18n } from "../src/i18n";
 import { useAppSettings } from "../src/data/appSettingsContext";
 import { font, radius, space } from "../src/theme";
 import { useTheme } from "../src/theme-context";
 import { StatusChip } from "../src/ui/StatusChip";
+import { EmptyState } from "../src/ui/EmptyState";
+import { SkeletonRow } from "../src/ui/SkeletonRow";
 import { Field } from "../src/ui/Field";
 import { Button } from "../src/ui/Button";
 import { HarnessMark } from "../src/ui/HarnessMark";
@@ -91,6 +93,11 @@ export default function SessionsScreen() {
   const { colors } = useTheme();
   const { scale } = useAppSettings();
   const styles = useMemo(() => createStyles(colors, scale), [colors, scale]);
+  const stateLabel = (s: typeof state) =>
+    s === "online" ? t.common.stateOnline
+      : s === "offline" ? t.common.stateOffline
+        : s === "backoff" ? t.common.stateBackoff
+          : t.common.stateConnecting;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
@@ -264,39 +271,31 @@ export default function SessionsScreen() {
     if (state === "connecting" || state === "backoff") {
       return (
         <View style={styles.emptyWrap}>
-          <View style={[styles.skeletonBar, { width: "55%" }]} />
-          <View style={[styles.skeletonBar, { width: "80%" }]} />
-          <View style={[styles.skeletonBar, { width: "65%" }]} />
+          <SkeletonRow variant="hero" />
+          <SkeletonRow variant="hero" />
         </View>
       );
     }
     if (query.trim()) {
-      return (
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyEyebrow}>NO MATCH</Text>
-          <Text style={styles.emptyText}>{t.sessions.noMatchText}</Text>
-        </View>
-      );
+      return <EmptyState variant="hero" eyebrow="NO MATCH" text={t.sessions.noMatchText} />;
     }
     if (state === "offline") {
       return (
-        <View style={styles.emptyWrap}>
-          <Text style={styles.emptyEyebrow}>OFFLINE</Text>
-          <Text style={styles.emptyText}>{t.sessions.offlineText}</Text>
-          <View style={styles.emptyAction}>
-            <Button label={t.common.goConnect} onPress={() => router.push("/")} full />
-          </View>
-        </View>
+        <EmptyState
+          variant="hero"
+          eyebrow="OFFLINE"
+          text={t.sessions.offlineText}
+          action={<Button label={t.common.goConnect} onPress={() => router.push("/")} full />}
+        />
       );
     }
     return (
-      <View style={styles.emptyWrap}>
-        <Text style={styles.emptyEyebrow}>EMPTY</Text>
-        <Text style={styles.emptyText}>{t.sessions.emptyText}</Text>
-        <View style={styles.emptyAction}>
-          <Button label={t.sessions.newSession} onPress={() => void onCreate()} full />
-        </View>
-      </View>
+      <EmptyState
+        variant="hero"
+        eyebrow="EMPTY"
+        text={t.sessions.emptyText}
+        action={<Button label={t.sessions.newSession} onPress={() => void onCreate()} full />}
+      />
     );
   };
 
@@ -318,7 +317,7 @@ export default function SessionsScreen() {
             <View style={styles.headerRow}>
               <HarnessMark size={27} />
               <View style={styles.headerRight}>
-                <StatusChip tone={state === "online" ? "success" : state === "offline" ? "danger" : "warn"} label={STATE_LABEL[state] ?? state} variant="hero" />
+                <StatusChip tone={state === "online" ? "success" : state === "offline" ? "danger" : "warn"} label={stateLabel(state)} variant="hero" />
                 <Pressable
                   onPress={() => router.push("/settings" as never)}
                   hitSlop={8}
@@ -437,7 +436,7 @@ export default function SessionsScreen() {
                   <Text style={styles.rowId} numberOfLines={1}>{String(item.session.id).slice(0, 16)}</Text>
                   {item.session.lastActiveAt !== undefined && (
                     <Text style={styles.time} numberOfLines={1}>
-                      {item.session.running ? "运行中" : formatSessionTime(item.session.lastActiveAt)}
+                      {item.session.running ? t.chat.goalRunning : formatSessionTime(item.session.lastActiveAt, Date.now(), t.common.weekdays, t.common.yesterday)}
                     </Text>
                   )}
                 </View>
@@ -483,6 +482,7 @@ export default function SessionsScreen() {
                 {workspaceFilter === normalizePath(w.path) && <Text style={styles.menuItemTick}>✓</Text>}
               </Pressable>
             ))}
+            <Text style={styles.menuItemHint}>当前宿主未提供目录浏览能力，仅支持按已列出的工作区筛选。</Text>
             <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => setWorkspaceSheetVisible(false)} accessibilityRole="button" accessibilityLabel={t.common.cancel}>
               <Text style={[styles.menuItemText, { color: colors.textMuted }]}>{t.common.cancel}</Text>
             </Pressable>
@@ -689,6 +689,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
     },
     menuItemBody: { flex: 1, gap: 2 },
     menuItemSub: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono },
+    menuItemHint: { color: colors.textDim, fontSize: font.caption, lineHeight: 18, paddingHorizontal: 2, paddingBottom: 4 },
     menuItemPressed: { opacity: 0.7 },
     menuItemText: { color: colors.text, fontSize: font.body, fontWeight: "500" },
     menuItemTick: { color: colors.accent, fontSize: font.body, fontWeight: "600" },

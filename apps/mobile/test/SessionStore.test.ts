@@ -393,4 +393,49 @@ describe("SessionStore", () => {
     s.applyFrame(frame("host/session-removed", { sessionId: "s1" }) as never);
     expect(s.getSessions()).toHaveLength(0);
   });
+
+  it("keeps server updatedAt separate from monotonic sort key (H1)", () => {
+    const s = new SessionStore();
+    s.applySessionList([
+      { sessionId: "old", updatedAt: 1787000000000 },
+      { sessionId: "new", updatedAt: 1787000001000 },
+    ] as never);
+    expect(s.getSessions().map((x) => x.id)).toEqual(["new", "old"]);
+
+    // 实时事件落在“旧”会话上：排序键推进，服务器毫秒时间不参与排序。
+    s.applyFrame(frame("session/event", {
+      sessionId: "old",
+      event: { type: "assistant/chunk", seq: 10, time: Date.now(), data: { chunk: { type: "text-delta", text: "hi" } } },
+    }) as never);
+    const list = s.getSessions();
+    expect(list.map((x) => x.id)).toEqual(["old", "new"]);
+    expect(list[0]?.serverUpdatedAt).toBe(1787000000000);
+    expect(list[1]?.serverUpdatedAt).toBe(1787000001000);
+  });
+
+  it("registers realtime seq so replayed history cannot duplicate it (H2)", () => {
+    const s = new SessionStore();
+    s.applyFrame(frame("session/event", {
+      sessionId: "s1",
+      event: { type: "user/message", seq: 1, time: 1, data: { content: [{ type: "text", text: "你好" }] } },
+    }) as never);
+    s.applyHistory([
+      { event: { type: "user/message", seq: 1, time: 1, data: { content: [{ type: "text", text: "你好" }] } } },
+      { event: { type: "user/message", seq: 2, time: 2, data: { content: [{ type: "text", text: "世界" }] } } },
+    ], "s1");
+    expect(s.getTranscript("s1").map((m) => m.content)).toEqual(["你好", "世界"]);
+  });
+
+  it("folds reasoning-delta chunks into a collapsed thinking block (M9)", () => {
+    const s = new SessionStore();
+    s.applyHistory([
+      { event: { type: "assistant/chunk", seq: 1, time: 1, data: { chunk: { type: "block-start", blockType: "reasoning" } } } },
+      { event: { type: "assistant/chunk", seq: 2, time: 2, data: { chunk: { type: "reasoning-delta", text: "We need execute" } } } },
+      { event: { type: "assistant/chunk", seq: 3, time: 3, data: { chunk: { type: "text-delta", text: "你好" } } } },
+      { event: { type: "assistant/message", seq: 4, time: 4, data: { message: { content: [{ type: "text", text: "你好" }] } } } },
+    ], "s1");
+    const t = s.getTranscript("s1");
+    expect(t).toHaveLength(1);
+    expect(t[0]).toMatchObject({ role: "assistant", content: "你好", thinking: "We need execute" });
+  });
 });
