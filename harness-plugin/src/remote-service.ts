@@ -14,6 +14,7 @@ import {
   type RemoteAccessMode,
   type RemoteAccessOptions,
 } from "./remote-access.js";
+import type { RemotePersistedConfig } from "./persist.js";
 
 export interface RemoteStatus {
   running: boolean;
@@ -49,6 +50,15 @@ export interface RemoteAccessServiceOptions {
   startImpl?: (opts: RemoteAccessOptions) => Promise<RemoteAccessHandle>;
   /** 注入二维码生成（测试用）。 */
   qrDataUrlImpl?: (payload: string) => Promise<string>;
+  /**
+   * 开关持久化（审计 2026-08-23 P0-1）：start 成功写 {enabled:true,mode}，
+   * stop 写 {enabled:false}。缺省不持久化（CLI/测试路径零影响）；
+   * DSH 插件入口（apply.ts）显式注入文件实现。
+   */
+  persist?: {
+    read(): RemotePersistedConfig | null;
+    write(config: RemotePersistedConfig): void;
+  };
 }
 
 const EMPTY_STATUS: RemoteStatus = {
@@ -150,6 +160,12 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
         if (!h.dshUrl && !dshBaseUrl) {
           scheduleDshRetry();
         }
+        // P0-1：持久化用户意愿，DSH 重启后按此自启（失败不影响运行）。
+        try {
+          options.persist?.write({ enabled: true, mode: h.mode });
+        } catch {
+          /* 持久化失败仅降级为「重启后需手动开启」 */
+        }
         return status;
       } catch (err) {
         status = {
@@ -186,6 +202,12 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
       await h.stop().catch(() => {});
     }
     status = { ...status, running: false, starting: false, code: null, qrPayload: null, qrDataUrl: null, pairedDeviceId: null, dshUrl: null, dshDetected: false };
+    // P0-1：显式停止也要持久化（保留最后模式，便于下次开启复用）。
+    try {
+      options.persist?.write({ enabled: false, ...(status.mode ? { mode: status.mode } : {}) });
+    } catch {
+      /* 同上，降级不抛错 */
+    }
     return status;
   }
 

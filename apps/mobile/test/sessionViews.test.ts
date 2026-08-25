@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterSessions, formatSessionTime, groupByWorkspace, pressureTier } from "../src/data/sessionViews";
+import { filterSessions, formatSessionTime, groupByWorkspace, pressureTier, workspaceDisplayName } from "../src/data/sessionViews";
 import type { SessionSummary } from "../src/data/SessionStore";
 
 const s = (over: Partial<SessionSummary>): SessionSummary => ({
@@ -73,5 +73,22 @@ describe("pressureTier", () => {
 
   it("treats negative pressure as normal (lenient UI)", () => {
     expect(pressureTier(-1)).toBe("normal");
+  });
+});
+
+describe("workspaceDisplayName", () => {
+  it("prefers the host-provided workspace title", () => {
+    expect(workspaceDisplayName("D:\\APP\\foo", (p) => (p === "D:/APP/foo" ? "Foo 项目" : undefined))).toBe("Foo 项目");
+  });
+
+  it("falls back to the path basename instead of rendering the full Windows path", () => {
+    expect(workspaceDisplayName("D:\\APP\\dsh-remote", () => undefined)).toBe("dsh-remote");
+    expect(workspaceDisplayName("/home/user/projects/dsh-remote/", () => undefined)).toBe("dsh-remote");
+  });
+
+  it("returns 其他 for empty/missing paths and never returns an empty label", () => {
+    expect(workspaceDisplayName(undefined, () => undefined)).toBe("其他");
+    expect(workspaceDisplayName("", () => undefined)).toBe("其他");
+    expect(workspaceDisplayName("D:\\", () => undefined)).toBe("D:");
   });
 });

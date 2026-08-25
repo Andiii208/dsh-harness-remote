@@ -316,7 +316,7 @@ export function MessageBubble({ m, live, sessionId }: { m: TranscriptMessage; li
 function createStyles(colors: ThemeColors, scale: number) {
   return StyleSheet.create({
     gapRow: { alignItems: "center", paddingVertical: 8 },
-    gapText: { color: colors.textDim, fontSize: 11 * scale, fontStyle: "italic" },
+    gapText: { color: colors.textDim, fontSize: 12 * scale, fontStyle: "italic" },
     bubble: {
       maxWidth: "82%",
       borderRadius: 18,
@@ -326,7 +326,7 @@ function createStyles(colors: ThemeColors, scale: number) {
     bubbleBot: { alignSelf: "flex-start", backgroundColor: colors.surface, borderBottomLeftRadius: 6, borderWidth: 1, borderColor: colors.separator },
     bubblePressed: { opacity: 0.85 },
     body: { paddingVertical: 11, paddingHorizontal: 15, gap: 5, flexShrink: 1 },
-    roleTag: { color: colors.textMuted, fontFamily: font.monoBold, fontSize: 9, fontWeight: "500", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 2 },
+    roleTag: { color: colors.textMuted, fontFamily: font.monoBold, fontSize: 10, fontWeight: "500", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 2 },
     imageRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
     imageThumb: {
       width: 200,
@@ -344,7 +344,7 @@ function createStyles(colors: ThemeColors, scale: number) {
       marginVertical: 3,
       gap: 6,
     },
-    thinkingHeader: { color: colors.textDim, fontSize: 11, fontFamily: font.mono, fontWeight: "500" },
+    thinkingHeader: { color: colors.textDim, fontSize: 12, fontFamily: font.mono, fontWeight: "500" },
     thinkingText: { color: colors.textMuted, fontSize: (font.body - 1) * scale, lineHeight: 18 * scale },
     roleTagTool: { color: colors.warn },
     text: { color: colors.text, fontSize: (font.body + 1) * scale, lineHeight: 22 * scale },
@@ -360,11 +360,11 @@ function createStyles(colors: ThemeColors, scale: number) {
     codeBlockTool: { borderLeftWidth: 2, borderLeftColor: colors.warn },
     codeHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
     codeActions: { flexDirection: "row", alignItems: "center", gap: 12 },
-    codeLang: { color: colors.textDim, fontSize: 9, fontFamily: font.monoBold, letterSpacing: 1, textTransform: "uppercase" },
-    codeToggle: { color: colors.accent, fontSize: 11, fontFamily: font.mono, fontWeight: "500" },
+    codeLang: { color: colors.textDim, fontSize: 10, fontFamily: font.monoBold, letterSpacing: 1, textTransform: "uppercase" },
+    codeToggle: { color: colors.accent, fontSize: 12, fontFamily: font.mono, fontWeight: "500" },
     codeText: { color: colors.codeText, fontSize: 12 * scale, lineHeight: 19 * scale, fontFamily: font.mono },
     copied: { color: colors.accent, fontSize: font.eyebrow, fontFamily: font.mono, alignSelf: "flex-end" },
-    tail: { color: colors.warn, fontSize: 11, fontFamily: font.mono },
+    tail: { color: colors.warn, fontSize: 12, fontFamily: font.mono },
     modalBackdrop: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.5)",

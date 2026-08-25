@@ -22,6 +22,7 @@ import { filterSkills, type SkillEntry } from "../../src/data/skillList";
 import { estimateBase64Bytes, resolveImageMediaType } from "../../src/data/imageMessage";
 import { shouldStickToBottom } from "../../src/ui/chat/stickyBottom";
 import { availableCommands, queueEditPayload } from "../../src/ui/chat/composerCommands";
+import { buildTranscriptRows, type TranscriptRow } from "../../src/ui/chat/chatTimeline";
 import { font, radius, space } from "../../src/theme";
 import { MessageBubble } from "../../src/ui/chat/MessageBubble";
 import { TrajectoryView } from "../../src/ui/trajectory/TrajectoryView";
@@ -70,7 +71,7 @@ export default function ChatScreen() {
   const [skillQuery, setSkillQuery] = useState("");
   const [sendingImage, setSendingImage] = useState(false);
   const showJumpRef = useRef(false);
-  const listRef = useRef<FlashListRef<TranscriptMessage> | null>(null);
+  const listRef = useRef<FlashListRef<TranscriptRow> | null>(null);
   const trajectoryRef = useRef<FlashListRef<TranscriptStep> | null>(null);
   const swipeRef = useRef<ScrollView | null>(null);
   const historyLoadedFor = useRef<string | null>(null);
@@ -368,6 +369,7 @@ export default function ChatScreen() {
     setPausedData(null);
   }, [liveId]);
   const data = streamPaused ? (pausedData ?? messages) : live ? [...messages, live] : messages;
+  const rows = useMemo(() => buildTranscriptRows(data), [data]);
   const filteredSkills = skills ? filterSkills(skills, skillQuery) : [];
   const goalStatus = summary?.goalStatus;
   const goalLabel =
@@ -513,8 +515,8 @@ export default function ChatScreen() {
               ref={listRef}
         style={styles.list}
         contentContainerStyle={styles.listContent}
-        data={data}
-        keyExtractor={(m, i) => `${m.id ?? "m"}-${i}`}
+        data={rows}
+        keyExtractor={(row) => row.key}
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <View style={styles.sessionHeader}>
@@ -637,11 +639,17 @@ export default function ChatScreen() {
             </View>
           </View>
         }
-        renderItem={({ item, index }) => (
-          <View>
-            <MessageBubble m={item} live={index === messages.length && item.id === live?.id} sessionId={id} />
-          </View>
-        )}
+        renderItem={({ item, index }) =>
+          item.kind === "day" ? (
+            <View style={styles.dayDivider}>
+              <Text style={styles.dayDividerText}>{item.label}</Text>
+            </View>
+          ) : (
+            <View>
+              <MessageBubble m={item.message} live={item.message.id === live?.id} sessionId={id} />
+            </View>
+          )
+        }
         onScroll={onScroll}
         scrollEventThrottle={64}
         ListEmptyComponent={
@@ -1078,8 +1086,13 @@ export default function ChatScreen() {
             )}
           </View>
         )}
-        {/* M3：composer 控制行——权限 / 模型 / 思考强度 / 上下文环 */}
-        <View style={styles.controlRow}>
+        {/* M3 + P1-4：composer 控制行——单行横滚，不再折两行挤压输入区 */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.controlRow}
+        >
           <Pressable
             style={({ pressed }) => [styles.controlChip, pressed && styles.modelItemPressed]}
             onPress={openPermissionPicker}
@@ -1132,22 +1145,20 @@ export default function ChatScreen() {
               <Text style={styles.contextRingText}>{summary.contextPercent}%</Text>
             </Pressable>
           )}
-        </View>
-        <View style={styles.toolRow}>
           <Pressable
-            style={({ pressed }) => [styles.toolChip, (pressed || !online || sendingImage) && styles.modelItemPressed]}
+            style={({ pressed }) => [styles.controlChip, (pressed || !online || sendingImage) && styles.modelItemPressed]}
             onPress={() => void pickImage()}
             disabled={!online || sendingImage}
             accessibilityRole="button"
             accessibilityLabel="发送图片"
           >
-            <Text style={[styles.toolChipText, (!online || sendingImage) && styles.toolChipTextDim]}>
+            <Text style={[styles.controlChipText, (!online || sendingImage) && styles.controlChipTextDim]}>
               {sendingImage ? `${t.chat.image}…` : t.chat.image}
             </Text>
           </Pressable>
           {skills && skills.length > 0 && (
             <Pressable
-              style={({ pressed }) => [styles.toolChip, pressed && styles.modelItemPressed]}
+              style={({ pressed }) => [styles.controlChip, pressed && styles.modelItemPressed]}
               onPress={() => {
                 setSkillQuery("");
                 setShowSkillPicker(true);
@@ -1155,10 +1166,10 @@ export default function ChatScreen() {
               accessibilityRole="button"
               accessibilityLabel="选择技能"
             >
-              <Text style={styles.toolChipText}>{t.chat.skill}</Text>
+              <Text style={styles.controlChipText}>{t.chat.skill}</Text>
             </Pressable>
           )}
-        </View>
+        </ScrollView>
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
@@ -1176,7 +1187,7 @@ export default function ChatScreen() {
             onPress={send}
             disabled={!draft.trim() || !online}
           >
-            <Text style={styles.sendText}>↑</Text>
+            <Text style={styles.sendIcon}>↑</Text>
           </Pressable>
         </View>
       </View>
@@ -1189,7 +1200,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     screen: { flex: 1, backgroundColor: colors.bg },
     switchBar: {
       flexDirection: "row",
-      marginHorizontal: 66,
+      marginHorizontal: 20,
       marginTop: space.x3,
       marginBottom: space.x2,
       backgroundColor: colors.surface2,
@@ -1232,7 +1243,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     },
     sessionTitle: {
       color: colors.text,
-      fontSize: 18,
+      fontSize: 20,
       fontWeight: "600",
       letterSpacing: -0.3,
     },
@@ -1270,11 +1281,27 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       alignSelf: "flex-start",
     },
     jobsText: { color: colors.textMuted, fontSize: font.eyebrow, fontFamily: font.mono },
+    dayDivider: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: space.x3,
+    },
+    dayDividerText: {
+      color: colors.textDim,
+      fontSize: font.caption,
+      backgroundColor: colors.surface2,
+      borderRadius: radius.pill,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      overflow: "hidden",
+    },
     controlRow: {
       flexDirection: "row",
       alignItems: "center",
-      flexWrap: "wrap",
       gap: 8,
+      paddingHorizontal: 2,
+      paddingVertical: 2,
     },
     controlChip: {
       backgroundColor: colors.surface,
@@ -1404,25 +1431,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       padding: space.x3,
       backgroundColor: "transparent",
     },
-    toolRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    toolChip: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.pill,
-      borderWidth: 1,
-      borderColor: colors.separator,
-      paddingHorizontal: 12,
-      paddingVertical: 4,
-    },
-    toolChipText: {
-      color: colors.accent,
-      fontSize: font.caption,
-      fontWeight: "500",
-    },
-    toolChipTextDim: { opacity: 0.45 },
+    controlChipTextDim: { opacity: 0.45 },
     skillDescription: {
       color: colors.textMuted,
       fontSize: font.caption,
@@ -1475,7 +1484,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       justifyContent: "center",
     },
     sendDisabled: { opacity: 0.4 },
-    sendText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600", textAlign: "center", textAlignVertical: "center", lineHeight: 20 },
+    sendIcon: { color: "#FFFFFF", fontSize: 18, fontWeight: "600", textAlign: "center", textAlignVertical: "center", lineHeight: 20 },
     statsPillWrap: { alignItems: "center", marginBottom: 2 },
     statsPill: {
       flexDirection: "row",
@@ -1515,12 +1524,29 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       alignItems: "center",
       justifyContent: "center",
     },
-    jumpFabText: { color: colors.textMuted, fontSize: 16, fontWeight: "600" },
+    jumpFabText: { color: colors.textMuted, fontSize: 15, fontWeight: "600" },
   });
 }
 
 function ChatHeaderRight({ state, onPressMenu }: { state: string; onPressMenu: () => void }) {
   const { colors } = useTheme();
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        row: { flexDirection: "row", alignItems: "center", gap: 10, paddingRight: 6 },
+        dot: {
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          shadowOpacity: 0.65,
+          shadowRadius: 5,
+          shadowOffset: { width: 0, height: 0 },
+          elevation: 2,
+        },
+        moreIconText: { color: colors.text, fontSize: 18, fontWeight: "600", lineHeight: 22 },
+      }),
+    [colors],
+  );
   const dotColor =
     state === "online"
       ? colors.success
@@ -1530,22 +1556,12 @@ function ChatHeaderRight({ state, onPressMenu }: { state: string; onPressMenu: (
           ? colors.warn
           : colors.textDim;
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+    <View style={styles.row}>
       <View
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 4,
-          backgroundColor: dotColor,
-          shadowColor: dotColor,
-          shadowOpacity: 0.65,
-          shadowRadius: 5,
-          shadowOffset: { width: 0, height: 0 },
-          elevation: 2,
-        }}
+        style={[styles.dot, { backgroundColor: dotColor, shadowColor: dotColor }]}
       />
       <Pressable onPress={onPressMenu} hitSlop={8} accessibilityRole="button" accessibilityLabel="会话菜单">
-        <Text style={{ color: colors.text, fontSize: 18, fontWeight: "600", lineHeight: 22 }}>⋯</Text>
+        <Text style={styles.moreIconText}>⋯</Text>
       </Pressable>
     </View>
   );

@@ -51,6 +51,26 @@ export function pressureTier(percent: number): PressureTier {
   return "normal";
 }
 
+/**
+ * 工作区分组显示名（审计 2026-08-23 P1-4）：
+ * 优先用宿主 workspace.list 的标题；否则退化为路径末段（basename），
+ * 绝不把「D:\APP\foo」整条 Windows 路径渲染成分组头。
+ * @param path 会话上的原始 workspace 路径（可空）
+ * @param getTitle 归一化路径 → 宿主标题 的查询函数（可返回 undefined）
+ */
+export function workspaceDisplayName(
+  path: string | undefined,
+  getTitle: (normalizedPath: string) => string | undefined,
+): string {
+  if (!path || path.trim().length === 0) return "其他";
+  const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  const titled = getTitle(normalized);
+  if (titled && titled.trim().length > 0) return titled;
+  const segments = normalized.split("/").filter((s) => s.length > 0);
+  const base = segments[segments.length - 1];
+  return base && base.length > 0 ? base : normalized;
+}
+
 const DAY_NAMES_ZH = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
 /** 会话时间格式：今天 HH:mm / 昨天 / 一周内周X / 更早 M/D。weekday/yesterday 名称可注入翻译。 */

@@ -22,6 +22,13 @@ jobs:
       - run: pnpm -r build
       - run: pnpm typecheck
       - run: pnpm test
+      # 字号令牌走查门禁（P1-3）：v8 白名单外出现原始 fontSize 即失败
+      - name: Font token lint (--strict)
+        run: node apps/mobile/scripts/lint-font-tokens.mjs --strict
+      # 端到端冒烟门禁（P0-5）：relay→配对→E2E→session.list 全链路；
+      # --mock 模式内置假 DSH API，CI 无真实宿主也可跑
+      - name: E2E smoke (mock DSH)
+        run: node tools/smoke-e2e.mjs --mock
       # 插件包可发布性门禁：pack 预览必须通过（lib/client/cordis.patch.yml 齐全）
       - name: Validate plugin package (npm pack --dry-run)
         working-directory: harness-plugin

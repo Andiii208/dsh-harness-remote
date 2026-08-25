@@ -280,6 +280,22 @@ describe("SessionStore", () => {
     expect(s.getSessions()[0]?.lastMessage).toBe("你好");
   });
 
+  it("threads event time into transcript ts for date grouping", () => {
+    const s = new SessionStore();
+    const t0 = 1787000000000;
+    const t1 = t0 + 60_000;
+    s.applyHistory([
+      { event: { type: "user/message", seq: 1, time: t0, data: { content: [{ type: "text", text: "你好" }] } } },
+      { event: { type: "assistant/chunk", seq: 2, time: t1, data: { chunk: { type: "text-delta", text: "世" } } } },
+      { event: { type: "assistant/message", seq: 3, time: t1, data: { message: { content: [{ type: "text", text: "世界" }] } } } },
+      { event: { type: "tool/call", seq: 4, time: t1, data: { callId: "c1", name: "bash" } } },
+    ], "s1");
+    const t = s.getTranscript("s1");
+    expect(t[0]?.ts).toBe(t0);
+    expect(t[1]?.ts).toBe(t1);
+    expect(t[2]?.ts).toBe(t1);
+  });
+
   it("applyHistory folds tool call/result events", () => {
     const s = new SessionStore();
     s.applyHistory([

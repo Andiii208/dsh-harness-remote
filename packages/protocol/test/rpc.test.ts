@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { describe, expect, it } from "vitest";
 import { RpcClient, RpcError } from "../src/rpc.js";
 
@@ -95,6 +96,26 @@ describe("RpcClient.unary", () => {
     });
     await expect(client.unary("slow", {})).rejects.toMatchObject({ code: "TIMEOUT" });
   });
+
+  it("throws RpcError TIMEOUT when a real server sends headers but never finishes the body", async () => {
+    // Real-world failure (audit 2026-08-23): a local service returned HTTP
+    // headers quickly but never completed the body — res.json() hung ~30s even
+    // though a 1.5s timeout was configured, because the timer was cleared as
+    // soon as fetch() resolved. The timer must cover the body read too.
+    const server = createServer((_req, res) => {
+      res.writeHead(400, { "content-type": "application/json", "content-length": "128" });
+      res.write("{");
+      // intentionally never res.end()
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    try {
+      const client = new RpcClient({ baseUrl: `http://127.0.0.1:${port}`, timeoutMs: 150 });
+      await expect(client.unary("host.describe", {})).rejects.toMatchObject({ code: "TIMEOUT" });
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }, 5000);
 
   it("throws RpcError NETWORK on fetch failure", async () => {
     const client = new RpcClient({

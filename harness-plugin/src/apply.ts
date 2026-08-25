@@ -16,6 +16,7 @@ import {
   type RemoteAccessService,
 } from "./remote-service.js";
 import { installRemoteRpc } from "./web-rpc.js";
+import { readPersistedConfig, writePersistedConfig, type RemotePersistedConfig } from "./persist.js";
 
 export const name = "dsh-harness-remote";
 /** host 侧需要的 Cordis 上下文注入：connection（loopback RPC）。 */
@@ -47,6 +48,8 @@ export interface DshRemoteInternals {
   installRpc?: typeof installRemoteRpc;
   /** 测试时把自动启动关掉，避免真实起 relay/tunnel。 */
   autoStart?: boolean;
+  /** 注入持久化读取（测试用）；缺省读 <DSH_HOME>/dsh-harness-remote/config.json。 */
+  readPersisted?: () => RemotePersistedConfig | null;
 }
 
 export function apply(
@@ -60,14 +63,26 @@ export function apply(
     createRemoteAccessService({
       autoDetectDsh: config.autoDetectDsh ?? true,
       onStatus: (line) => logger.info?.(line),
+      // P0-1：设置页 start/stop 的意愿落盘（仅生产路径；测试注入 service 时不落盘）。
+      persist: {
+        read: () => readPersistedConfig(),
+        write: (c) => writePersistedConfig(c),
+      },
     });
 
   const disposeRpc = (internals.installRpc ?? installRemoteRpc)(ctx, service, logger);
 
-  // 安全默认：插件加载不自动开公网隧道；只有显式 autoStart:true（或测试注入）才自动启动。
-  // 用户可在 DSH 设置页「手机远程」手动开启公网/局域网访问。
-  if (internals.autoStart === true) {
-    void service.start(config.mode ?? "tunnel").catch((err: unknown) => {
+  // 安全默认保持不变：从未开启过的安装没有配置文件 → 不自动开隧道。
+  // P0-1 新增：用户上次显式开启过（config.json enabled=true）→ 重启后按上次模式自启，
+  // 手机端不再每天面对「未连接」。internals.autoStart === false 为测试逃逸口。
+  const persisted = internals.readPersisted ? internals.readPersisted() : readPersistedConfig();
+  const shouldAutoStart =
+    internals.autoStart === true ||
+    (internals.autoStart === undefined && persisted?.enabled === true);
+  if (shouldAutoStart) {
+    const mode = persisted?.mode ?? config.mode ?? "tunnel";
+    logger.info?.(`dsh-harness-remote: 按上次配置自启远程（${mode}）`);
+    void service.start(mode).catch((err: unknown) => {
       logger.warn?.(`dsh-harness-remote: 自动开启远程失败：${err instanceof Error ? err.message : String(err)}`);
     });
   }

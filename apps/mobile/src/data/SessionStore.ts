@@ -79,6 +79,8 @@ export interface TranscriptMessage {
   thinking?: string;
   /** 来源事件 seq（用于历史分页 beforeSeq 计算）。 */
   seq?: number;
+  /** 来源事件 time（epoch ms，用于聊天日期分组；旧事件/间隙标记无此字段）。 */
+  ts?: number;
 }
 
 export interface PendingRequest {
@@ -296,7 +298,8 @@ export class SessionStore {
       }
       const ev = str(event.type);
       const data = event.data;
-      if (ev) this.applyDshEvent(sessionId, ev, data, seq);
+      const time = num(event.time) ?? num(entry.time);
+      if (ev) this.applyDshEvent(sessionId, ev, data, seq, time);
     }
     // 确保 streaming 中没有残留的未完成消息
     const cur = this.streaming.get(sessionId);
@@ -615,7 +618,8 @@ export class SessionStore {
         seen.add(seq);
       }
       const ev = str(f.event.type);
-      if (ev) this.applyDshEvent(id, ev, f.event.data, seq);
+      const time = num(f.event.time);
+      if (ev) this.applyDshEvent(id, ev, f.event.data, seq, time);
       return;
     }
 
@@ -688,7 +692,7 @@ export class SessionStore {
   }
 
   /** DSH Desktop 事件折叠：user/message、assistant/chunk、assistant/message、turn/*。 */
-  private applyDshEvent(id: string, ev: string, data: unknown, seq?: number): void {
+  private applyDshEvent(id: string, ev: string, data: unknown, seq?: number, time?: number): void {
     if (
       ev === "turn/start" ||
       ev === "turn/complete" ||
@@ -716,6 +720,7 @@ export class SessionStore {
             content: text,
             ...(images.length > 0 ? { images } : {}),
             ...(seq !== undefined ? { seq } : {}),
+            ...(time !== undefined ? { ts: time } : {}),
           });
         }
         break;
@@ -728,28 +733,34 @@ export class SessionStore {
         const ensureSeq = (m: TranscriptMessage) => {
           if (seq !== undefined && m.seq === undefined) m.seq = seq;
         };
+        const ensureTs = (m: TranscriptMessage) => {
+          if (time !== undefined && m.ts === undefined) m.ts = time;
+        };
         if (chunkType === "reasoning-delta") {
           const delta = str(chunk.text) ?? str(chunk.delta) ?? "";
           if (cur0) {
             ensureSeq(cur0);
+            ensureTs(cur0);
             cur0.thinking = `${cur0.thinking ?? ""}${delta}`;
           } else {
-            this.streaming.set(id, { role: "assistant", content: "", thinking: delta, ...(seq !== undefined ? { seq } : {}) });
+            this.streaming.set(id, { role: "assistant", content: "", thinking: delta, ...(seq !== undefined ? { seq } : {}), ...(time !== undefined ? { ts: time } : {}) });
           }
         } else if (chunkType === "block-start" && str(chunk.blockType) === "reasoning") {
           if (cur0) {
             ensureSeq(cur0);
+            ensureTs(cur0);
             if (cur0.thinking === undefined) cur0.thinking = "";
           } else {
-            this.streaming.set(id, { role: "assistant", content: "", thinking: "", ...(seq !== undefined ? { seq } : {}) });
+            this.streaming.set(id, { role: "assistant", content: "", thinking: "", ...(seq !== undefined ? { seq } : {}), ...(time !== undefined ? { ts: time } : {}) });
           }
         } else if (chunkType === "text-delta" || chunkType === "text") {
           const delta = str(chunk.text) ?? str(chunk.delta) ?? "";
           if (cur0) {
             ensureSeq(cur0);
+            ensureTs(cur0);
             cur0.content += delta;
           } else {
-            this.streaming.set(id, { role: "assistant", content: delta, ...(seq !== undefined ? { seq } : {}) });
+            this.streaming.set(id, { role: "assistant", content: delta, ...(seq !== undefined ? { seq } : {}), ...(time !== undefined ? { ts: time } : {}) });
           }
         }
         break;
@@ -766,6 +777,7 @@ export class SessionStore {
             ...(live?.thinking !== undefined ? { thinking: live.thinking } : {}),
             ...(images.length > 0 ? { images } : {}),
             ...(seq !== undefined ? { seq } : {}),
+            ...(time !== undefined ? { ts: time } : {}),
           });
         } else if (live && live.content.length > 0) {
           this.pushMessage(id, live);
@@ -785,6 +797,7 @@ export class SessionStore {
           role: "tool",
           content: `工具调用 · ${name}${argsText}`,
           ...(seq !== undefined ? { seq } : {}),
+          ...(time !== undefined ? { ts: time } : {}),
         });
         break;
       }
@@ -794,7 +807,7 @@ export class SessionStore {
         const text = extractDshText(message);
         const truncated = text.length > 240 ? `${text.slice(0, 240)}…` : text;
         if (truncated.length > 0) {
-          this.pushMessage(id, { role: "tool", content: `工具结果 · ${truncated}`, ...(seq !== undefined ? { seq } : {}) });
+          this.pushMessage(id, { role: "tool", content: `工具结果 · ${truncated}`, ...(seq !== undefined ? { seq } : {}), ...(time !== undefined ? { ts: time } : {}) });
         }
         break;
       }

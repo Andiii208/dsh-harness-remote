@@ -1,3 +1,8 @@
+## 2026-08-23/24 P0 可用性救援：1 项部署性阻塞（非代码）
+
+- **dsh-harness-remote 0.3.2 需 DSH Desktop 重启激活**：代码已修复、测试全绿、tgz 已装入 profile（INSTALLED_VERSION=0.3.2）、持久化配置已预置（`~/.dsh/dsh-harness-remote/config.json` `{enabled:true,mode:"tunnel"}`）。`dev_reload_package` 在当前环境报「loader.internal 不可用」无法热重载；为不杀掉正在工作的会话未强行重启宿主。**下次重启 DSH Desktop 即全自动生效**（远程自启 + 手机回连）。重启后可在 DSH 日志核对 `按上次配置自启远程（tunnel）`。
+- 仍保留的历史阻塞：iOS/EAS 发布与真机推送（见下方 Phase E 记录），本窗口未涉及。
+
 ## 2026-08-22 修复与优化计划（Phase 0–5）：无未解决阻塞
 
 - 真实 DSH 校准已完成（DSH Desktop 2.0.1 / CLI 0.1.0-rc.7 / API 动态端口经 `DSH_WEB_URL` 注入）；`settings.mutate` 接受 `expectedRevision`；默认模型/权限写路径已实测并恢复；`commands/execute` 成功路径与 `/permission` 切换已实测。

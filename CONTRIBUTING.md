@@ -49,6 +49,17 @@ cd apps/mobile && npx expo export --platform web --output-dir dist-web
 
 然后用 playwright 驱动页面（连接 127.0.0.1:3080 → 会话 → 审批 → 聊天），截图对照 `docs/design/UI-SYSTEM.md` 逐屏检查。注意 web 预览的限制：通知/保活/安全存储是原生能力，web 上会优雅降级（console.warn，不崩溃）；审批/提问经会话页「待处理请求」横幅进入。
 
+## 验证与证据标准（2026-08-24 入宪，审计 P2-1）
+
+2026-08-23 审计发现 v0.3.1 的「明暗双主题截图」是同一帧图当两份证据提交（SHA-256 完全相同），且「真实 DSH 核心链路验证通过」实为 RPC 直连探测、从未端到端跑过。为避免重演，任何「已验证」结论必须满足：
+
+1. **可复现**：附一条可直接执行的命令或脚本路径（如 `node tools/smoke-e2e.mjs --mock`、`node apps/mobile/scripts/lint-font-tokens.mjs --strict`），产物落 `.shots/` 或日志文件。
+2. **机器可查**：
+   - 明暗/多条件截图必须是**同一环境下真实切换后的不同像素**——用 SHA-256 断言两两不同（`Get-FileHash` / `sha256sum`），并抽查角像素归属主题（如深色纸面 #0B0B0F、深海 #07182B）。
+   - 端到端链路结论必须经**模拟手机同款传输层**（`RelayTransport`）跑通，而不是只探活 RPC。
+3. **诚实标注边界**：真机/特定网络/特定宿主版本未覆盖的，写明「未验证」与原因（如「web 预览 SecureStore 降级」「4G 隧道待真机」），不得写成已通过。
+4. **门禁优先**：能用脚本断言的（字号令牌 `--strict`、E2E 冒烟 `--mock`）接 CI，不靠口头确认。
+
 ## 行为准则
 
 见 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。安全问题走 [SECURITY.md](SECURITY.md) 的私密披露渠道，不要开公开 issue。

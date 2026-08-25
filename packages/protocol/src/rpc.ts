@@ -128,11 +128,14 @@ export class RpcClient {
   }
 
   private async postRaw(path: string, body: unknown): Promise<unknown> {
+    // The timeout timer must cover the WHOLE exchange — fetch() resolving only
+    // means headers arrived; a server that never finishes its body would
+    // otherwise hang res.json() far past timeoutMs (audit 2026-08-23: a local
+    // service stalled a probe for ~30s with a 1.5s timeout configured).
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
-    let res: Response;
     try {
-      res = await this.fetchImpl(this.baseUrl + path, {
+      const res = await this.fetchImpl(this.baseUrl + path, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -141,20 +144,24 @@ export class RpcClient {
         body: JSON.stringify(body),
         signal: ctrl.signal,
       });
+      try {
+        return await res.json();
+      } catch (err) {
+        // Body-phase abort: headers arrived but the body did not finish in time.
+        if (err instanceof Error && err.name === "AbortError") {
+          throw new RpcError("TIMEOUT", `request timed out after ${this.timeoutMs}ms`);
+        }
+        // Non-JSON body: HTTP status is only a carrier — surface as typed error.
+        throw new RpcError(`HTTP_${res.status}`, `unexpected response (status ${res.status})`);
+      }
     } catch (err) {
+      if (err instanceof RpcError) throw err;
       if (err instanceof Error && err.name === "AbortError") {
         throw new RpcError("TIMEOUT", `request timed out after ${this.timeoutMs}ms`);
       }
       throw new RpcError("NETWORK", `request failed: ${(err as Error).message}`);
     } finally {
       clearTimeout(timer);
-    }
-
-    try {
-      return await res.json();
-    } catch {
-      // Non-JSON body: HTTP status is only a carrier — surface as typed error.
-      throw new RpcError(`HTTP_${res.status}`, `unexpected response (status ${res.status})`);
     }
   }
 }

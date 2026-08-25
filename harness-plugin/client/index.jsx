@@ -195,7 +195,7 @@ function RemoteSettingsTab({ rpcCall }) {
 
   const codeRow = (label, value, mono = true) =>
     h('div', { style: styles.codeRow },
-      h('div', { style: { ...styles.codeText, fontFamily: mono ? undefined : 'inherit' } }, `${label}${value ? '' : '：——'}`),
+      h('div', { style: { ...styles.codeText, fontFamily: mono ? undefined : 'inherit' } }, `${label}：${value || '——'}`),
       value
         ? h('button', { style: styles.copyBtn, onClick: () => void copyText(value) }, '复制')
         : null,

@@ -16,9 +16,8 @@ import { SkeletonRow } from "../src/ui/SkeletonRow";
 import { Field } from "../src/ui/Field";
 import { Button } from "../src/ui/Button";
 import { HarnessMark } from "../src/ui/HarnessMark";
-import { DeepOceanBackground } from "../src/ui/DeepOceanBackground";
 import type { SessionSummary } from "../src/data/SessionStore";
-import { filterSessions, formatSessionTime, groupByWorkspace, pressureTier } from "../src/data/sessionViews";
+import { filterSessions, formatSessionTime, groupByWorkspace, pressureTier, workspaceDisplayName } from "../src/data/sessionViews";
 
 function normalizePath(p: string): string {
   return p.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -52,7 +51,7 @@ function FolderIcon({ color, size = 20 }: { color: string; size?: number }) {
   );
 }
 
-function GoalPill({ status, colors, onHero }: { status?: string; colors: ReturnType<typeof useTheme>["colors"]; onHero?: boolean }) {
+function GoalPill({ status, colors }: { status?: string; colors: ReturnType<typeof useTheme>["colors"] }) {
   if (!status) return null;
   const done = status === "complete" || status === "completed";
   return (
@@ -67,14 +66,7 @@ function GoalPill({ status, colors, onHero }: { status?: string; colors: ReturnT
           paddingVertical: 2,
           overflow: "hidden",
         },
-        onHero
-          ? {
-              color: colors.mist,
-              backgroundColor: colors.heroCard,
-              borderWidth: 1,
-              borderColor: colors.heroStroke,
-            }
-          : { color: colors.textMuted, backgroundColor: colors.surface2 },
+        { color: colors.textMuted, backgroundColor: colors.surface2 },
         done && { color: colors.success, backgroundColor: "rgba(46,158,91,0.08)" },
       ]}
     >
@@ -90,7 +82,7 @@ type SessionRow =
 export default function SessionsScreen() {
   const { sessions, pending, state, refreshSessions, createSession, renameSession, forkSession, archiveSession, searchSessions, workspaceList } = useConnection();
   const { t } = useI18n();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { scale } = useAppSettings();
   const styles = useMemo(() => createStyles(colors, scale), [colors, scale]);
   const stateLabel = (s: typeof state) =>
@@ -164,7 +156,7 @@ export default function SessionsScreen() {
       : visible;
     const groupedSessions = scoped.map((s) => ({
       ...s,
-      workspace: (s.workspace ? pathToTitle.get(normalizePath(s.workspace)) : undefined) ?? s.workspace ?? t.common.other,
+      workspace: workspaceDisplayName(s.workspace, (p) => pathToTitle.get(p)),
     }));
     const filtered = filterSessions(groupedSessions, query);
     return groupByWorkspace(filtered).flatMap<SessionRow>((g) => [
@@ -264,25 +256,22 @@ export default function SessionsScreen() {
   };
 
   const activeWorkspaceTitle = workspaceFilter ? pathToTitle.get(workspaceFilter) ?? workspaceFilter : null;
-  const workspaceCardTitle = activeWorkspaceTitle ?? (workspaceGroups.length > 0 ? "全部工作区" : "DeepseekHarnessProject");
-  const workspaceCardPath = workspaceFilter ?? (workspaceGroups.length > 0 ? `${workspaceGroups.length} 个工作区` : "通过 Mobile Gateway 连接");
 
   const renderEmpty = () => {
     if (state === "connecting" || state === "backoff") {
       return (
         <View style={styles.emptyWrap}>
-          <SkeletonRow variant="hero" />
-          <SkeletonRow variant="hero" />
+          <SkeletonRow />
+          <SkeletonRow />
         </View>
       );
     }
     if (query.trim()) {
-      return <EmptyState variant="hero" eyebrow="NO MATCH" text={t.sessions.noMatchText} />;
+      return <EmptyState eyebrow="NO MATCH" text={t.sessions.noMatchText} />;
     }
     if (state === "offline") {
       return (
         <EmptyState
-          variant="hero"
           eyebrow="OFFLINE"
           text={t.sessions.offlineText}
           action={<Button label={t.common.goConnect} onPress={() => router.push("/")} full />}
@@ -291,7 +280,6 @@ export default function SessionsScreen() {
     }
     return (
       <EmptyState
-        variant="hero"
         eyebrow="EMPTY"
         text={t.sessions.emptyText}
         action={<Button label={t.sessions.newSession} onPress={() => void onCreate()} full />}
@@ -301,8 +289,7 @@ export default function SessionsScreen() {
 
   return (
     <View style={styles.screen}>
-      <StatusBar style="light" />
-      <DeepOceanBackground whaleTop={Math.max(insets.top + 170, 170)} whaleSize={190} whaleOpacity={0.34} />
+      <StatusBar style={isDark ? "light" : "dark"} />
 
       <FlashList
         style={styles.list}
@@ -310,14 +297,14 @@ export default function SessionsScreen() {
         data={rows}
         keyExtractor={(row) => row.key}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.mist} colors={[colors.accent]} progressBackgroundColor={colors.navyRaised} />
+          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.textMuted} colors={[colors.accent]} progressBackgroundColor={colors.surface} />
         }
         ListHeaderComponent={
           <View style={styles.header}>
             <View style={styles.headerRow}>
               <HarnessMark size={27} />
               <View style={styles.headerRight}>
-                <StatusChip tone={state === "online" ? "success" : state === "offline" ? "danger" : "warn"} label={stateLabel(state)} variant="hero" />
+                <StatusChip tone={state === "online" ? "success" : state === "offline" ? "danger" : "warn"} label={stateLabel(state)} />
                 <Pressable
                   onPress={() => router.push("/settings" as never)}
                   hitSlop={8}
@@ -330,28 +317,25 @@ export default function SessionsScreen() {
               </View>
             </View>
 
-            <View style={styles.heroCopy}>
-              <Text style={styles.heroTitle}>{t.sessions.heroTitle}</Text>
-              <Text style={styles.heroSubtitle}>{t.sessions.heroSubtitle}</Text>
-            </View>
-
-            {/* 工作区选择卡 */}
-            <Pressable
-              style={({ pressed }) => [styles.workspaceCard, pressed && styles.workspaceCardPressed]}
-              onPress={() => setWorkspaceSheetVisible(true)}
-              accessibilityRole="button"
-              accessibilityLabel="选择工作区"
-            >
-              <View style={styles.workspaceIconWrap}>
-                <FolderIcon color={colors.mist} />
-              </View>
-              <View style={styles.workspaceBody}>
-                <Text style={styles.workspaceTitle} numberOfLines={1}>{workspaceCardTitle}</Text>
-                <Text style={styles.workspacePath} numberOfLines={1}>{workspaceCardPath}</Text>
-              </View>
-              <View style={[styles.workspaceDot, { backgroundColor: state === "online" ? colors.success : colors.heroTextDim }]} />
-              <Text style={styles.workspaceChevron}>⌄</Text>
-            </Pressable>
+            {/* 工作区选择卡：宿主提供了工作区清单才显示（审计 P1-4：不再渲染假品牌占位） */}
+            {workspaceGroups.length > 0 && (
+              <Pressable
+                style={({ pressed }) => [styles.workspaceCard, pressed && styles.workspaceCardPressed]}
+                onPress={() => setWorkspaceSheetVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="选择工作区"
+              >
+                <View style={styles.workspaceIconWrap}>
+                  <FolderIcon color={colors.textMuted} />
+                </View>
+                <View style={styles.workspaceBody}>
+                  <Text style={styles.workspaceTitle} numberOfLines={1}>{activeWorkspaceTitle ?? "全部工作区"}</Text>
+                  <Text style={styles.workspacePath} numberOfLines={1}>{workspaceFilter ?? `${workspaceGroups.length} 个工作区`}</Text>
+                </View>
+                <View style={[styles.workspaceDot, { backgroundColor: state === "online" ? colors.success : colors.textDim }]} />
+                <Text style={styles.workspaceChevron}>⌄</Text>
+              </Pressable>
+            )}
 
             {/* 新建会话 */}
             <Pressable
@@ -361,7 +345,7 @@ export default function SessionsScreen() {
               accessibilityRole="button"
               accessibilityLabel={t.sessions.newSession}
             >
-              <Text style={styles.newSessionPlusText}>＋</Text>
+              <Text style={styles.newSessionPlusIcon}>＋</Text>
               <Text style={styles.newSessionText}>{t.sessions.newSession}</Text>
             </Pressable>
 
@@ -379,7 +363,6 @@ export default function SessionsScreen() {
                 value={query}
                 onChangeText={onChangeQuery}
                 autoFocus
-                variant="hero"
               />
             )}
             {refreshError.length > 0 && <Text style={styles.refreshError}>{refreshError}</Text>}
@@ -413,13 +396,13 @@ export default function SessionsScreen() {
               accessibilityRole="button"
               accessibilityLabel={item.session.title ?? item.session.id}
             >
-              <View style={[styles.rowDot, { backgroundColor: item.session.running ? colors.success : "rgba(255,255,255,0.35)" }]} />
+              <View style={[styles.rowDot, { backgroundColor: item.session.running ? colors.success : colors.textDim }]} />
               <View style={styles.rowBody}>
                 <View style={styles.rowHeader}>
                   <Text style={styles.rowTitle} numberOfLines={1}>
                     {item.session.title ?? item.session.id}
                   </Text>
-                  <GoalPill status={item.session.goalStatus} colors={colors} onHero />
+                  <GoalPill status={item.session.goalStatus} colors={colors} />
                   {item.session.contextPercent !== undefined && item.session.contextPercent >= 70 && (
                     <Text
                       style={[
@@ -433,7 +416,6 @@ export default function SessionsScreen() {
                   )}
                 </View>
                 <View style={styles.rowMeta}>
-                  <Text style={styles.rowId} numberOfLines={1}>{String(item.session.id).slice(0, 16)}</Text>
                   {item.session.lastActiveAt !== undefined && (
                     <Text style={styles.time} numberOfLines={1}>
                       {item.session.running ? t.chat.goalRunning : formatSessionTime(item.session.lastActiveAt, Date.now(), t.common.weekdays, t.common.yesterday)}
@@ -541,7 +523,7 @@ export default function SessionsScreen() {
 
 function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: number) {
   return StyleSheet.create({
-    screen: { flex: 1, backgroundColor: colors.navy },
+    screen: { flex: 1, backgroundColor: colors.bg },
     list: { flex: 1 },
     content: { paddingHorizontal: 20, paddingBottom: space.x7, gap: 12 },
     header: { gap: space.x4, marginBottom: space.x2 },
@@ -551,67 +533,56 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: colors.heroCard,
+      backgroundColor: colors.surface2,
       borderWidth: 1,
-      borderColor: colors.heroStroke,
+      borderColor: colors.separator,
       alignItems: "center",
       justifyContent: "center",
     },
     headerIconBtnPressed: { opacity: 0.7 },
-    headerIconText: { color: colors.heroText, fontSize: 17, fontWeight: "600" },
-    heroCopy: { gap: 7, paddingTop: space.x3 },
-    heroTitle: {
-      color: colors.heroText,
-      fontFamily: font.displayBold,
-      fontSize: 32,
-      fontWeight: "700",
-      letterSpacing: -0.8,
-      lineHeight: 38,
-    },
-    heroSubtitle: { color: colors.heroTextDim, fontSize: 17, lineHeight: 22 },
+    headerIconText: { color: colors.text, fontSize: 17, fontWeight: "600" },
     workspaceCard: {
       flexDirection: "row",
       alignItems: "center",
       gap: 12,
-      backgroundColor: colors.heroCard,
+      backgroundColor: colors.surface,
       borderRadius: radius.card,
       borderWidth: 1,
-      borderColor: colors.heroStroke,
+      borderColor: colors.separator,
       padding: 16,
     },
-    workspaceCardPressed: { backgroundColor: "rgba(255,255,255,0.09)" },
-    workspaceIcon: { fontSize: 20 },
+    workspaceCardPressed: { backgroundColor: colors.surface2 },
     workspaceIconWrap: {
       width: 38,
       height: 38,
       borderRadius: 12,
-      backgroundColor: "rgba(255,255,255,0.08)",
+      backgroundColor: colors.surface2,
       borderWidth: 1,
-      borderColor: colors.heroStroke,
+      borderColor: colors.separator,
       alignItems: "center",
       justifyContent: "center",
     },
     workspaceBody: { flex: 1, gap: 2 },
-    workspaceTitle: { color: colors.heroText, fontSize: 16, fontWeight: "600", letterSpacing: -0.2 },
-    workspacePath: { color: colors.heroTextDim, fontSize: 12, fontFamily: font.mono },
+    workspaceTitle: { color: colors.text, fontSize: 15, fontWeight: "600", letterSpacing: -0.2 },
+    workspacePath: { color: colors.textMuted, fontSize: 12, fontFamily: font.mono },
     workspaceDot: { width: 7, height: 7, borderRadius: 4 },
-    workspaceChevron: { color: colors.heroTextDim, fontSize: 13, fontWeight: "600" },
+    workspaceChevron: { color: colors.textDim, fontSize: 13, fontWeight: "600" },
     newSession: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       gap: 8,
-      backgroundColor: colors.ocean,
+      backgroundColor: colors.accent,
       borderRadius: 14,
       height: 48,
-      shadowColor: colors.ocean,
-      shadowOpacity: 0.35,
-      shadowRadius: 12,
+      shadowColor: colors.accent,
+      shadowOpacity: 0.30,
+      shadowRadius: 10,
       shadowOffset: { width: 0, height: 4 },
-      elevation: 4,
+      elevation: 3,
     },
     newSessionPressed: { opacity: 0.85 },
-    newSessionPlusText: { color: "#FFFFFF", fontSize: 18, fontWeight: "600", lineHeight: 20 },
+    newSessionPlusIcon: { color: "#FFFFFF", fontSize: 20, fontWeight: "600", lineHeight: 20 },
     newSessionText: { color: "#FFFFFF", fontSize: 15, fontWeight: "600" },
     sessionsHead: {
       flexDirection: "row",
@@ -619,22 +590,20 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
       justifyContent: "space-between",
       paddingTop: space.x3,
     },
-    sessionsTitle: { color: colors.heroText, fontSize: 17, fontWeight: "600" },
-    searchToggle: { color: colors.mist, fontSize: 13, fontWeight: "500" },
+    sessionsTitle: { color: colors.text, fontSize: 15, fontWeight: "600" },
+    searchToggle: { color: colors.textMuted, fontSize: 13, fontWeight: "500" },
     pendingRow: {
       flexDirection: "row",
       alignItems: "center",
       gap: space.x2,
-      backgroundColor: colors.heroCard,
-      borderWidth: 1,
-      borderColor: colors.heroStroke,
+      backgroundColor: colors.accentSoft,
       borderRadius: radius.pill,
       paddingHorizontal: 12,
       paddingVertical: 8,
       alignSelf: "flex-start",
     },
     pendingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.amber },
-    pendingText: { color: colors.mist, fontSize: 13, fontWeight: "500", letterSpacing: -0.1 },
+    pendingText: { color: colors.text, fontSize: 13, fontWeight: "500", letterSpacing: -0.1 },
     refreshError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
     groupHeaderRow: {
       flexDirection: "row",
@@ -644,36 +613,31 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
       paddingBottom: space.x2,
       paddingHorizontal: 2,
     },
-    groupHeader: { color: colors.mist, fontFamily: font.monoBold, fontSize: font.eyebrow, letterSpacing: 1.4, textTransform: "uppercase" },
-    groupCount: { color: colors.heroTextDim, fontSize: font.eyebrow, fontFamily: font.mono },
+    groupHeader: { color: colors.textMuted, fontFamily: font.monoBold, fontSize: font.eyebrow, letterSpacing: 1.4, textTransform: "uppercase" },
+    groupCount: { color: colors.textDim, fontSize: font.eyebrow, fontFamily: font.mono },
     row: {
       flexDirection: "row",
       alignItems: "center",
       gap: 12,
-      backgroundColor: colors.heroCard,
+      backgroundColor: colors.surface,
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.heroStroke,
+      borderColor: colors.separator,
       paddingVertical: 13,
       paddingHorizontal: 14,
       marginBottom: 8,
     },
-    rowPressed: { backgroundColor: "rgba(255,255,255,0.09)" },
+    rowPressed: { backgroundColor: colors.surface2 },
     rowDot: { width: 8, height: 8, borderRadius: 4 },
     rowBody: { flex: 1, gap: 3 },
     rowHeader: { flexDirection: "row", alignItems: "center", gap: space.x2 },
-    rowTitle: { color: colors.heroText, fontSize: 16 * scale, fontWeight: "600", letterSpacing: -0.2, flexShrink: 1 },
+    rowTitle: { color: colors.text, fontSize: 15 * scale, fontWeight: "600", letterSpacing: -0.2, flexShrink: 1 },
     rowMeta: { flexDirection: "row", alignItems: "center", gap: space.x2 },
-    rowId: { color: "rgba(242,246,255,0.40)", fontSize: 11, fontFamily: font.mono, flexShrink: 1 },
-    rowPreview: { color: colors.heroTextDim, fontSize: font.caption * scale, lineHeight: 18 * scale, letterSpacing: 0.1 },
-    time: { color: "rgba(242,246,255,0.48)", fontSize: 11, fontFamily: font.mono },
+    time: { color: colors.textMuted, fontSize: 12, fontFamily: font.mono },
+    rowPreview: { color: colors.textMuted, fontSize: font.caption * scale, lineHeight: 18 * scale, letterSpacing: 0.1 },
     pressure: { fontSize: font.eyebrow, fontFamily: font.mono, letterSpacing: 0.2 },
-    rowArrow: { color: colors.heroTextDim, fontSize: 18, fontWeight: "300" },
+    rowArrow: { color: colors.textDim, fontSize: 18, fontWeight: "300" },
     emptyWrap: { alignItems: "center", paddingTop: space.x7 * 2, gap: space.x2, paddingHorizontal: space.x4 },
-    emptyEyebrow: { color: colors.mist, fontFamily: font.monoBold, fontSize: font.eyebrow, letterSpacing: 1.6, textTransform: "uppercase" },
-    emptyText: { color: colors.heroTextDim, fontSize: font.caption, textAlign: "center" },
-    emptyAction: { marginTop: space.x2, minWidth: 160, alignSelf: "center" },
-    skeletonBar: { height: 10, borderRadius: 5, backgroundColor: "rgba(255,255,255,0.08)" },
     modalBackdrop: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.5)",

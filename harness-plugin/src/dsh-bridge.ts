@@ -15,6 +15,7 @@
 
 import {
   RpcClient,
+  RpcError,
   RELAY_ENVELOPE_VERSION,
   makeRpcId,
   type RelayEnvelope,
@@ -85,9 +86,10 @@ export function parseLoopbackListeningPorts(netstatOutput: string): number[] {
 
 /**
  * 枚举当前机器上的回环 TCP 监听端口（Windows 用 netstat）。
- * 失败/非 Windows 时返回空数组，调用方回退历史端口。
+ * 失败时返回空数组并经 onStatus 留痕（审计 2026-08-23：此前失败完全静默，
+ * 导致「只试 56734/3080 死端口」的故障无从排查）。
  */
-export function getLoopbackListeningPorts(timeoutMs = 5000): Promise<number[]> {
+export function getLoopbackListeningPorts(timeoutMs = 5000, onStatus?: (line: string) => void): Promise<number[]> {
   return new Promise((resolve) => {
     nodeExecFile(
       "netstat",
@@ -95,6 +97,7 @@ export function getLoopbackListeningPorts(timeoutMs = 5000): Promise<number[]> {
       { timeout: timeoutMs, windowsHide: true, maxBuffer: 1024 * 1024 },
       (err, stdout) => {
         if (err) {
+          onStatus?.(`netstat 回环端口枚举失败：${err.message}`);
           resolve([]);
           return;
         }
@@ -104,36 +107,75 @@ export function getLoopbackListeningPorts(timeoutMs = 5000): Promise<number[]> {
   });
 }
 
+export interface DetectDshApiUrlOptions {
+  /**
+   * 注入回环端口枚举（测试用）。缺省用 netstat 枚举。
+   * 枚举实现自身可经 onStatus 报告失败原因。
+   */
+  listLoopbackPorts?: (onStatus?: (line: string) => void) => Promise<number[]>;
+}
+
 /** 从常见环境变量/默认端口里挑一个可达的 DSH API baseUrl。 */
 export async function detectDshApiUrl(
   fetchImpl?: typeof fetch,
   onStatus?: (line: string) => void,
+  options?: DetectDshApiUrlOptions,
 ): Promise<string | null> {
-  const candidates: Array<{ base: string; timeoutMs: number }> = [];
-  const envUrl = process.env.DSH_API_URL ?? process.env.DSH_WEB_URL;
-  if (envUrl) candidates.push({ base: envUrl.replace(/\/+$/, ""), timeoutMs: 3000 });
+  const listPorts = options?.listLoopbackPorts ?? ((onStatus2) => getLoopbackListeningPorts(5000, onStatus2));
 
-  // Windows 兜底：枚举 DSH Desktop 进程实际监听的 127.0.0.1 端口，逐个探活。
-  const loopbackPorts = await getLoopbackListeningPorts();
-  for (const port of loopbackPorts) {
-    candidates.push({ base: `http://127.0.0.1:${port}`, timeoutMs: 1500 });
+  // 1) env 候选最高优先级（当前 DSH Desktop 实例已实测会注入 DSH_WEB_URL），
+  //    串行先试；命中即返回，避免无谓的端口枚举。
+  const envUrl = process.env.DSH_API_URL ?? process.env.DSH_WEB_URL;
+  if (envUrl) {
+    const base = envUrl.replace(/\/+$/, "");
+    if (await probeDshApi(base, fetchImpl, 3000)) {
+      onStatus?.(`已连接 DSH API：${base}`);
+      return base;
+    }
+    onStatus?.(`未检测到 DSH API：${base}（env DSH_API_URL/DSH_WEB_URL）`);
   }
 
-  // 历史兼容端口，放在动态探测之后。
+  // 2) 回环端口枚举（失败/为空必须留痕，不再静默）+ 历史兼容端口。
+  let ports: number[] = [];
+  try {
+    ports = await listPorts(onStatus);
+  } catch (err) {
+    onStatus?.(`netstat 回环端口枚举失败：${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (ports.length === 0) {
+    onStatus?.("netstat 回环端口枚举无结果（可能被沙箱/权限拦截，或 netstat 不可用）");
+  }
+  const candidates: Array<{ base: string; timeoutMs: number }> = ports.map((port) => ({
+    base: `http://127.0.0.1:${port}`,
+    timeoutMs: 1500,
+  }));
   candidates.push(
     { base: "http://127.0.0.1:56734", timeoutMs: 1500 },
     { base: "http://127.0.0.1:3080", timeoutMs: 1500 },
   );
 
   const seen = new Set<string>();
-  for (const { base, timeoutMs } of candidates) {
-    if (seen.has(base)) continue;
+  const unique = candidates.filter(({ base }) => {
+    if (seen.has(base)) return false;
     seen.add(base);
-    if (await probeDshApi(base, fetchImpl, timeoutMs)) {
-      onStatus?.(`已连接 DSH API：${base}`);
-      return base;
-    }
-    onStatus?.(`未检测到 DSH API：${base}`);
+    return true;
+  });
+
+  // 3) 并行探活（串行逐端口最坏 30-40s，审计实测）；命中取候选顺序最前者，
+  //    保证优先级确定、不随完成先后漂移。
+  const results = await Promise.all(
+    unique.map(async ({ base, timeoutMs }) => ({
+      base,
+      ok: await probeDshApi(base, fetchImpl, timeoutMs),
+    })),
+  );
+  const hit = results.find((r) => r.ok);
+  if (hit) {
+    onStatus?.(`已连接 DSH API：${hit.base}`);
+    return hit.base;
+  }
+  for (const r of results) {
+    onStatus?.(`未检测到 DSH API：${r.base}`);
   }
   return null;
 }
@@ -148,6 +190,8 @@ export class DshBridge {
   private readonly reconnectTimers = new Set<ReturnType<typeof setTimeout>>();
   private unsubscribeRelay: (() => void) | null = null;
   private stopped = false;
+  /** 已探测为宿主不支持（HTTP 404）的方法缓存；短路后续调用。 */
+  private readonly unsupportedMethods = new Set<string>();
   private readonly baseUrlValue: string;
 
   constructor(opts: DshBridgeOptions) {
@@ -196,7 +240,7 @@ export class DshBridge {
     this.unsubscribeRelay = null;
   }
 
-  private async handleRelayEnvelope(env: RelayEnvelope): Promise<void> {
+  handleRelayEnvelope = async (env: RelayEnvelope): Promise<void> => {
     if (env.type !== "relay.route") return;
     const p = env.payload;
     if (!isRecord(p)) return;
@@ -220,6 +264,20 @@ export class DshBridge {
 
     if (!method) return;
 
+    // 能力缓存：已知宿主不支持（HTTP 404）的方法直接短路，不再撞墙刷错误日志
+    // （审计 2026-08-23 P0-4：plugin.list / host.settings.* 在 Desktop 2.0.1 上 404）。
+    if (this.unsupportedMethods.has(method)) {
+      await this.sendRoute(to, {
+        rpcId,
+        ok: false,
+        error: {
+          code: "E_UNSUPPORTED",
+          message: `当前 DSH 宿主未实现 ${method}（已探测缓存，不再重试）`,
+        },
+      });
+      return;
+    }
+
     try {
       const r = await this.rpc.unary(method, p.payload ?? {});
       await this.sendRoute(to, {
@@ -230,17 +288,22 @@ export class DshBridge {
           : { error: r.error ?? { code: "E_UNKNOWN", message: "DSH request failed" } }),
       });
     } catch (err) {
-      this.onError?.(err);
+      if (err instanceof RpcError && err.code === "HTTP_404") {
+        this.unsupportedMethods.add(method);
+        this.onStatus?.(`DSH 宿主不支持 ${method}（HTTP 404）——已缓存，后续调用直接短路`);
+      } else {
+        this.onError?.(err);
+      }
       await this.sendRoute(to, {
         rpcId,
         ok: false,
         error: {
-          code: "E_UNKNOWN",
+          code: err instanceof RpcError && err.code === "HTTP_404" ? "E_UNSUPPORTED" : "E_UNKNOWN",
           message: err instanceof Error ? err.message : String(err),
         },
       });
     }
-  }
+  };
 
   private async sendRoute(to: string, payload: Record<string, unknown>): Promise<void> {
     if (this.stopped) return;

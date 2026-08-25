@@ -102,7 +102,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     },
     pillText: {
       color: colors.heroText,
-      fontSize: 9,
+      fontSize: 10,
       fontFamily: font.monoMedium,
       letterSpacing: 1.4,
       opacity: 0.9,
@@ -110,7 +110,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     title: {
       color: colors.heroText,
       fontFamily: font.displayBold,
-      fontSize: 26,
+      fontSize: 24,
       fontWeight: "700",
       letterSpacing: -0.6,
       textAlign: "center",

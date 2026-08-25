@@ -66,4 +66,71 @@ describe("createRemoteAccessService", () => {
     expect(service.status().running).toBe(false);
     expect(service.status().error).toContain("超时");
   });
+
+  it("start() persists enabled+mode when a persist impl is provided", async () => {
+    const writes: Array<{ enabled?: boolean; mode?: string }> = [];
+    const service = createRemoteAccessService({
+      autoDetectDsh: false,
+      startImpl: async () => fakeHandle({ mode: "lan" }),
+      qrDataUrlImpl: async () => "data:image/png;base64,x",
+      persist: {
+        read: () => null,
+        write: (c) => writes.push({ ...c }),
+      },
+    });
+    await service.start("lan");
+    expect(writes).toEqual([{ enabled: true, mode: "lan" }]);
+  });
+
+  it("stop() persists enabled=false and keeps the last mode", async () => {
+    const writes: Array<{ enabled?: boolean; mode?: string }> = [];
+    const service = createRemoteAccessService({
+      autoDetectDsh: false,
+      startImpl: async () => fakeHandle({ mode: "tunnel" }),
+      qrDataUrlImpl: async () => "data:image/png;base64,x",
+      persist: {
+        read: () => null,
+        write: (c) => writes.push({ ...c }),
+      },
+    });
+    await service.start("tunnel");
+    await service.stop();
+    expect(writes).toEqual([
+      { enabled: true, mode: "tunnel" },
+      { enabled: false, mode: "tunnel" },
+    ]);
+  });
+
+  it("start() failure does not persist enabled=true", async () => {
+    const writes: Array<{ enabled?: boolean; mode?: string }> = [];
+    const service = createRemoteAccessService({
+      autoDetectDsh: false,
+      startImpl: async () => {
+        throw new Error("tunnel down");
+      },
+      qrDataUrlImpl: async () => "data:image/png;base64,x",
+      persist: {
+        read: () => null,
+        write: (c) => writes.push({ ...c }),
+      },
+    });
+    await expect(service.start("tunnel")).rejects.toThrow("tunnel down");
+    expect(writes).toEqual([]);
+  });
+
+  it("persist failures never break start/stop", async () => {
+    const service = createRemoteAccessService({
+      autoDetectDsh: false,
+      startImpl: async () => fakeHandle(),
+      qrDataUrlImpl: async () => "data:image/png;base64,x",
+      persist: {
+        read: () => null,
+        write: () => {
+          throw new Error("disk full");
+        },
+      },
+    });
+    await expect(service.start("tunnel")).resolves.toMatchObject({ running: true });
+    await expect(service.stop()).resolves.toMatchObject({ running: false });
+  });
 });

@@ -191,7 +191,7 @@ function createStyles(colors: ThemeColors) {
       shadowOffset: { width: 0, height: 4 },
       elevation: 6,
     },
-    successCheck: { color: "#FFFFFF", fontSize: 26, fontWeight: "700", lineHeight: 30 },
+    successCheck: { color: "#FFFFFF", fontSize: 24, fontWeight: "700", lineHeight: 30 },
     overlayTitle: { color: colors.heroText, fontSize: font.body + 1, fontWeight: "600", textAlign: "center" },
     overlayHint: { color: colors.heroTextDim, fontSize: font.caption, textAlign: "center" },
     error: { color: colors.danger, fontSize: font.caption, textAlign: "center" },

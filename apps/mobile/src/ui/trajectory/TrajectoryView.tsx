@@ -172,7 +172,7 @@ function Lane({ kind, steps, colors, totalMs }: { kind: "turn" | "step" | "tool"
 
 const laneStyles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
-  label: { width: 42, fontFamily: font.monoBold, fontSize: 9, letterSpacing: 1, textTransform: "uppercase" },
+  label: { width: 42, fontFamily: font.monoBold, fontSize: 10, letterSpacing: 1, textTransform: "uppercase" },
   track: { flex: 1, height: 6, justifyContent: "center" },
 });
 

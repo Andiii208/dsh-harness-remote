@@ -35,7 +35,7 @@ function createStyles(colors: ThemeColors, tone: "hero" | "ink") {
     word: {
       color: fg,
       fontFamily: font.display,
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: "600",
       letterSpacing: -0.4,
       lineHeight: 26,
@@ -43,7 +43,7 @@ function createStyles(colors: ThemeColors, tone: "hero" | "ink") {
     badge: {
       color: fg,
       fontFamily: font.monoBold,
-      fontSize: 9,
+      fontSize: 10,
       fontWeight: "700",
       letterSpacing: 0.8,
       paddingHorizontal: 5,

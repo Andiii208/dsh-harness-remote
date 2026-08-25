@@ -34,7 +34,7 @@ function RootNavigator() {
         screenOptions={{
           headerStyle: { backgroundColor: colors.bg },
           headerTintColor: colors.text,
-          headerTitleStyle: { fontWeight: "600", fontSize: 17 },
+          headerTitleStyle: { fontWeight: "600", fontSize: 15 },
           contentStyle: { backgroundColor: colors.bg },
           headerShadowVisible: false,
           headerBackTitle: "返回",

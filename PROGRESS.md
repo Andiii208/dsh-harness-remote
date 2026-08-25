@@ -1,5 +1,37 @@
 # PROGRESS
 
+## P2 收尾第 1/2 步完成（2026-08-24 CI 门禁 + 证据标准入宪）
+- P2 第 4 步（CI 门禁接线）：`.github/workflows/ci.yml` 在 `pnpm test` 之后新增两步——`node apps/mobile/scripts/lint-font-tokens.mjs --strict`（字号令牌门禁，P1-3 机制接入 CI）与 `node tools/smoke-e2e.mjs --mock`（E2E 冒烟门禁，P0-5 机制接入 CI；mock 模式封闭可跑，不依赖真实宿主）。本机实测两命令 exit 0；workflow YAML 经 `yaml@2.9.0` 解析验证合法（9 步装配正确）。需 push 后由 GitHub runner 最终确认。
+- P2 第 5 步（证据标准入宪）：`CONTRIBUTING.md` 新增「验证与证据标准」小节（2026-08-24 入宪）——四条铁律：①可复现（附命令/脚本路径，产物落 .shots）②机器可查（明暗截图 SHA-256 两两不同 + 角像素主题抽查；端到端必须走 RelayTransport 同款传输层而非只探活 RPC）③诚实标注边界（真机/特定网络未覆盖要写「未验证」）④门禁优先（能脚本断言的接 CI）。条款直接源自 2026-08-23 审计实锤：v0.3.1 明暗同图当两份证据、真实链路验证实为 RPC 直连探测。
+- 剩余：P2 第 1 步（重启 DSH 激活插件 0.3.2）、第 2 步（真机回归）、第 3 步（文档对齐，已部分随各批完成）——前两项需用户操作（重启/手机），见 README/PROGRESS 顶部路线。
+
+## P1 UI 精致化第二批完成（2026-08-24 剩余项收尾）
+- P1-2 补 web 主题持久化：新增 `apps/mobile/src/data/webStorageApi.ts`（localStorage 版 SecureStoreApi，3 单测）+ `themePreferenceStoreAdapter` 按 `Platform.OS === "web"` 降级。**实测深色切换后整页重载仍为深色**（R11G11B15 角像素验证）——修复了 web 预览「主题不跨刷新」的遗留。配对 token 等敏感数据仍走 SecureStore，绝不入 localStorage（注释明示）。
+- P1-4 补聊天日期分组：`TranscriptMessage` 新增 `ts`（来源事件 time，epoch ms），`SessionStore.applyDshEvent` 全折叠点（user/message、assistant/chunk、assistant/message、tool/call、tool/result）贯穿 `event.time`（+1 单测）；新增纯函数 `src/ui/chat/chatTimeline.ts` `buildTranscriptRows`/`dayLabel`（今天/昨天/M月D日，ts-less 消息并入前组，+4 单测）；聊天页 FlashList 数据源改为 rows、渲染居中日期胶囊（`dayDivider`）。
+- P1-3 令牌走查机制：新增 `apps/mobile/scripts/lint-font-tokens.mjs`（扫描 src/app 全部 fontSize 原始值 vs v8 白名单 10/12/13/14/15/20/24/28，图标字形样式按名跳过；`--strict` 可作 CI 门禁）。**全仓修复 24 处越界**：11→12（meta/时间戳）、9→10（eyebrow 微标签）、16→15（卡片标题）、17→15（区块标题）、18→20（会话标题/加号）、22→20（品牌字）、26→24（hero/引导）——严格模式现为 **0 违规**；聊天「⋯」与发送箭头抽成命名图标样式（glyph 豁免）、跳底 16→15、切页条 `marginHorizontal 66→20`（原怪边距）。
+- 回归：`pnpm --filter @dsh-remote/mobile build` exit 0（含 tsc）；`pnpm --filter @dsh-remote/mobile test` **192 passed / 38 files** exit 0（+1 SessionStore ts、+4 chatTimeline、+3 webStorageApi）；`node apps/mobile/scripts/lint-font-tokens.mjs --strict` 通过。
+- 视觉证据（`.shots/p1m-*.png`，**360x732 手机视口**，`--mobile` 仿真）：连接/会话/聊天三屏明暗各一对，SHA-256 两两不同 + 角像素主题验证（connect 深色 R13G34B61=深海、sessions/chat 深色 R11G11B15=暗纸面）。深色证据流程因持久化修复大幅简化：切深色后可直接整页重载。
+- P1 全批状态：P1-1/2/3/4/5 计划内全部落地；剩余仅「真机 390px 截图」留待设备窗口。
+
+## P1 UI 精致化第一批完成（2026-08-24 去营销化 + 真浅色主题 + 信息层级）
+- P1-1/P1-2 功能页去 hero + 真·浅色主题：`app/sessions.tsx` 整页去 `DeepOceanBackground`/hero 口号/鲸鱼水印，全部切换 paper 令牌（surface/separator/text），明暗两主题真实可渲染；`app/index.tsx` 连接页收敛为品牌唯一阵地——深色保留深海画布（签名元素），浅色走纸面；删除「DEEPSEEK HARNESS · REMOTE」营销 pill，hero 文案换功能性文案（i18n 新键 `connect.pageTitle/pageSubtitle`：「连接你的电脑 / 扫码或输入地址，随时查看会话、发消息、处理审批。」）；删除 sessions 的 hero i18n 键（zh/en 同步，parity 测试绿）；StatusBar/Field/StatusChip/ConnectionBanner/SectionLabel 全部按 `isDark` 选择 hero/paper 变体。
+- P1-4 信息层级：新增纯函数 `sessionViews.workspaceDisplayName()`（宿主标题优先 → 路径 basename 兜底，绝不渲染整条 `D:\APP` 路径；3 单测）；会话行删除原始会话 id 前缀（`s2` 之类）；工作区选择卡仅在宿主返回工作区清单时渲染（删除「DeepseekHarnessProject / 通过 Mobile Gateway 连接」假品牌占位）；聊天 composer 六个控制胶囊（权限/预设/模型/queue/图片/技能）合并为**单行横滚**（原两行折行挤压输入区）；聊天头部「⋯」加 paddingRight 修复右缘裁切。
+- P1-5 细节：页脚去等宽字体改 `v{version}`；`app.json` 版本 0.3.1 → **0.3.2**。
+- 视觉证据（`.shots/p1-*.png`，1280x720 桌面视口）：明暗三对截图（connect/sessions/chat）**SHA-256 两两不同**（P1-2 门禁断言，每张另做角像素主题验证）——直接反证 v0.3.1 时期「明暗同图」的造假模式。深色证据需在**同一文档内**完成（web 端主题偏好为内存适配器，整页重载即重置；原生 SecureStore 无此问题），流程：连接页 ⚙ → 设置点深色 → `history.back()`（同文档客户端返回）→ LAN 连接 → 会话/聊天。
+- 回归：`pnpm --filter @dsh-remote/mobile build`（含 tsc --noEmit）exit 0；`pnpm --filter @dsh-remote/mobile test` exit 0（183 测试，含 i18n parity + workspaceDisplayName +3）。
+- 遗留（下一批）：P1-3 设计令牌全量走查（4pt 栅格/字号阶梯逐屏过）；聊天消息分组与日期分割线；真机（390px 视口）截图证据（本轮桌面视口，`--device` 仿真未生效，需 playwright `setViewportSize`）；web 端主题持久化可考虑 localStorage 降级。
+
+## P0 可用性救援完成（2026-08-23/24，审计驱动修复）
+- 背景：`docs/audits/2026-08-23-app-audit-and-optimization-plan.md` 定位「手机 App 依旧不可用」的四层根因（远程无生命周期 / DSH API 探测脆弱且静默失败 / 桥接 404 无能力缓存 / 隧道地址一次性）。DSH 服务器日志实证 8/20–8/23 共 15 次「未检测到 DSH API：会话列表将为空」。
+- P0-3a RPC 超时修复：`packages/protocol/src/rpc.ts` `postRaw()` 原来在 `finally` 清掉定时器后才 `res.json()`，对端「秒回头、body 挂住」时无限悬挂（实测 5283 端口 30s）。现在定时器覆盖整个交换（headers+body），body 阶段 abort 映射为 `TIMEOUT`。修复后同端口探活 30034ms → 1512ms。测试：真实 HTTP 服务器挂 body 用例（protocol 127 → 128）。
+- P0-3b 探测诊断 + 并行：`harness-plugin/src/dsh-bridge.ts` `detectDshApiUrl()` 支持注入 `listLoopbackPorts`（可测）；netstat 枚举失败/为空**必须留痕**（此前 `err → resolve([])` 完全静默，13:42 故障因此无从排查）；env 候选串行优先（当前 DSH Desktop 实例已实测注入 `DSH_WEB_URL`，秒中），其余候选**并行探活**、按候选顺序取命中（串行最坏 30-40s → 并行 <2s）。
+- P0-4 404 能力缓存：`DshBridge.handleRelayEnvelope` 提为公开方法；HTTP 404 的方法（实测 Desktop 2.0.1：`plugin.list`、`host.settings.get/set`）进缓存后**直接短路**回 `E_UNSUPPORTED`，不再撞墙刷「DSH 桥接错误」日志；非 404 失败不缓存。手机端对应功能仍走既有的 null 降级隐藏。
+- P0-1 开关持久化 + 自启：新增 `harness-plugin/src/persist.ts`（`<DSH_HOME>/dsh-harness-remote/config.json`，宽容解析、tmp+rename 原子写）；`remote-service.ts` 显式 opt-in `persist`（start 成功写 `{enabled:true,mode}`、stop 写 `{enabled:false,mode}`、持久化失败仅降级）；`apply.ts` 加载时读持久化配置，`enabled=true` 按上次模式自启。安全默认不变：从未开启过的安装无配置文件 → 永不自启。`internals.autoStart=false` 为测试逃逸口。
+- P0-5 端到端冒烟：新增 `tools/smoke-e2e.mjs`（LAN 模式，不依赖 cloudflared）——startRemoteAccess → RelayTransport（App 同款传输层）配对 → E2E 加密数据面调 `session.list` → 断言桥接与状态日志。实测：`--mock` 封闭模式全绿（exit 0）；真实 DSH 模式全绿并拉到 **227 个真实会话**（exit 0）——「连上但看不到会话」的反面验证。
+- 回归：`pnpm -r build`（BUILD_EXIT=0）；`pnpm -r test`（TEST_EXIT=0，protocol 128 / harness-plugin 76，其余包不变）；`pnpm -r typecheck`（TYPECHECK_EXIT=0）。
+- 出包与部署：`dsh-harness-remote` 升 **0.3.2**（`harness-plugin/dsh-harness-remote-0.3.2.tgz`）；profile 依赖已切 0.3.2 并 `pnpm install` 重装（INSTALLED_VERSION=0.3.2）。`dev_reload_package` 报「loader.internal 不可用」无法热重载——**0.3.2 将在下次 DSH Desktop 重启时生效**；已预置 `~/.dsh/dsh-harness-remote/config.json` `{enabled:true,mode:"tunnel"}`（经插件自身 `readPersistedConfig` 验证可读），重启后远程自动开启、手机自动回连。
+- 遗留（下一窗口）：P1 UI 精致化（功能页去 hero、真浅色主题、设计令牌走查——详见审计文档 §4）；P2 证据标准入宪（v0.3.1 明暗同图造假已实证）；CI 接入 smoke-e2e 门禁（需 push 后验证 runner）；`dsh_reload`/热重载通道修复（super-injector loader.internal）。
+
 ## Phase 5 完成（2026-08-22 收尾与发布门禁）
 - P5-1 全仓回归全绿：`pnpm -r build`（BUILD_EXIT=0，`.shots/phase5-final-build.log`）；`pnpm -r typecheck`（TYPECHECK_EXIT=0，`.shots/phase5-final-typecheck.log`，期间修复 `RemoteAccessHandle.attachDsh` 可选化以通过测试类型检查）；`pnpm -r test` 退出码 0，capture 24 / protocol 127 / mobile 180 / relay 39 / harness-plugin 55 / mock-harness 29，skipped=0（`.shots/phase5-final-test.log`）。
 - P5-2 全页面 Playwright 证据：浅色 `phase5-connect-light.png` / `phase5-sessions-light.png` / `phase5-chat-light.png` / `phase5-trajectory-light.png` / `phase5-settings-light.png` / `phase5-events-light.png` / `phase5-plugins-light.png` / `phase5-approval-light.png`；深色 `phase5-dark-connect.png` / `phase5-dark-sessions.png` / `phase5-dark-chat.png` / `phase5-dark-trajectory.png` / `phase5-dark-settings.png` / `phase5-dark-approval.png` / `phase5-dark-plugins.png` / `phase5-dark-events.png`（脚本 `.shots/phase5-ui-evidence.py`、`.shots/phase5-dark-extra.py`）。

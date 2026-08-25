@@ -63,7 +63,7 @@ function createStyles(colors: ThemeColors) {
     brandText: {
       color: colors.heroText,
       fontFamily: font.display,
-      fontSize: 26,
+      fontSize: 24,
       fontWeight: "600",
       letterSpacing: -0.6,
       lineHeight: 30,
