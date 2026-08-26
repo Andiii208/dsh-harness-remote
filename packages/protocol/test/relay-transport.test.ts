@@ -93,10 +93,13 @@ async function collect(
   return out;
 }
 
-async function connectedPair(): Promise<{ conn: Awaited<ReturnType<RelayTransport["connect"]>>; ws: FakeWs }> {
+async function connectedPair(
+  opts: ConstructorParameters<typeof RelayTransport>[0] = {},
+): Promise<{ conn: Awaited<ReturnType<RelayTransport["connect"]>>; ws: FakeWs }> {
   const transport = new RelayTransport({
     wsImpl: FakeWs.fresh(),
     deviceId: "device-a",
+    ...opts,
   });
   const p = transport.connect({ host: "relay.example", port: 4090 }, {});
   const ws = FakeWs.instances[0]!;
@@ -647,5 +650,11 @@ describe("RelayTransport.connect", () => {
     const ws = FakeWs.instances[0]!;
     ws.open();
     await expect(p).rejects.toThrow(/control plane not ready before 20ms timeout/);
+  });
+
+  it("rejects unary after unaryTimeoutMs when no response arrives", async () => {
+    const { conn } = await connectedPair({ unaryTimeoutMs: 25 });
+    const unaryP = conn.unary("session.list", {});
+    await expect(unaryP).rejects.toThrow(/timed out after 25ms/);
   });
 });

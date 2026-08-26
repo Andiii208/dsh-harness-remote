@@ -133,6 +133,9 @@ export interface RelayTransportOptions {
   pairCode?: string;
   /** M3.5: called after relay.pair.ack (pairing succeeded). */
   onPairAck?: (ack: { consoleId: string; peerPublicKey: unknown }) => void;
+  /** Data-plane unary timeout in ms (default 30s). Prevents an App RPC from
+   * hanging forever when a large response stalls on a mobile tunnel. */
+  unaryTimeoutMs?: number;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -374,6 +377,7 @@ class RelayConnection implements Connection {
 
   private readonly queue = new FrameQueue();
   private closed = false;
+  private readonly unaryTimeoutMs: number;
 
   constructor(
     private readonly ws: RelaySocket,
@@ -381,7 +385,9 @@ class RelayConnection implements Connection {
     private readonly crypto: Crypto | undefined,
     private encKey: CryptoKey | undefined,
     private peerId?: string,
+    opts: { unaryTimeoutMs?: number } = {},
   ) {
+    this.unaryTimeoutMs = opts.unaryTimeoutMs ?? 30_000;
     this.events = this.queue;
     ws.onmessage = (ev) => {
       this.handleMessage(ev.data);
@@ -396,12 +402,21 @@ class RelayConnection implements Connection {
     };
   }
 
-  private readonly pending = new Map<string, (res: RpcResult) => void>();
+  private readonly pending = new Map<string, {
+    resolve: (res: RpcResult) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
 
   async unary(method: string, payload: unknown): Promise<RpcResult> {
     const id = makeRpcId();
-    const result = new Promise<RpcResult>((resolve) => {
-      this.pending.set(id, resolve);
+    const result = new Promise<RpcResult>((resolve, reject) => {
+      // 数据面 RPC 此前无超时：若响应被丢弃/网络挂起，调用方将永远
+      // pending（App 会话列表停在 EMPTY 且无错误提示）。30s 后明确失败。
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`RelayTransport: unary ${method} timed out after ${this.unaryTimeoutMs}ms`));
+      }, this.unaryTimeoutMs);
+      this.pending.set(id, { resolve, timer });
     });
 
     try {
@@ -428,7 +443,11 @@ class RelayConnection implements Connection {
         });
       }
     } catch (err) {
-      this.pending.delete(id);
+      const entry = this.pending.get(id);
+      if (entry) {
+        clearTimeout(entry.timer);
+        this.pending.delete(id);
+      }
       throw err;
     }
     return result;
@@ -572,13 +591,14 @@ class RelayConnection implements Connection {
     if (isRecord(payload)) {
       const rpcId = str(payload.rpcId);
       if (rpcId && typeof payload.ok === "boolean") {
-        const resolve = this.pending.get(rpcId);
-        if (resolve) {
+        const entry = this.pending.get(rpcId);
+        if (entry) {
           this.pending.delete(rpcId);
+          clearTimeout(entry.timer);
           if (payload.ok) {
-            resolve({ rpcId, ok: true, result: payload.result });
+            entry.resolve({ rpcId, ok: true, result: payload.result });
           } else {
-            resolve({
+            entry.resolve({
               rpcId,
               ok: false,
               error: normalizeRelayError(payload.error ?? { code: "E_UNKNOWN", message: "unknown error" }),
@@ -651,7 +671,9 @@ export class RelayTransport implements Transport {
       }
     }
 
-    const conn = new RelayConnection(ws, from, crypto, encKey, peerId);
+    const conn = new RelayConnection(ws, from, crypto, encKey, peerId, {
+      unaryTimeoutMs: this.opts.unaryTimeoutMs,
+    });
     const timeoutMs = this.opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
 
     return new Promise<Connection>((resolve, reject) => {

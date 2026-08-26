@@ -1,5 +1,15 @@
 # PROGRESS
 
+## 2026-08-25 真机「会话列表 EMPTY」根因修复：session.list 响应 10MB 瘦身 + relay unary 超时
+- 现象：用户 CI 下载 v0.3.2 APK，公网隧道（wss://…trycloudflare.com + 6 位码）连接成功进入会话页后，列表 EMPTY、新建会话后进入聊天无历史。Web 预览与 `tools/smoke-e2e.mjs` 均正常，差异只在真机 5G + 公网隧道。
+- 根因 1（主）：真实 DSH `session.list` 返回全量 projections（实测 237 会话 ≈ **11.8MB** JSON），经 cloudflared 公网隧道到手机必然超时/挂起；App 侧 `RelayConnection.unary` 又无超时，UI 永远停在 EMPTY 且无错误提示。LAN 直连的 smoke-e2e 从未暴露此问题（本地回环传 10MB 无压力）。
+- 根因 2（辅）：`packages/protocol/src/relay.ts` `RelayConnection.unary` 无超时——响应被丢弃/网络挂起时调用方永久 pending（refreshSessions 不抛错、不返回，列表空且无刷新失败提示）。
+- 修复 1（电脑端，不需新 APK）：`harness-plugin/src/dsh-bridge.ts` 新增 `slimSessionListResult()`，桥接层对 `session.list` 响应瘦身，只保留 App 消费字段（sessionId/updatedAt/running/blank/cwd/agentPreset + projections.values 的 title/goal/permissions/imageLimits）。**实测 11.8MB → 117KB（-99.0%）**；真实 DSH smoke-e2e 拉 243 会话通过，route 往返约 0.4s。
+- 修复 2（App 端，随下一版 APK）：`RelayTransportOptions.unaryTimeoutMs`（默认 30s），`RelayConnection.unary` 超时 reject 并清理 pending——再遇到大响应/丢帧，UI 至少显示错误而非假死。
+- 回归：`pnpm -r build` / `pnpm -r test` / `pnpm -r typecheck` 全绿（protocol 129 / harness-plugin 79，其余包不变；harness dsh-bridge +3 测，protocol relay-transport +1 测）；`tools/smoke-e2e.mjs --dsh http://127.0.0.1:43120` 真实 DSH 通过。
+- 部署：`dsh-harness-remote@0.3.2` 已重新 pack 并热装配进 profile（`dev_install_package` OK）；热重载仍不可用（loader.internal），**需重启 DSH Desktop 生效**。重启后现有 v0.3.2 APK 无需重装即可看到历史会话。
+- 证据：响应大小对比（raw 11832559B → slim 117037B）、smoke-e2e 真实模式输出见 `.shots/` 与本条记录。
+
 ## P2 收尾第 1/2 步完成（2026-08-24 CI 门禁 + 证据标准入宪）
 - P2 第 4 步（CI 门禁接线）：`.github/workflows/ci.yml` 在 `pnpm test` 之后新增两步——`node apps/mobile/scripts/lint-font-tokens.mjs --strict`（字号令牌门禁，P1-3 机制接入 CI）与 `node tools/smoke-e2e.mjs --mock`（E2E 冒烟门禁，P0-5 机制接入 CI；mock 模式封闭可跑，不依赖真实宿主）。本机实测两命令 exit 0；workflow YAML 经 `yaml@2.9.0` 解析验证合法（9 步装配正确）。需 push 后由 GitHub runner 最终确认。
 - P2 第 5 步（证据标准入宪）：`CONTRIBUTING.md` 新增「验证与证据标准」小节（2026-08-24 入宪）——四条铁律：①可复现（附命令/脚本路径，产物落 .shots）②机器可查（明暗截图 SHA-256 两两不同 + 角像素主题抽查；端到端必须走 RelayTransport 同款传输层而非只探活 RPC）③诚实标注边界（真机/特定网络未覆盖要写「未验证」）④门禁优先（能脚本断言的接 CI）。条款直接源自 2026-08-23 审计实锤：v0.3.1 明暗同图当两份证据、真实链路验证实为 RPC 直连探测。

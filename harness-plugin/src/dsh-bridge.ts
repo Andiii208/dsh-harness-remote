@@ -31,6 +31,58 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
+/**
+ * App 端 session.list 只需要摘要字段与少量投影；真实 DSH 返回的
+ * session.list 每个会话带完整 projections（contextTimeline/toolList 等），
+ * 实测 237 个会话约 10.4 MB，经公网隧道 + 5G 到手机必然超时/挂起。
+ * 这里把响应瘦身为 App 实际消费的字段（宽容：结构不认识时原样返回）。
+ */
+export function slimSessionListResult(result: unknown): unknown {
+  if (!isRecord(result)) return result;
+  const items = Array.isArray(result.items) ? result.items : null;
+  if (!items) return result;
+
+  const slimValues = (values: unknown): unknown => {
+    if (!isRecord(values)) return values;
+    const picked: Record<string, unknown> = {};
+    for (const key of ["title", "goal", "permissions", "imageLimits"]) {
+      if (values[key] !== undefined) picked[key] = values[key];
+    }
+    return picked;
+  };
+
+  const slimItem = (item: unknown): unknown => {
+    if (!isRecord(item)) return item;
+    const next: Record<string, unknown> = {};
+    for (const key of [
+      "sessionId",
+      "id",
+      "updatedAt",
+      "running",
+      "blank",
+      "cwd",
+      "workspace",
+      "agentPreset",
+      "title",
+      "lastMessage",
+    ]) {
+      if (item[key] !== undefined) next[key] = item[key];
+    }
+    const projections = isRecord(item.projections) ? item.projections : null;
+    if (projections) {
+      const values = isRecord(projections.values) ? projections.values : undefined;
+      const slimmed = slimValues(values);
+      next.projections = {
+        ...(projections.asOfSeq !== undefined ? { asOfSeq: projections.asOfSeq } : {}),
+        ...(slimmed !== undefined ? { values: slimmed } : {}),
+      };
+    }
+    return next;
+  };
+
+  return { ...result, items: items.map(slimItem) };
+}
+
 export interface DshBridgeOptions {
   /** DSH HTTP API base，如 http://127.0.0.1:56734 或 http://127.0.0.1:3080。 */
   baseUrl: string;
@@ -280,11 +332,16 @@ export class DshBridge {
 
     try {
       const r = await this.rpc.unary(method, p.payload ?? {});
+      // session.list 在真实 DSH 上返回全量 projections（约 10MB），
+      // 经公网隧道到手机必然超时/挂起。桥接层先行瘦身（保留 App 消费字段）。
+      const result = method === "session.list" && r.ok
+        ? slimSessionListResult(r.result)
+        : r.result;
       await this.sendRoute(to, {
         rpcId,
         ok: r.ok,
         ...(r.ok
-          ? { result: r.result }
+          ? { result }
           : { error: r.error ?? { code: "E_UNKNOWN", message: "DSH request failed" } }),
       });
     } catch (err) {

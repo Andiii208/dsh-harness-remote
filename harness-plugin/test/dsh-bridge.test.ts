@@ -4,6 +4,7 @@ import {
   detectDshApiUrl,
   parseLoopbackListeningPorts,
   probeDshApi,
+  slimSessionListResult,
 } from "../src/dsh-bridge.js";
 import type { RelayEnvelope } from "@dsh-remote/protocol";
 
@@ -155,6 +156,68 @@ describe("detectDshApiUrl", () => {
     // 并行：两个候选的请求应在等待前都已发出。
     expect(started.some((u) => u.includes("60576"))).toBe(true);
     expect(started.some((u) => u.includes("43120"))).toBe(true);
+  });
+});
+
+describe("slimSessionListResult", () => {
+  it("keeps summary fields and only the projections values the App consumes", () => {
+    const slimmed = slimSessionListResult({
+      items: [
+        {
+          sessionId: "s1",
+          updatedAt: 123,
+          running: true,
+          blank: false,
+          cwd: "D:\\app",
+          agentPreset: "standard",
+          projections: {
+            asOfSeq: 42,
+            values: {
+              title: "我的会话",
+              sessionStats: { turns: 9, steps: 92, llmMs: 1375704 },
+              contextTimeline: { ok: true, model: "big-model" },
+              goal: { phase: "active", objective: "把活干完", id: "g1", revision: 2 },
+              permissions: { currentValue: "workspace-write", options: [{ value: "workspace-write" }] },
+              imageLimits: { maxImageBytes: 1024, mediaTypes: ["image/png"], maxImagePixels: 1000, maxMessageImageBytes: 2048 },
+            },
+          },
+          huge: "drop-me",
+        },
+      ],
+    });
+    expect(slimmed).toEqual({
+      items: [
+        {
+          sessionId: "s1",
+          updatedAt: 123,
+          running: true,
+          blank: false,
+          cwd: "D:\\app",
+          agentPreset: "standard",
+          projections: {
+            asOfSeq: 42,
+            values: {
+              title: "我的会话",
+              goal: { phase: "active", objective: "把活干完", id: "g1", revision: 2 },
+              permissions: { currentValue: "workspace-write", options: [{ value: "workspace-write" }] },
+              imageLimits: { maxImageBytes: 1024, mediaTypes: ["image/png"], maxImagePixels: 1000, maxMessageImageBytes: 2048 },
+            },
+          },
+        },
+      ],
+    });
+  });
+
+  it("returns non-list results unchanged", () => {
+    const other = { ok: true, value: { anything: 1 } };
+    expect(slimSessionListResult(other)).toBe(other);
+  });
+
+  it("returns item unchanged when projections are missing", () => {
+    const result = { items: [{ sessionId: "s1" }, "garbage"] };
+    const slimmed = slimSessionListResult(result) as { items: unknown[] };
+    expect(slimmed.items[0]).toEqual({ sessionId: "s1" });
+    expect(slimmed.items[1]).toBe("garbage");
   });
 });
 
