@@ -5,12 +5,13 @@
  * 长按：操作菜单（复制消息全文 / 按代码块分别复制）。
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import type { PluginCommand } from "@dsh-remote/protocol";
 import type { TranscriptMessage } from "../../data/SessionStore";
 import { useConnection } from "../../transport/ConnectionProvider";
+import { useI18n } from "../../i18n";
 import { useAppSettings } from "../../data/appSettingsContext";
 import { font, radius, type ThemeColors } from "../../theme";
 import { useTheme } from "../../theme-context";
@@ -37,6 +38,7 @@ function tokenColor(type: HighlightTokenType, colors: ThemeColors): string {
 
 export function MessageBubble({ m, live, sessionId }: { m: TranscriptMessage; live?: boolean; sessionId?: string }) {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const { scale } = useAppSettings();
   const styles = useMemo(() => createStyles(colors, scale), [colors, scale]);
   const { pluginList, pluginExec, attachment } = useConnection();
@@ -70,22 +72,40 @@ export function MessageBubble({ m, live, sessionId }: { m: TranscriptMessage; li
     };
   }, [menuOpen, pluginList]);
 
-  // 图片消息：用 session.attachment 拉取 base64 显示（不落盘缓存）。
+  // 图片消息：用 session.attachment 拉取 base64；失败可见并提供点按重试（0.9/B9）。
+  const [imageFailed, setImageFailed] = useState<Record<string, true>>({});
+
+  const loadImage = useCallback(
+    (attachmentId: string) => {
+      if (!sessionId) return;
+      void attachment(sessionId, attachmentId)
+        .then((r) => {
+          if (!r) {
+            setImageFailed((prev) => ({ ...prev, [attachmentId]: true }));
+            return;
+          }
+          setImageFailed((prev) => {
+            if (!(attachmentId in prev)) return prev;
+            const next = { ...prev };
+            delete next[attachmentId];
+            return next;
+          });
+          setImageData((prev) => ({ ...prev, [attachmentId]: r }));
+        })
+        .catch(() => {
+          setImageFailed((prev) => ({ ...prev, [attachmentId]: true }));
+        });
+    },
+    [sessionId, attachment],
+  );
+
   useEffect(() => {
     const images = m.images;
     if (!images || images.length === 0 || !sessionId) return;
-    let alive = true;
     for (const img of images) {
-      void attachment(sessionId, img.attachmentId).then((r) => {
-        if (alive && r) {
-          setImageData((prev) => ({ ...prev, [img.attachmentId]: r }));
-        }
-      });
+      loadImage(img.attachmentId);
     }
-    return () => {
-      alive = false;
-    };
-  }, [m.images, sessionId, attachment]);
+  }, [m.images, sessionId, loadImage]);
 
   if (m.gap) {
     return (
@@ -162,14 +182,16 @@ export function MessageBubble({ m, live, sessionId }: { m: TranscriptMessage; li
             <View style={styles.imageRow}>
               {m.images.map((img) => {
                 const loaded = imageData[img.attachmentId];
+                const failed = imageFailed[img.attachmentId] === true;
                 return (
                   <Pressable
                     key={img.attachmentId}
                     onPress={() => {
+                      if (failed) { loadImage(img.attachmentId); return; }
                       if (loaded) setZoomImage({ uri: `data:${loaded.mediaType};base64,${loaded.data}` });
                     }}
                     accessibilityRole="button"
-                    accessibilityLabel="查看大图"
+                    accessibilityLabel={failed ? t.chat.imageLoadFailed : "查看大图"}
                   >
                     {loaded ? (
                       <Image
@@ -180,7 +202,12 @@ export function MessageBubble({ m, live, sessionId }: { m: TranscriptMessage; li
                       />
                     ) : (
                       <View style={[styles.imageThumb, styles.imageThumbLoading]}>
-                        <Text style={styles.imageThumbLoadingText}>…</Text>
+                        <Text
+                          style={[styles.imageThumbLoadingText, failed && { color: colors.danger }]}
+                          numberOfLines={3}
+                        >
+                          {failed ? t.chat.imageLoadFailed : "…"}
+                        </Text>
                       </View>
                     )}
                   </Pressable>

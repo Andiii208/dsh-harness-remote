@@ -27,6 +27,7 @@ import { buildTranscriptRows, type TranscriptRow } from "../../src/ui/chat/chatT
 import { font, radius, space } from "../../src/theme";
 import { MessageBubble } from "../../src/ui/chat/MessageBubble";
 import { AppIcon } from "../../src/ui/icons";
+import { ErrorCard } from "../../src/ui/ErrorCard";
 import { TrajectoryView } from "../../src/ui/trajectory/TrajectoryView";
 import { BottomSheet } from "../../src/ui/BottomSheet";
 import { SkeletonRow } from "../../src/ui/SkeletonRow";
@@ -78,6 +79,7 @@ export default function ChatScreen() {
   const trajectoryRef = useRef<FlashListRef<TranscriptStep> | null>(null);
   const swipeRef = useRef<ScrollView | null>(null);
   const historyLoadedFor = useRef<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"chat" | "trajectory">("chat");
   const messages = id ? transcript(id) : [];
   const live = id ? liveMessage(id) : undefined;
@@ -93,12 +95,14 @@ export default function ChatScreen() {
     if (historyLoadedFor.current === id) return;
     let cancelled = false;
     void loadHistory(id, 500).then((ok) => {
-      if (!cancelled && ok) historyLoadedFor.current = id;
+      if (cancelled) return;
+      if (ok) historyLoadedFor.current = id;
+      else setHistoryError(t.chat.historyLoadFailed);
     });
     return () => {
       cancelled = true;
     };
-  }, [id, state, loadHistory]);
+  }, [id, state, loadHistory, t]);
 
   // 技能清单：宿主支持且返回非空时展示「技能」按钮；读不到/null 自动隐藏。
   useEffect(() => {
@@ -309,7 +313,8 @@ export default function ChatScreen() {
     if (!id || !online || loadingHistory) return;
     setLoadingHistory(true);
     try {
-      await loadHistory(id, 500, earliestSeq);
+      const ok = await loadHistory(id, 500, earliestSeq);
+      if (!ok) setHistoryError(t.chat.historyLoadFailed);
     } finally {
       setLoadingHistory(false);
     }
@@ -519,6 +524,19 @@ export default function ChatScreen() {
           contentContainerStyle={styles.swiperContent}
         >
           <View style={[styles.swiperPage, { width: pageWidth }]}>
+            {historyError !== null && messages.length === 0 && (
+              <ErrorCard
+                message={historyError}
+                retryLabel={t.common.tryAgain}
+                onRetry={() => {
+                  setHistoryError(null);
+                  void loadHistory(id, 500).then((ok) => {
+                    if (ok) historyLoadedFor.current = id;
+                    else setHistoryError(t.chat.historyLoadFailed);
+                  });
+                }}
+              />
+            )}
             <FlashList
               ref={listRef}
         style={styles.list}
