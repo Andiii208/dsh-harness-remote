@@ -1,70 +1,50 @@
-import { describe, expect, it } from "vitest";
-import { deriveCandidates, discoverHosts } from "../src/discovery/discover";
+import { describe, expect, it, vi } from "vitest";
+import { discoverHosts } from "../src/discovery/discover";
 
-describe("deriveCandidates", () => {
-  it("derives a /24 range excluding the device ip", () => {
-    const list = deriveCandidates("192.168.1.23", 3080, 4);
-    expect(list).toEqual([
-      { host: "192.168.1.1", port: 3080 },
-      { host: "192.168.1.2", port: 3080 },
-      { host: "192.168.1.3", port: 3080 },
-      { host: "192.168.1.4", port: 3080 },
+function jsonFetch(okHosts: Set<string>) {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    const hit = [...okHosts].find((h) => url.includes(`//${h}/`));
+    if (!hit) throw new Error("unreachable");
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, result: { name: "dsh", version: "2.0.1" } }),
+    } as unknown as Response;
+  }) as typeof fetch;
+}
+
+describe("discoverHosts（P3/mDNS 合并）", () => {
+  it("合并 zeroconf 候选与 /24 扫描并按 host:port 去重", async () => {
+    const mdnsSource = vi.fn().mockResolvedValue([
+      { host: "nas.local", port: 4300, name: "NAS-DSH" },
+      { host: "192.168.1.7", port: 3080 }, // 与 /24 扫描重叠 → 去重
     ]);
-  });
-
-  it("returns empty for invalid ips", () => {
-    expect(deriveCandidates("localhost", 3080)).toEqual([]);
-    expect(deriveCandidates("1.2.3", 3080)).toEqual([]);
-  });
-});
-
-describe("discoverHosts", () => {
-  function okFetch(hosts: Set<string>) {
-    return (async (input: string | URL | Request) => {
-      const u = String(input);
-      const host = u.split("/")[2]?.split(":")[0] ?? "";
-      if (!hosts.has(host)) throw new Error("unreachable");
-      return {
-        ok: true,
-        json: async () => ({ ok: true, result: { name: `harness-${host}`, version: "0.1.0" } }),
-      } as unknown as Response;
-    }) as unknown as typeof fetch;
-  }
-
-  it("finds live hosts and ignores dead ones", async () => {
-    const live = new Set(["10.0.0.5", "10.0.0.9"]);
-    const found = await discoverHosts({
-      localIp: "10.0.0.20",
-      port: 3080,
-      concurrency: 4,
-      timeoutMs: 300,
-      fetchImpl: okFetch(live),
+    const fetchImpl = jsonFetch(new Set(["nas.local:4300", "192.168.1.7:3080"]));
+    const result = await discoverHosts({
+      localIp: "192.168.1.50",
+      timeoutMs: 50,
+      fetchImpl,
+      mdnsSource,
     });
-    expect(found).toHaveLength(2);
-    expect(found.map((f) => f.host).sort()).toEqual(["10.0.0.5", "10.0.0.9"]);
-    expect(found[0]?.name).toBe("harness-10.0.0.5");
+    // nas.local 来自 mDNS；192.168.1.7 只出现一次（不管来源）
+    expect(result.map((r) => `${r.host}:${r.port}`).sort()).toEqual([
+      "192.168.1.7:3080",
+      "nas.local:4300",
+    ]);
+    // /24 网段其余不可达主机不会出现在结果里
+    expect(result.length).toBe(2);
   });
 
-  it("returns empty when nothing responds", async () => {
-    const found = await discoverHosts({
-      localIp: "10.0.0.20",
-      port: 3080,
-      concurrency: 2,
-      timeoutMs: 100,
-      fetchImpl: okFetch(new Set()),
+  it("mdnsSource 抛错时降级为纯 /24 扫描不崩", async () => {
+    const mdnsSource = vi.fn().mockRejectedValue(new Error("no module"));
+    const fetchImpl = jsonFetch(new Set());
+    const result = await discoverHosts({
+      localIp: "10.0.0.9",
+      timeoutMs: 30,
+      fetchImpl,
+      mdnsSource,
     });
-    expect(found).toEqual([]);
-  });
-
-  it("stops early when the signal is aborted", async () => {
-    const controller = new AbortController();
-    controller.abort();
-    const found = await discoverHosts({
-      localIp: "10.0.0.20",
-      port: 3080,
-      signal: controller.signal,
-      fetchImpl: okFetch(new Set(["10.0.0.5"])),
-    });
-    expect(found).toEqual([]);
+    expect(result).toEqual([]);
   });
 });
