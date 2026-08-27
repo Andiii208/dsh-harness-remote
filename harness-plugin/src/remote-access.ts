@@ -215,6 +215,9 @@ export async function startRemoteAccess(
         timeoutMs: opts.tunnelTimeoutMs,
         spawnImpl: opts.tunnelSpawnImpl,
         logger: (line) => opts.onStatus?.(line),
+        // 审计 A4：崩溃自愈的状态对用户可见。
+        onUrlUpdate: (url) => opts.onStatus?.(`公网隧道地址已更新：${url}`),
+        onFatal: (err) => opts.onStatus?.(`公网隧道故障：${err.message}`),
       });
       publicUrl = tunnel.publicUrl;
       host = publicUrl;

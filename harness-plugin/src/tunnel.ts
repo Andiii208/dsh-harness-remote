@@ -11,6 +11,7 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
+import { execFile as nodeExecFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { homedir, platform as nodePlatform, arch as nodeArch } from "node:os";
@@ -37,6 +38,69 @@ export interface TunnelOptions {
   /** 注入 spawn（测试可换 fake child）。 */
   spawnImpl?: (cmd: string, args: string[]) => ChildProcess;
   logger?: (line: string) => void;
+  /**
+   * 审计 A4：cloudflared 中途崩溃的有界自愈。
+   * 默认最多重启 5 次（间隔 3s）；重试期间拿到新 URL 经 onUrlUpdate 上报；
+   * 重试耗尽经 onFatal 上报（此前是静默死亡、UI 一直显示运行中）。
+   */
+  maxRestarts?: number;
+  restartDelayMs?: number;
+  onUrlUpdate?: (publicUrl: string) => void;
+  onFatal?: (err: Error) => void;
+}
+
+/** cloudflared 进程退出后的处置决策（纯函数，便于单测）。 */
+export type TunnelExitDecision =
+  | { action: "ignore" }
+  | { action: "reject"; error: Error }
+  | { action: "retry"; delayMs: number; attempt: number }
+  | { action: "fatal"; error: Error };
+
+export function decideOnTunnelExit(input: {
+  stopping: boolean;
+  hasPublicUrl: boolean;
+  restarts: number;
+  maxRestarts: number;
+  restartDelayMs: number;
+  reason: string;
+}): TunnelExitDecision {
+  if (input.stopping) return { action: "ignore" };
+  const error = new Error(`${input.reason}——公网隧道未建立`);
+  if (!input.hasPublicUrl) return { action: "reject", error };
+  if (input.restarts >= input.maxRestarts) {
+    return {
+      action: "fatal",
+      error: new Error(`${input.reason}，已自动重启 ${input.restarts} 次仍失败`),
+    };
+  }
+  return { action: "retry", delayMs: input.restartDelayMs, attempt: input.restarts + 1 };
+}
+
+type ExecCallback = () => void;
+type ExecImpl = (cmd: string, args: string[], onDone: ExecCallback) => void;
+
+const defaultExec: ExecImpl = (cmd, args, onDone) => {
+  nodeExecFile(cmd, args, { windowsHide: true }, () => onDone());
+};
+
+/**
+ * 终止 cloudflared 进程（审计 A5）：Windows 用 taskkill 杀整棵进程树，
+ * 避免留下孤儿进程继续占着旧隧道；其他平台直接 kill。
+ */
+export function killTunnelProcess(
+  child: ChildProcess,
+  platform: string = nodePlatform(),
+  execImpl: ExecImpl = defaultExec,
+): void {
+  if (platform === "win32" && typeof child.pid === "number") {
+    execImpl("taskkill", ["/pid", String(child.pid), "/T", "/F"], () => {});
+    return;
+  }
+  try {
+    child.kill();
+  } catch {
+    /* ignore */
+  }
 }
 
 /** 从 cloudflared 的 stdout 里解析 quick tunnel URL。 */
@@ -146,12 +210,16 @@ export async function ensureCloudflared(
 
 /**
  * 启动 cloudflared quick tunnel，把本地端口暴露成 trycloudflare.com 公网 URL。
- * 直到解析出公网 URL 才 resolve；超时/进程退出/启动失败 reject。
+ * 直到解析出公网 URL 才 resolve；超时/启动失败 reject。
+ * URL 解析出来之后进程崩溃进入有界自愈：自动重启（默认 ≤5 次、间隔 3s），
+ * 新 URL 经 onUrlUpdate 上报；重试耗尽经 onFatal 上报（不再静默死亡）。
  */
 export async function startCloudflaredTunnel(opts: TunnelOptions): Promise<TunnelHandle> {
   const logger = opts.logger ?? (() => {});
   const timeoutMs = opts.timeoutMs ?? 30_000;
   const spawnImpl = opts.spawnImpl ?? spawn;
+  const maxRestarts = opts.maxRestarts ?? 5;
+  const restartDelayMs = opts.restartDelayMs ?? 3_000;
 
   const binPath = await ensureCloudflared({
     binPath: opts.binPath,
@@ -163,64 +231,80 @@ export async function startCloudflaredTunnel(opts: TunnelOptions): Promise<Tunne
   const args = ["tunnel", "--url", `http://127.0.0.1:${opts.localPort}`, "--no-autoupdate"];
   logger(`cloudflared tunnel --url http://127.0.0.1:${opts.localPort}`);
 
-  const child = spawnImpl(binPath, args);
-  let settled = false;
+  let stopping = false;
+  let activeChild: ChildProcess | null = null;
+  let publicUrlValue: string | null = null;
+  let restarts = 0;
 
-  const cleanup = () => {
-    if (child && !child.killed) {
-      try {
-        child.kill();
-      } catch {
-        /* ignore */
-      }
-    }
+  const stop = async (): Promise<void> => {
+    stopping = true;
+    if (activeChild && !activeChild.killed) killTunnelProcess(activeChild);
   };
 
-  return new Promise<TunnelHandle>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        cleanup();
-        reject(new Error("公网隧道建立超时：请检查网络/代理后重试，或手动安装 cloudflared"));
+  return new Promise<TunnelHandle>((resolveStartup, rejectStartup) => {
+    const startupTimer = setTimeout(() => {
+      if (!publicUrlValue) {
+        stopping = true;
+        if (activeChild && !activeChild.killed) killTunnelProcess(activeChild);
+        rejectStartup(new Error("公网隧道建立超时：请检查网络/代理后重试，或手动安装 cloudflared"));
       }
     }, timeoutMs);
 
-    const fail = (err: Error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      cleanup();
-      reject(err);
-    };
-
-    const onStdout = (chunk: Buffer | string) => {
-      const text = String(chunk);
-      for (const line of text.split(/\r?\n/)) {
-        const url = parseTunnelUrl(line);
-        if (url && !settled) {
-          settled = true;
-          clearTimeout(timer);
-          resolve({
-            publicUrl: url,
-            stop: async () => {
-              cleanup();
-            },
-          });
-          return;
+    /** 处理子进程退出：未建立→reject；已建立→有界重启/上报致命错误。 */
+    const handleExit = (reason: string): void => {
+      if (publicUrlValue) {
+        const decision = decideOnTunnelExit({
+          stopping,
+          hasPublicUrl: true,
+          restarts,
+          maxRestarts,
+          restartDelayMs,
+          reason,
+        });
+        if (decision.action === "retry") {
+          restarts = decision.attempt;
+          logger(`${reason}，${decision.delayMs}ms 后自动重启隧道（第 ${decision.attempt}/${maxRestarts} 次重试）…`);
+          setTimeout(() => {
+            if (!stopping) wireChild();
+          }, decision.delayMs);
+        } else if (decision.action === "fatal") {
+          logger(decision.error.message);
+          opts.onFatal?.(decision.error);
         }
+      } else if (!stopping) {
+        clearTimeout(startupTimer);
+        stopping = true;
+        rejectStartup(new Error(`${reason}——公网隧道未建立`));
       }
     };
 
-    // cloudflared 的日志（含 trycloudflare URL 行）走 stderr；stdout 也可能有数据。
-    // 两个流都同时用于解析 URL 和记录日志，避免只监听 stdout 导致 URL 被漏掉。
-    child.stdout?.on("data", onStdout);
-    child.stderr?.on("data", onStdout);
-    child.once("error", (err) => fail(new Error(`cloudflared 启动失败：${err.message}`)));
-    child.once("exit", (code) => {
-      if (!settled) {
-        fail(new Error(`cloudflared 已退出（exit ${code}）——公网隧道未建立`));
-      }
-    });
+    const wireChild = (): ChildProcess => {
+      const child = spawnImpl(binPath, args);
+      activeChild = child;
+      // cloudflared 的日志（含 trycloudflare URL 行）走 stderr；两个流都解析。
+      const onStdout = (chunk: Buffer | string) => {
+        for (const line of String(chunk).split(/\r?\n/)) {
+          const url = parseTunnelUrl(line);
+          if (!url || stopping) continue;
+          if (!publicUrlValue) {
+            publicUrlValue = url;
+            clearTimeout(startupTimer);
+            resolveStartup({ publicUrl: url, stop });
+          } else if (url !== publicUrlValue) {
+            publicUrlValue = url;
+            logger(`公网隧道地址已变更：${url}（手机端需重新扫码或更新地址）`);
+            opts.onUrlUpdate?.(url);
+          }
+        }
+      };
+      child.stdout?.on("data", onStdout);
+      child.stderr?.on("data", onStdout);
+      child.once("error", (err) => handleExit(`cloudflared 启动失败：${err.message}`));
+      child.once("exit", (code) => handleExit(`cloudflared 已退出（exit ${code}）`));
+      return child;
+    };
+
+    wireChild();
   });
 }
 

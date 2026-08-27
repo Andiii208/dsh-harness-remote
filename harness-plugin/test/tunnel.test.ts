@@ -5,6 +5,7 @@ import type { ChildProcess } from "node:child_process";
 import {
   candidateBinPaths,
   cloudflaredAsset,
+  killTunnelProcess,
   parseTunnelUrl,
   startCloudflaredTunnel,
 } from "../src/tunnel.js";
@@ -93,4 +94,94 @@ describe("startCloudflaredTunnel", () => {
     });
     await expect(promise).rejects.toThrow(/超时/);
   });
+
+  it("restarts the child with backoff after crash once URL was established (A4)", async () => {
+    const spawned: FakeChild[] = [];
+    const logs: string[] = [];
+    const urlUpdates: string[] = [];
+    const promise = startCloudflaredTunnel({
+      localPort: 4090,
+      binPath: process.execPath,
+      timeoutMs: 5000,
+      restartDelayMs: 10,
+      maxRestarts: 2,
+      spawnImpl: () => {
+        const c = fakeSpawn();
+        spawned.push(c);
+        return asChildProcess(c);
+      },
+      logger: (l) => logs.push(l),
+      onUrlUpdate: (u) => urlUpdates.push(u),
+    });
+    await queueMicrotask(() => {});
+    const first = spawned[0]!;
+    first.stdout.emit("data", Buffer.from("INF |  https://first.trycloudflare.com\n"));
+    const handle = await promise;
+    expect(handle.publicUrl).toBe("https://first.trycloudflare.com");
+
+    // 崩溃 → 自动重启出新 child，并从新 child 的 stdout 解析到新 URL。
+    first.emit("exit", 1);
+    await waitFor(() => expect(spawned.length).toBe(2));
+    const second = spawned[1]!;
+    expect(second.killed).toBe(false);
+    second.stdout.emit("data", Buffer.from("INF |  https://second-abc.trycloudflare.com\n"));
+    await waitFor(() => expect(urlUpdates).toEqual(["https://second-abc.trycloudflare.com"]));
+    expect(logs.some((l) => /自动重启隧道/.test(l))).toBe(true);
+
+    await handle.stop();
+    expect(second.killed).toBe(true);
+  });
+
+  it("reports fatal after exhausting bounded retries instead of dying silently", async () => {
+    const spawned: FakeChild[] = [];
+    const fatals: string[] = [];
+    const promise = startCloudflaredTunnel({
+      localPort: 4090,
+      binPath: process.execPath,
+      timeoutMs: 5000,
+      restartDelayMs: 5,
+      maxRestarts: 2,
+      spawnImpl: () => {
+        const c = fakeSpawn();
+        spawned.push(c);
+        return asChildProcess(c);
+      },
+      onFatal: (err) => fatals.push(err.message),
+    });
+    await queueMicrotask(() => {});
+    spawned[0]!.stdout.emit("data", Buffer.from("INF |  https://doomed.trycloudflare.com\n"));
+    const handle = await promise;
+
+    for (let round = 0; round < 3; round += 1) {
+      await waitFor(() => expect(spawned.length).toBeGreaterThanOrEqual(round + 1));
+      spawned[round]!.emit("exit", 2);
+    }
+    await waitFor(() => expect(fatals).toHaveLength(1));
+    expect(fatals[0]).toMatch(/已自动重启 2 次仍失败/);
+    await handle.stop();
+  });
+
+  it("killTunnelProcess uses taskkill tree-kill on Windows", async () => {
+    const child = new FakeChild() as unknown as ChildProcess & { pid?: number };
+    child.pid = 4242;
+    const calls: Array<{ cmd: string; args: string[] }> = [];
+    killTunnelProcess(child, "win32", (cmd, args, onDone) => {
+      calls.push({ cmd, args });
+      onDone();
+    });
+    expect(child.killed).toBe(false); // Windows 不走 child.kill，走 taskkill 树杀
+    expect(calls).toEqual([{ cmd: "taskkill", args: ["/pid", "4242", "/T", "/F"] }]);
+  });
 });
+
+async function waitFor(assertion: () => void): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    try {
+      assertion();
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  }
+  assertion();
+}
