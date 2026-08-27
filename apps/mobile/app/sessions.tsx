@@ -21,6 +21,8 @@ import { HarnessMark } from "../src/ui/HarnessMark";
 import type { SessionSummary } from "../src/data/SessionStore";
 import { filterSessions, formatSessionTime, groupByWorkspace, pressureTier, workspaceDisplayName } from "../src/data/sessionViews";
 import { ErrorCard } from "../src/ui/ErrorCard";
+import { useEntering } from "../src/ui/anim";
+import AnimatedView from "react-native-reanimated";
 
 function normalizePath(p: string): string {
   return p.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -92,6 +94,7 @@ export default function SessionsScreen() {
   const { t } = useI18n();
   const { colors, isDark } = useTheme();
   const { scale } = useAppSettings();
+  const headerEntering = useEntering(8);
   const styles = useMemo(() => createStyles(colors, scale), [colors, scale]);
   const stateLabel = (s: typeof state) =>
     s === "online" ? t.common.stateOnline
@@ -397,10 +400,10 @@ export default function SessionsScreen() {
         ListEmptyComponent={renderEmpty()}
         renderItem={({ item }) =>
           item.kind === "header" ? (
-            <View style={styles.groupHeaderRow}>
+            <AnimatedView.View style={styles.groupHeaderRow} entering={headerEntering}>
               <Text style={styles.groupHeader}>{item.workspace}</Text>
               <Text style={styles.groupCount}>{item.count}</Text>
-            </View>
+            </AnimatedView.View>
           ) : (
             <Pressable
               style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}

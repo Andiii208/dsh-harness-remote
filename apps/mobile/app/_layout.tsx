@@ -2,7 +2,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { StyleSheet, View } from "react-native";
+import { Animated, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
@@ -21,6 +21,7 @@ import { AppSettingsProvider } from "../src/data/appSettingsContext";
 import { notificationService } from "../src/notify/expoAdapter";
 import { registerNotificationDeepLink } from "../src/notify/deeplink";
 import { ThemeProvider, useTheme } from "../src/theme-context";
+import { useReduceMotion } from "../src/ui/anim";
 import { I18nProvider } from "../src/i18n";
 
 void SplashScreen.preventAutoHideAsync();
@@ -54,6 +55,44 @@ function RootNavigator() {
   );
 }
 
+/**
+ * 主题切换背景交叉淡出（1.9）：切换浅/深时旧底色作为一次性叠层淡出，
+ * 消除整树瞬时跳变的割裂感。尊重系统「减弱动态」。
+ */
+function ThemeCrossfade() {
+  const { colors } = useTheme();
+  const reduced = useReduceMotion();
+  const [overlay, setOverlay] = useState<string | null>(null);
+  const prevBg = useRef(colors.bg);
+  const fade = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (prevBg.current === colors.bg) return;
+    const oldBg = prevBg.current;
+    prevBg.current = colors.bg;
+    if (reduced) return;
+    setOverlay(oldBg);
+  }, [colors.bg, reduced]);
+
+  useEffect(() => {
+    if (!overlay) return;
+    fade.setValue(1);
+    const anim = Animated.timing(fade, { toValue: 0, duration: 200, useNativeDriver: true });
+    anim.start(({ finished }) => {
+      if (finished) setOverlay(null);
+    });
+    return () => anim.stop();
+  }, [overlay, fade]);
+
+  if (!overlay) return null;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.crossfade, { backgroundColor: overlay, opacity: fade }]}
+    />
+  );
+}
+
 /** 主题内层壳：让手势根视图的底色跟随主题，深色冷启动不再闪白。 */
 function ThemedRootShell({
   onLayout,
@@ -66,6 +105,7 @@ function ThemedRootShell({
   return (
     <GestureHandlerRootView style={[styles.root, { backgroundColor: colors.bg }]} onLayout={onLayout}>
       {children}
+      <ThemeCrossfade />
     </GestureHandlerRootView>
   );
 }
@@ -125,4 +165,5 @@ export default function RootLayout() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  crossfade: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 } as const,
 });

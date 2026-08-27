@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AnimatedCard from "react-native-reanimated";
 import * as Network from "expo-network";
 import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
@@ -58,6 +59,7 @@ export default function ConnectScreen() {
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const cardEntering = useEntering(10);
 
   // 引导检查：首次加载时先判断是否已引导，避免闪一下连接界面再跳转
   const [booted, setBooted] = useState(false);
@@ -516,7 +518,7 @@ export default function ConnectScreen() {
           )}
 
           {showList ? (
-            <View style={styles.listCard}>
+            <AnimatedCard.View style={styles.listCard} entering={cardEntering}>
               <View style={styles.listHeader}>
                 <Text style={styles.listTitle}>{mode === "remote" ? t.connect.recentHosts : found.length > 0 ? "发现的电脑" : "历史电脑"}</Text>
                 {found.length === 0 && (
@@ -543,7 +545,7 @@ export default function ConnectScreen() {
                   </Pressable>
                 ))
               )}
-            </View>
+            </AnimatedCard.View>
           ) : (
             mode === "lan" && (
               <Pressable onPress={() => setShowRecent(true)} style={styles.historyButton} hitSlop={8} accessibilityRole="button" accessibilityLabel="展开历史电脑">
