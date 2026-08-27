@@ -524,14 +524,22 @@ export class RelayClient {
     }
 
     let delivered = env;
-    if (env.type === "relay.route" && this.encKeyPromise) {
+    if (env.type === "relay.route") {
       const routePayload = isRecord(env.payload) ? env.payload : null;
       const ciphertext = routePayload ? str(routePayload.ciphertext) : undefined;
       const nonce = routePayload ? str(routePayload.nonce) : undefined;
-      if (ciphertext && nonce) {
+
+      // C3：带密文的 route 但本端没有会话密钥（pair.ack 丢失/密钥丢失）
+      // ——丢弃并告警，绝不把解不开的原始负载塞给宿主。
+      if (ciphertext && nonce && !this.encKeyPromise) {
+        this.emitError(new Error("RelayClient: 收到加密 route 但本端未配置会话密钥，已丢弃"));
+        return;
+      }
+      if (ciphertext && nonce && this.encKeyPromise) {
         try {
           const crypto = this.requireCrypto();
           const encKey = await this.encKeyPromise;
+          if (!encKey) throw new Error("session key unavailable");
           const inner = await openRelayPayload(crypto, encKey, {
             ciphertext,
             nonce,
@@ -543,7 +551,7 @@ export class RelayClient {
           return;
         }
       }
-      // 配置了密钥但收到明文 route 则透传（保持 M3.1 兼容）。
+      // 真·明文 route（无 ciphertext 字段）：保持 M3.1 兼容透传。
     }
 
     for (const cb of this.listeners) {
@@ -568,8 +576,11 @@ export class RelayClient {
           peerPublicKey as unknown as JsonWebKey,
         );
         this.encKeyPromise = Promise.resolve(keys.encKey);
-      } catch {
-        // 对端公钥无效/派生失败：保持明文兼容，onPaired 仍要回调。
+      } catch (err) {
+        // 对端公钥无效/派生失败：保持明文兼容，但必须留痕（C3 静默降级消除）。
+        this.opts.onLog?.(
+          `E2E 会话密钥派生失败，已回退明文兼容：${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 

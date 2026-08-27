@@ -6,7 +6,7 @@ import {
   sealRelayPayload,
 } from "@dsh-remote/protocol";
 import { RelayClient } from "../src/relay-client.js";
-import type { WsCtor, WsLike } from "@dsh-remote/protocol";
+import type { RelayEnvelope, WsCtor, WsLike } from "@dsh-remote/protocol";
 
 const crypto = globalThis.crypto;
 
@@ -529,6 +529,57 @@ describe("RelayClient", () => {
     );
 
     await expect(p).rejects.toThrow(/missing code/);
+  });
+
+  it("drops ciphertext route when no session key instead of delivering payload (C3)", async () => {
+    const client = new RelayClient({
+      url: "ws://relay.example:4090",
+      clientId: "console-c",
+      kind: "console",
+      wsImpl: FakeWs.fresh(),
+    });
+    const p = client.connect();
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
+    const register = JSON.parse(ws.sent[1]!) as { id: string };
+    ws.recv(registerAck(register.id, "console-c", { credential: "c1", ttlMs: 900_000 }));
+    await p;
+
+    const seen: unknown[] = [];
+    const delivered: RelayEnvelope[] = [];
+    client.onError((e) => seen.push(e));
+    client.onEnvelope((env) => delivered.push(env));
+
+    // 模拟密文帧（本端无 encKeyPromise）：必须丢弃 + onError，不能透传。
+    ws.recv(
+      JSON.stringify({
+        v: 1,
+        type: "relay.route",
+        id: "r-1",
+        from: "device-x",
+        to: "console-c",
+        ts: Date.now(),
+        payload: { to: "console-c", ciphertext: "bm90LXJlYWw=", nonce: "YWVzLW5vbmNl" },
+      }),
+    );
+    expect(seen).toHaveLength(1);
+    expect(delivered.filter((e) => e.type === "relay.route")).toHaveLength(0);
+
+    // 明文 route（无 ciphertext 字段）仍正常投递（M3.1 兼容）。
+    ws.recv(
+      JSON.stringify({
+        v: 1,
+        type: "relay.route",
+        id: "r-2",
+        from: "device-x",
+        to: "console-c",
+        ts: Date.now(),
+        payload: { to: "console-c", ping: true },
+      }),
+    );
+    expect(delivered.filter((e) => e.type === "relay.route")).toHaveLength(1);
+    client.close();
   });
 
   it("auto-reconnects after an unexpected close (A3)", async () => {

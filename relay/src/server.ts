@@ -66,6 +66,8 @@ export interface RelayServerOptions {
   audit?: (entry: RelayAuditEntry) => void;
   /** Optional persistent store (e.g. createSqliteRelayStore). Defaults to in-memory. */
   store?: RelayStore;
+  /** 单帧应用层大小上限（字节），默认 8MiB（审计 C4）。超限连接被 ws 关闭。 */
+  maxPayloadBytes?: number;
 }
 
 export interface RelayServer {
@@ -572,7 +574,7 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
     res.end("not found");
   });
 
-  const wss = new WebSocketServer({ server });
+  const wss = new WebSocketServer({ server, maxPayload: options.maxPayloadBytes ?? 8 * 1024 * 1024 });
   wss.on("connection", (ws, req) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const credential = url.searchParams.get("credential");

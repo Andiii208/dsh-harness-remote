@@ -155,6 +155,23 @@ function registerEnvelope(
 }
 
 describe("relay server", () => {
+  it("closes connections that exceed maxPayloadBytes with 1009 (C4)", async () => {
+    const relay = await startRelay({ maxPayloadBytes: 64 * 1024 });
+    const closeInfo = await new Promise<{ code: number }>((resolve, reject) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${relay.port}`);
+      const timer = setTimeout(() => reject(new Error("no close within 3s")), 3000);
+      ws.on("close", (code) => {
+        clearTimeout(timer);
+        resolve({ code });
+      });
+      ws.on("open", () => {
+        ws.send("x".repeat(80 * 1024));
+      });
+      ws.on("error", () => { /* 超限后 ws 库会主动 error/close，这里等 close */ });
+    });
+    expect(closeInfo.code).toBe(1009);
+  });
+
   it("health check returns ok + timestamp", async () => {
     const relay = await startRelay();
     const res = await fetch(`http://127.0.0.1:${relay.port}/healthz`);
