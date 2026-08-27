@@ -6,6 +6,7 @@ import { FlashList } from "@shopify/flash-list";
 import Svg, { Path } from "react-native-svg";
 import { StatusBar } from "expo-status-bar";
 import { useConnection } from "../src/transport/ConnectionProvider";
+import { AppIcon } from "../src/ui/icons";
 import { useI18n } from "../src/i18n";
 import { useAppSettings } from "../src/data/appSettingsContext";
 import { font, radius, space } from "../src/theme";
@@ -317,7 +318,7 @@ export default function SessionsScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={t.common.settings}
                 >
-                  <Text style={styles.headerIconText}>⚙</Text>
+                  <AppIcon name="settings" size={18} color={colors.text} />
                 </Pressable>
               </View>
             </View>
@@ -548,7 +549,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
       justifyContent: "center",
     },
     headerIconBtnPressed: { opacity: 0.7 },
-    headerIconText: { color: colors.text, fontSize: 17, fontWeight: "600" },
+
     workspaceCard: {
       flexDirection: "row",
       alignItems: "center",

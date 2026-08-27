@@ -25,6 +25,7 @@ import { availableCommands, queueEditPayload } from "../../src/ui/chat/composerC
 import { buildTranscriptRows, type TranscriptRow } from "../../src/ui/chat/chatTimeline";
 import { font, radius, space } from "../../src/theme";
 import { MessageBubble } from "../../src/ui/chat/MessageBubble";
+import { AppIcon } from "../../src/ui/icons";
 import { TrajectoryView } from "../../src/ui/trajectory/TrajectoryView";
 import { SkeletonRow } from "../../src/ui/SkeletonRow";
 import { EmptyState } from "../../src/ui/EmptyState";
@@ -678,7 +679,7 @@ export default function ChatScreen() {
       {showJump && (
         <View style={styles.jumpFabWrap}>
           <Pressable style={styles.jumpFab} onPress={jumpToBottom} accessibilityRole="button" accessibilityLabel={t.chat.jumpToBottom}>
-            <Text style={styles.jumpFabText}>↓</Text>
+            <AppIcon name="arrowDown" size={18} color={colors.text} />
           </Pressable>
         </View>
       )}
@@ -1100,9 +1101,12 @@ export default function ChatScreen() {
             accessibilityRole="button"
             accessibilityLabel={`${t.chat.permission}${permissionCurrent ? ` ${permissionCurrent}` : ""}`}
           >
-            <Text style={styles.controlChipText} numberOfLines={1}>
-              🛡 {permissionCurrent ?? t.chat.permission}
-            </Text>
+            <View style={styles.controlChipInner}>
+              <AppIcon name="shield" size={13} color={colors.accent} />
+              <Text style={styles.controlChipText} numberOfLines={1}>
+                {permissionCurrent ?? t.chat.permission}
+              </Text>
+            </View>
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.controlChip, pressed && styles.modelItemPressed]}
@@ -1187,7 +1191,7 @@ export default function ChatScreen() {
             onPress={send}
             disabled={!draft.trim() || !online}
           >
-            <Text style={styles.sendIcon}>↑</Text>
+            <AppIcon name="arrowUp" size={22} color="#FFFFFF" />
           </Pressable>
         </View>
       </View>
@@ -1313,6 +1317,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       maxWidth: 220,
     },
     controlChipActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+    controlChipInner: { flexDirection: "row", alignItems: "center", gap: 5 },
     controlChipText: { color: colors.text, fontSize: font.caption, fontWeight: "500" },
     contextRing: {
       width: 34,
@@ -1484,7 +1489,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       justifyContent: "center",
     },
     sendDisabled: { opacity: 0.4 },
-    sendIcon: { color: "#FFFFFF", fontSize: 18, fontWeight: "600", textAlign: "center", textAlignVertical: "center", lineHeight: 20 },
+
     statsPillWrap: { alignItems: "center", marginBottom: 2 },
     statsPill: {
       flexDirection: "row",
@@ -1524,7 +1529,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       alignItems: "center",
       justifyContent: "center",
     },
-    jumpFabText: { color: colors.textMuted, fontSize: 15, fontWeight: "600" },
+
   });
 }
 

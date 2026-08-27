@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { AppIcon, type IconName } from "../src/ui/icons";
 import { useConnection } from "../src/transport/ConnectionProvider";
 import { useI18n } from "../src/i18n";
 import { font, radius, space, type ThemeColors } from "../src/theme";
@@ -27,22 +28,22 @@ function kindLabel(ev: NotificationEvent, t: ReturnType<typeof useI18n>["t"]): s
   }
 }
 
-function kindIcon(ev: NotificationEvent): string {
+function iconForEvent(ev: NotificationEvent): IconName {
   switch (ev.kind) {
     case "turn-complete":
-      return "↻";
+      return "refresh";
     case "goal-complete":
-      return "✓";
+      return "check";
     case "goal-blocked":
-      return "⛔";
+      return "banned";
     case "approval-waiting":
-      return "🛡";
+      return "shield";
     case "question-waiting":
-      return "?";
+      return "help";
     case "context-pressure":
-      return "◔";
+      return "clock";
     default:
-      return "•";
+      return "pending";
   }
 }
 
@@ -79,7 +80,7 @@ export default function EventsScreen() {
               >
                 <View style={styles.cardTop}>
                   <View style={styles.kindWrap}>
-                    <Text style={styles.kindIcon}>{kindIcon(ev)}</Text>
+                    <AppIcon name={iconForEvent(ev)} size={16} color={colors.text} />
                     <Text style={styles.kindTitle}>{kindLabel(ev, t)}</Text>
                   </View>
                   <Text style={styles.time}>
@@ -125,7 +126,7 @@ function createStyles(colors: ThemeColors) {
     cardPressed: { opacity: 0.85 },
     cardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.x3 },
     kindWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
-    kindIcon: { fontSize: 16, color: colors.accent },
+    kindIcon: { marginRight: 2 },
     kindTitle: { color: colors.text, fontSize: font.body, fontWeight: "600" },
     time: { color: colors.textDim, fontSize: font.eyebrow, fontFamily: font.mono },
     prompt: { color: colors.textMuted, fontSize: font.caption, lineHeight: 18 },

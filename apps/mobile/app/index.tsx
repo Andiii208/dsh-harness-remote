@@ -32,6 +32,7 @@ import { Button } from "../src/ui/Button";
 import { ConnectionBanner } from "../src/ui/ConnectionBanner";
 import { SectionLabel } from "../src/ui/SectionLabel";
 import { useTheme } from "../src/theme-context";
+import { AppIcon } from "../src/ui/icons";
 import { useI18n } from "../src/i18n";
 import { haptic } from "../src/ui/haptics";
 
@@ -296,7 +297,7 @@ export default function ConnectScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="设置"
               >
-                <Text style={styles.headerIconText}>⚙</Text>
+                <AppIcon name="settings" size={20} color={colors.text} />
               </Pressable>
             </View>
           </View>
@@ -601,7 +602,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], isDark: boo
       justifyContent: "center",
     },
     headerIconBtnPressed: { opacity: 0.7 },
-    headerIconText: { color: heading, fontSize: 17, fontWeight: "600" },
+
     heroBlock: { alignItems: "center", paddingTop: space.x4, gap: 8 },
     heroTitle: {
       color: heading,
