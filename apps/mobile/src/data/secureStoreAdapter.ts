@@ -6,10 +6,11 @@
 import * as SecureStore from "expo-secure-store";
 import { TokenStore, type SecureStoreApi } from "./tokenStore";
 
-const api: SecureStoreApi = {
+/** 事件日志等非密钥小数据也复用同一底层实现。 */
+export const secureStoreApi: SecureStoreApi = {
   getItemAsync: (key) => SecureStore.getItemAsync(key),
   setItemAsync: (key, value) => SecureStore.setItemAsync(key, value),
   deleteItemAsync: (key) => SecureStore.deleteItemAsync(key),
 };
 
-export const tokenStore = new TokenStore(api);
+export const tokenStore = new TokenStore(secureStoreApi);

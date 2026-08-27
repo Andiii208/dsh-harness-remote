@@ -28,11 +28,12 @@ import { isRelayUrl, toRelayWsUrl } from "./relayMode";
 import { classifyConnectionError, type ConnectionErrorInfo } from "./connectionErrors";
 import { requestInterrupt } from "./interrupt";
 import { getExpoPushToken } from "../notify/pushToken";
+import { EventLogStore, MAX_EVENT_LOG } from "../notify/eventLogStore";
 import { notificationService } from "../notify/expoAdapter";
 import { notificationPrefsStore } from "../notify/notificationPrefsStoreAdapter";
 import { hostStore } from "../discovery/hostStoreAdapter";
 import { autoReconnectStore } from "../discovery/autoReconnectStoreAdapter";
-import { tokenStore } from "../data/secureStoreAdapter";
+import { tokenStore, secureStoreApi } from "../data/secureStoreAdapter";
 import { approvalHistoryStore } from "../data/approvalHistoryStoreAdapter";
 import { KeepaliveScheduler } from "../notify/keepalive";
 import { backgroundTaskApi, KEEPALIVE_TASK } from "../notify/keepaliveAdapter";
@@ -144,6 +145,26 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [version, setVersion] = useState(0);
   const lastConnectParamsRef = useRef<{ host: string; port: number; token?: string; pairCode?: string } | null>(null);
   const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
+  // A15/P3：事件日志持久化——冷启动恢复、重连不清空、封顶 200 条。
+  const eventLogRef = useRef(new EventLogStore(secureStoreApi));
+  useEffect(() => {
+    let alive = true;
+    void eventLogRef.current.read().then((events) => {
+      if (alive && events.length > 0) {
+        setNotifications((prev) => (prev.length > 0 ? prev : events));
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (notifications.length === 0) return;
+    const timer = setTimeout(() => {
+      void eventLogRef.current.writeAll(notifications);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [notifications]);
   const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
   const notificationsEnabledRef = useRef(true);
 
@@ -206,7 +227,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     // 先等旧 pipeline 完全退出再建新连接，避免 WS/定时器重叠（评审 #14）。
     await pipelineRef.current?.stop();
     pipelineRef.current = null;
-    setNotifications([]);
+    // A15：重连不再清空事件历史（此前每次 connect 全焚）。
     setRelayPeerId(null);
     setLastError(null);
     setGivenUp(false);
@@ -257,7 +278,12 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         setGivenUp(true);
       },
       onNotification: (n) => {
-        setNotifications((prev) => [...prev.slice(-49), { ...n, receivedAt: Date.now() }]);
+        setNotifications((prev) => {
+          // 幂等：同一事件帧可能因事件流重连重复投递，按 type+rpcId/goalId 去重。
+          const key = n.dedupeKey;
+          if (prev.some((e) => e.dedupeKey === key)) return prev;
+          return [...prev.slice(-MAX_EVENT_LOG + 1), { ...n, receivedAt: Date.now() }];
+        });
         if (notificationsEnabledRef.current) void notificationService.present(n); // 开关门控
       },
     });
