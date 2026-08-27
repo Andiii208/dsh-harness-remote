@@ -29,6 +29,10 @@ import { classifyConnectionError, type ConnectionErrorInfo } from "./connectionE
 import { requestInterrupt } from "./interrupt";
 import { getExpoPushToken } from "../notify/pushToken";
 import { EventLogStore, MAX_EVENT_LOG } from "../notify/eventLogStore";
+
+/** 附件内存 LRU：历史滚动不再重复经 relay 拉同一批图（A16）。 */
+const attachmentCache = createAttachmentCache();
+import { createAttachmentCache } from "../data/attachmentCache";
 import { notificationService } from "../notify/expoAdapter";
 import { notificationPrefsStore } from "../notify/notificationPrefsStoreAdapter";
 import { hostStore } from "../discovery/hostStoreAdapter";
@@ -362,6 +366,9 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
   /** session.attachment：读取图片附件 base64。 */
   const attachment = useCallback(async (sessionId: string, attachmentId: string) => {
+    const cacheKey = `${sessionId}:${attachmentId}`;
+    const cached = attachmentCache.get(cacheKey);
+    if (cached) return cached;
     const c = pipelineRef.current?.loop.connection;
     if (!c) return null;
     try {
@@ -371,7 +378,9 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       if (!value || typeof value.data !== "string") return null;
       const mediaType = toImageMediaType(value.attachment?.mediaType);
       if (!mediaType) return null;
-      return { mediaType, data: value.data };
+      const payload = { mediaType, data: value.data };
+      attachmentCache.put(cacheKey, payload);
+      return payload;
     } catch {
       return null;
     }
