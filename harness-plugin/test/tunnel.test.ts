@@ -5,8 +5,10 @@ import type { ChildProcess } from "node:child_process";
 import {
   candidateBinPaths,
   cloudflaredAsset,
+  DEFAULT_CLOUDFLARED_VERSION,
   killTunnelProcess,
   parseTunnelUrl,
+  sha256Hex,
   startCloudflaredTunnel,
 } from "../src/tunnel.js";
 
@@ -50,6 +52,32 @@ describe("candidateBinPaths", () => {
     // 实现用 node:path.join 拼接，Windows/Linux 的路径分隔符不同；用同一个 join 生成期望值。
     expect(paths[0]).toBe(join("C:\\bin", "cloudflared.exe"));
     expect(paths.some((p) => p.includes(join("dsh-harness-remote", "bin", "cloudflared.exe")))).toBe(true);
+  });
+});
+
+describe("supply-chain hardening (C6)", () => {
+  it("uses a pinned versioned download URL instead of /latest/", () => {
+    const asset = cloudflaredAsset("win32", "x64");
+    expect(asset?.url).toContain("/download/");
+    expect(asset?.url).not.toContain("/latest/download");
+    expect(asset?.url).toContain(DEFAULT_CLOUDFLARED_VERSION);
+  });
+
+  it("honours CLOUDFLARED_VERSION override in asset URL", () => {
+    const previous = process.env.CLOUDFLARED_VERSION;
+    process.env.CLOUDFLARED_VERSION = "2026.1.1";
+    try {
+      expect(cloudflaredAsset("win32", "x64")?.url).toContain("/download/2026.1.1/");
+    } finally {
+      if (previous === undefined) delete process.env.CLOUDFLARED_VERSION;
+      else process.env.CLOUDFLARED_VERSION = previous;
+    }
+  });
+
+  it("sha256Hex is stable", () => {
+    expect(sha256Hex(Buffer.from("abc"))).toBe(
+      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    );
   });
 });
 

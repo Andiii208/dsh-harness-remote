@@ -12,6 +12,7 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { execFile as nodeExecFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { homedir, platform as nodePlatform, arch as nodeArch } from "node:os";
@@ -109,25 +110,57 @@ export function parseTunnelUrl(line: string): string | null {
   return m ? m[0] : null;
 }
 
+/**
+ * 默认钉住的 cloudflared 版本（审计 C6）。
+ * 钉版本让下载物不可变，避免 latest 漂移带来供应链面；可用
+ * CLOUDFLARED_VERSION 环境变量覆盖。
+ */
+export const DEFAULT_CLOUDFLARED_VERSION = "2026.8.2";
+
+function releaseBaseUrl(): string {
+  const version = process.env.CLOUDFLARED_VERSION?.trim() || DEFAULT_CLOUDFLARED_VERSION;
+  return `https://github.com/cloudflare/cloudflared/releases/download/${version}`;
+}
+
+/** 十六进制小写 sha256（C6 校验用）。 */
+export function sha256Hex(buf: Buffer): string {
+  return createHash("sha256").update(buf).digest("hex");
+}
+
+/**
+ * 可选完整性校验：上游 GitHub Release 不提供 per-file sha 资产，
+ * 因此默认跳过；当用户设置 CLOUDFLARED_SHA256（来自可信渠道）时
+ * 强校验，不匹配即拒绝写入二进制（fail closed）。
+ */
+function assertChecksumIfConfigured(buf: Buffer, logger?: (line: string) => void): void {
+  const expected = process.env.CLOUDFLARED_SHA256?.trim().toLowerCase();
+  if (!expected) return;
+  const actual = sha256Hex(buf);
+  if (actual !== expected) {
+    throw new Error(`cloudflared 校验失败：实际 ${actual}，期望 ${expected}（拒绝写入二进制）`);
+  }
+  logger?.(`cloudflared sha256 校验通过：${actual}`);
+}
+
 /** 各平台 cloudflared 官方下载资产。 */
 export function cloudflaredAsset(
   platform: string = nodePlatform(),
   arch: string = nodeArch(),
+  baseUrl: string = releaseBaseUrl(),
 ): { name: string; url: string; extract: "none" | "tgz" } | null {
-  const base = "https://github.com/cloudflare/cloudflared/releases/latest/download";
   if (platform === "win32") {
-    if (arch === "x64") return { name: "cloudflared.exe", url: `${base}/cloudflared-windows-amd64.exe`, extract: "none" };
-    if (arch === "arm64") return { name: "cloudflared.exe", url: `${base}/cloudflared-windows-arm64.exe`, extract: "none" };
+    if (arch === "x64") return { name: "cloudflared.exe", url: `${baseUrl}/cloudflared-windows-amd64.exe`, extract: "none" };
+    if (arch === "arm64") return { name: "cloudflared.exe", url: `${baseUrl}/cloudflared-windows-arm64.exe`, extract: "none" };
     return null;
   }
   if (platform === "darwin") {
-    if (arch === "x64") return { name: "cloudflared.tgz", url: `${base}/cloudflared-darwin-amd64.tgz`, extract: "tgz" };
-    if (arch === "arm64") return { name: "cloudflared.tgz", url: `${base}/cloudflared-darwin-arm64.tgz`, extract: "tgz" };
+    if (arch === "x64") return { name: "cloudflared.tgz", url: `${baseUrl}/cloudflared-darwin-amd64.tgz`, extract: "tgz" };
+    if (arch === "arm64") return { name: "cloudflared.tgz", url: `${baseUrl}/cloudflared-darwin-arm64.tgz`, extract: "tgz" };
     return null;
   }
   if (platform === "linux") {
-    if (arch === "x64") return { name: "cloudflared", url: `${base}/cloudflared-linux-amd64`, extract: "none" };
-    if (arch === "arm64") return { name: "cloudflared", url: `${base}/cloudflared-linux-arm64`, extract: "none" };
+    if (arch === "x64") return { name: "cloudflared", url: `${baseUrl}/cloudflared-linux-amd64`, extract: "none" };
+    if (arch === "arm64") return { name: "cloudflared", url: `${baseUrl}/cloudflared-linux-arm64`, extract: "none" };
     return null;
   }
   return null;
@@ -168,6 +201,7 @@ async function downloadBin(
   const res = await fetchImpl(asset.url);
   if (!res.ok) throw new Error(`cloudflared 下载失败：HTTP ${res.status}`);
   const buf = Buffer.from(await res.arrayBuffer());
+  assertChecksumIfConfigured(buf, logger);
   await writeFile(target, buf);
   if (asset.extract === "none") {
     await chmod(target, 0o755).catch(() => {});
