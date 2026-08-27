@@ -30,6 +30,8 @@ export interface RemoteAccessOptions {
   port?: number;
   /** 配对成功回调（宿主面板可弹提示）。peerPublicKey 用于落盘以跨重启续连。 */
   onPaired?: (info: { deviceId: string; peerPublicKey?: unknown }) => void;
+  /** console↔relay 控制面在线状态变化（自动重连恢复/断开时回调）。 */
+  onRelayState?: (online: boolean) => void;
   /** 显式指定 DSH API baseUrl（如 http://127.0.0.1:56734）。如果提供则跳过自动探测。 */
   dshBaseUrl?: string | null;
   /** 未显式指定 baseUrl 时，是否自动探测 DSH_WEB_URL / 默认端口。CLI 默认开启。 */
@@ -159,6 +161,10 @@ export async function startRemoteAccess(
     url: `ws://127.0.0.1:${port}`,
     clientId,
     kind: "console",
+    // 审计 A3：console→relay 控制面必须自愈——断线指数退避重连 + 心跳保活。
+    autoReconnect: true,
+    onLog: (line) => opts.onStatus?.(line),
+    ...(opts.onRelayState ? { onConnectionChange: opts.onRelayState } : {}),
     ...(opts.ecdhPrivateJwk ? { privateKeyJwk: opts.ecdhPrivateJwk } : {}),
     // 已知对端公钥时直接派生会话密钥：重启后不等 pair.ack 即可解密。
     ...(opts.ecdhPrivateJwk && opts.ecdhPeerPublicJwk

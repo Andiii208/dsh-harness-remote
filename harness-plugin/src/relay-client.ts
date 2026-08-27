@@ -31,6 +31,9 @@ import type {
 
 const OPEN = 1;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
+const DEFAULT_RECONNECT_BASE_MS = 1_000;
+const DEFAULT_RECONNECT_MAX_MS = 60_000;
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 
 /** WebSocket 表面：协议包的 WsLike + 发送能力（fake ws 也实现同一表面）。 */
 interface RelaySocket extends WsLike {
@@ -47,6 +50,22 @@ export interface RelayClientOptions {
   wsImpl?: WsCtor;
   /** 控制面握手超时（毫秒），默认 15s。 */
   connectTimeoutMs?: number;
+  /**
+   * 断线自动重连（审计 2026-08-27 A3）：指数退避 1s→2s→4s…封顶 60s；
+   * register.ack 成功后计数归零并重启心跳。close() 视为主动放弃不重连。
+   * 默认关闭；console 宿主（remote-access）开启。
+   */
+  autoReconnect?: boolean;
+  /** 首次重连等待基数（毫秒），默认 1000。 */
+  reconnectBaseMs?: number;
+  /** 重连等待上限（毫秒），默认 60000。 */
+  reconnectMaxMs?: number;
+  /** 心跳间隔（毫秒），默认 30000；仅 autoReconnect 开启时调度。 */
+  heartbeatIntervalMs?: number;
+  /** 连接状态变化回调：register.ack 成功 true、socket 意外断开 false。 */
+  onConnectionChange?: (online: boolean) => void;
+  /** 内部日志（重连计划等），宿主可接状态日志。 */
+  onLog?: (line: string) => void;
   /** M3.2 E2E：本 console 的 ECDH 私钥 JWK（与 peerPublicKeyJwk 一起提供时启用加密数据面）。 */
   privateKeyJwk?: JsonWebKey;
   /** M3.2 E2E：对端（device）公钥 JWK。 */
@@ -107,6 +126,11 @@ export class RelayClient {
   private handshakeSettled = false;
   private settleHandshake: ((err: Error | null) => void) | null = null;
   private readonly pairCodeWaiters = new Map<string, { resolve: (code: string) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  /** 自动重连/心跳相关状态（A3）。 */
+  private userClosed = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempt = 0;
 
   constructor(private readonly opts: RelayClientOptions) {
     this.cryptoImpl = opts.crypto
@@ -151,12 +175,52 @@ export class RelayClient {
 
   /** 打开 WS/WSS，发 relay.hello + relay.register，收到 register.ack 后 resolve。 */
   connect(): Promise<void> {
+    this.userClosed = false;
     if (this.online) return Promise.resolve();
     if (this.connectPromise) return this.connectPromise;
     this.connectPromise = this.doConnect().finally(() => {
       this.connectPromise = null;
     });
     return this.connectPromise;
+  }
+
+  /**
+   * 意外断线后的重连调度（A3）：指数退避，上限封顶；
+   * register.ack 成功把计数归零。close() 视为主动放弃不进入本路径。
+   */
+  private scheduleReconnect(): void {
+    if (!this.opts.autoReconnect || this.userClosed) return;
+    const baseMs = this.opts.reconnectBaseMs ?? DEFAULT_RECONNECT_BASE_MS;
+    const maxMs = this.opts.reconnectMaxMs ?? DEFAULT_RECONNECT_MAX_MS;
+    const delay = Math.min(baseMs * 2 ** this.reconnectAttempt, maxMs);
+    this.reconnectAttempt += 1;
+    this.opts.onLog?.(`relay 连接断开，${delay}ms 后自动重连（第 ${this.reconnectAttempt} 次）…`);
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.connect().catch(() => {});
+    }, delay);
+  }
+
+  /** 心跳保活：仅 autoReconnect 开启时调度；socket 已死由 onclose 接管。 */
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    const intervalMs = this.opts.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
+    if (!this.opts.autoReconnect || intervalMs <= 0) return;
+    this.heartbeatTimer = setInterval(() => {
+      try {
+        this.heartbeat();
+      } catch {
+        /* socket 已死：onclose 会触发退避重连 */
+      }
+    }, intervalMs);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 
   /** 发送 relay.heartbeat（from=clientId, to="relay"）。 */
@@ -235,6 +299,12 @@ export class RelayClient {
   }
 
   close(): void {
+    this.userClosed = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.stopHeartbeat();
     this.online = false;
     this.credentialValue = null;
     if (this.handshakeTimer) {
@@ -267,6 +337,22 @@ export class RelayClient {
       throw new Error("RelayClient: no WebCrypto available");
     }
     return this.cryptoImpl;
+  }
+
+  /** 丢弃当前 socket（不置 userClosed）：握手超时/握手期异常用，保留重连能力。 */
+  private abandonSocket(): void {
+    const ws = this.ws;
+    this.ws = null;
+    if (!ws) return;
+    ws.onmessage = null;
+    ws.onopen = null;
+    ws.onclose = null;
+    ws.onerror = null;
+    try {
+      ws.close();
+    } catch {
+      /* close() 不抛错 */
+    }
   }
 
   private doConnect(): Promise<void> {
@@ -305,18 +391,25 @@ export class RelayClient {
           this.online = false;
           reject(err);
         } else {
+          // 连接确立：重置退避计数、启动心跳、对外宣告在线。
           this.online = true;
+          this.reconnectAttempt = 0;
+          this.startHeartbeat();
+          this.opts.onConnectionChange?.(true);
           resolve();
         }
       };
 
       this.handshakeTimer = setTimeout(() => {
+        // 握手超时 ≠ 用户放弃：只丢弃当前 socket，保留自动重连计划。
         this.settleHandshake?.(
           new Error(
             `RelayClient: relay.register.ack not received before ${timeoutMs}ms timeout`,
           ),
         );
-        this.close();
+        this.abandonSocket();
+        this.online = false;
+        this.scheduleReconnect();
       }, timeoutMs);
 
       ws.onmessage = (ev) => {
@@ -325,9 +418,12 @@ export class RelayClient {
       ws.onclose = () => {
         this.online = false;
         this.ws = null;
+        this.stopHeartbeat();
+        this.opts.onConnectionChange?.(false);
         this.settleHandshake?.(
           new Error("RelayClient: ws closed before relay.register.ack"),
         );
+        this.scheduleReconnect();
       };
       ws.onerror = () => {
         /* surfaced via onclose / timeout */
@@ -347,7 +443,9 @@ export class RelayClient {
             );
           } catch (err) {
             this.settleHandshake?.(err instanceof Error ? err : new Error(String(err)));
-            this.close();
+            this.abandonSocket();
+            this.online = false;
+            this.scheduleReconnect();
           }
         })();
       };

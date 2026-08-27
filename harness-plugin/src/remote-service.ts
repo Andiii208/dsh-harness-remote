@@ -36,6 +36,8 @@ export interface RemoteStatus {
   dshUrl: string | null;
   dshDetected: boolean;
   pairedDeviceId: string | null;
+  /** console→relay 控制面在线状态（A3 自动重连语义下的真实健康度）。 */
+  relayOnline?: boolean;
   error: string | null;
   lastLogs: string[];
 }
@@ -197,6 +199,10 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
           consoleId: bootIdentity.consoleId,
           ...(bootIdentity.ecdhPrivateJwk ? { ecdhPrivateJwk: bootIdentity.ecdhPrivateJwk } : {}),
           onStatus: pushLog,
+          onRelayState: (online) => {
+            status = { ...status, relayOnline: online };
+            pushLog(online ? "relay 控制面已连接" : "与 relay 的控制面已断开（自动重连中）…");
+          },
           onPaired: (info) => {
             status = { ...status, pairedDeviceId: info.deviceId };
             rememberPeerPublicKey(info.peerPublicKey);
@@ -267,7 +273,7 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
       handle = null;
       await h.stop().catch(() => {});
     }
-    status = { ...status, running: false, starting: false, code: null, qrPayload: null, qrDataUrl: null, pairedDeviceId: null, dshUrl: null, dshDetected: false };
+    status = { ...status, running: false, starting: false, code: null, qrPayload: null, qrDataUrl: null, pairedDeviceId: null, dshUrl: null, dshDetected: false, relayOnline: false };
     return status;
   };
 

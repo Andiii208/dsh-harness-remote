@@ -530,4 +530,105 @@ describe("RelayClient", () => {
 
     await expect(p).rejects.toThrow(/missing code/);
   });
+
+  it("auto-reconnects after an unexpected close (A3)", async () => {
+    const client = new RelayClient({
+      url: "ws://relay.example:4090",
+      clientId: "console-c",
+      kind: "console",
+      wsImpl: FakeWs.fresh(),
+      autoReconnect: true,
+      reconnectBaseMs: 10,
+      reconnectMaxMs: 20,
+      heartbeatIntervalMs: 0,
+    });
+    const p = client.connect();
+    const ws1 = FakeWs.instances[0]!;
+    ws1.open();
+    await vi.waitFor(() => expect(ws1.sent).toHaveLength(2));
+    const register = JSON.parse(ws1.sent[1]!) as { id: string };
+    ws1.recv(registerAck(register.id, "console-c", { credential: "c1", ttlMs: 900_000 }));
+    await p;
+    expect(client.isOnline()).toBe(true);
+
+    // 意外断开 → 无需人工干预，退避后自动重连并重新注册成功。
+    ws1.onclose?.();
+    expect(client.isOnline()).toBe(false);
+    await vi.waitFor(() => expect(FakeWs.instances.length).toBeGreaterThanOrEqual(2));
+    const ws2 = FakeWs.instances[1]!;
+    ws2.open();
+    await vi.waitFor(() => expect(ws2.sent).toHaveLength(2));
+    const register2 = JSON.parse(ws2.sent[1]!) as { id: string };
+    ws2.recv(registerAck(register2.id, "console-c", { credential: "c2", ttlMs: 900_000 }));
+    await vi.waitFor(() => expect(client.isOnline()).toBe(true));
+    client.close();
+  });
+
+  it("close() suppresses auto-reconnect (user gave up)", async () => {
+    const client = new RelayClient({
+      url: "ws://relay.example:4090",
+      clientId: "console-c",
+      kind: "console",
+      wsImpl: FakeWs.fresh(),
+      autoReconnect: true,
+      reconnectBaseMs: 10,
+    });
+    const p = client.connect();
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
+    const register = JSON.parse(ws.sent[1]!) as { id: string };
+    ws.recv(registerAck(register.id, "console-c", { credential: "c1", ttlMs: 900_000 }));
+    await p;
+
+    client.close();
+    const instanceCount = FakeWs.instances.length;
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 60));
+    expect(FakeWs.instances.length).toBe(instanceCount);
+    expect(client.isOnline()).toBe(false);
+  });
+
+  it("sends periodic heartbeats while online when autoReconnect is on", async () => {
+    const client = new RelayClient({
+      url: "ws://relay.example:4090",
+      clientId: "console-c",
+      kind: "console",
+      wsImpl: FakeWs.fresh(),
+      autoReconnect: true,
+      heartbeatIntervalMs: 15,
+    });
+    const p = client.connect();
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
+    const register = JSON.parse(ws.sent[1]!) as { id: string };
+    ws.recv(registerAck(register.id, "console-c", { credential: "c1", ttlMs: 900_000 }));
+    await p;
+
+    await vi.waitFor(() => {
+      const types = ws.sent.map((raw) => (JSON.parse(raw) as { type: string }).type);
+      expect(types.filter((t) => t === "relay.heartbeat").length).toBeGreaterThan(0);
+    });
+    client.close();
+  });
+
+  it("does not reconnect by default (legacy behavior unchanged)", async () => {
+    const client = new RelayClient({
+      url: "ws://relay.example:4090",
+      clientId: "console-c",
+      kind: "console",
+      wsImpl: FakeWs.fresh(),
+    });
+    const p = client.connect();
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
+    const register = JSON.parse(ws.sent[1]!) as { id: string };
+    ws.recv(registerAck(register.id, "console-c", { credential: "c1", ttlMs: 900_000 }));
+    await p;
+
+    ws.onclose?.();
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 40));
+    expect(FakeWs.instances.length).toBe(1);
+  });
 });
