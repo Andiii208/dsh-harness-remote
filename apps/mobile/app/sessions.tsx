@@ -7,6 +7,7 @@ import Svg, { Path } from "react-native-svg";
 import { StatusBar } from "expo-status-bar";
 import { useConnection } from "../src/transport/ConnectionProvider";
 import { AppIcon } from "../src/ui/icons";
+import { BottomSheet } from "../src/ui/BottomSheet";
 import { useI18n } from "../src/i18n";
 import { useAppSettings } from "../src/data/appSettingsContext";
 import { font, radius, space } from "../src/theme";
@@ -444,88 +445,79 @@ export default function SessionsScreen() {
       />
 
       {/* 工作区选择 Sheet */}
-      <Modal visible={workspaceSheetVisible} transparent animationType="fade" onRequestClose={() => setWorkspaceSheetVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setWorkspaceSheetVisible(false)} accessibilityRole="button" accessibilityLabel="关闭工作区选择" />
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>选择工作区</Text>
-            <Pressable
-              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-              onPress={() => { setWorkspaceFilter(null); setWorkspaceSheetVisible(false); }}
-              accessibilityRole="button"
-              accessibilityLabel="全部工作区"
-            >
-              <Text style={styles.menuItemText}>全部工作区</Text>
-              {workspaceFilter === null && <Text style={styles.menuItemTick}>✓</Text>}
-            </Pressable>
-            {workspaceGroups.map((w) => (
-              <Pressable
-                key={w.workspaceId}
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => { setWorkspaceFilter(normalizePath(w.path)); setWorkspaceSheetVisible(false); }}
-                accessibilityRole="button"
-                accessibilityLabel={w.title}
-              >
-                <View style={styles.menuItemBody}>
-                  <Text style={styles.menuItemText} numberOfLines={1}>{w.title}</Text>
-                  <Text style={styles.menuItemSub} numberOfLines={1}>{w.path}</Text>
-                </View>
-                {workspaceFilter === normalizePath(w.path) && <Text style={styles.menuItemTick}>✓</Text>}
-              </Pressable>
-            ))}
-            <Text style={styles.menuItemHint}>当前宿主未提供目录浏览能力，仅支持按已列出的工作区筛选。</Text>
-            <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => setWorkspaceSheetVisible(false)} accessibilityRole="button" accessibilityLabel={t.common.cancel}>
-              <Text style={[styles.menuItemText, { color: colors.textMuted }]}>{t.common.cancel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BottomSheet visible={workspaceSheetVisible} onClose={() => setWorkspaceSheetVisible(false)} closeLabel="关闭工作区选择">
+
+<Text style={styles.menuTitle}>选择工作区</Text>
+<Pressable
+style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+onPress={() => { setWorkspaceFilter(null); setWorkspaceSheetVisible(false); }}
+accessibilityRole="button"
+accessibilityLabel="全部工作区"
+>
+<Text style={styles.menuItemText}>全部工作区</Text>
+{workspaceFilter === null && <Text style={styles.menuItemTick}>✓</Text>}
+</Pressable>
+{workspaceGroups.map((w) => (
+<Pressable
+key={w.workspaceId}
+style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+onPress={() => { setWorkspaceFilter(normalizePath(w.path)); setWorkspaceSheetVisible(false); }}
+accessibilityRole="button"
+accessibilityLabel={w.title}
+>
+<View style={styles.menuItemBody}>
+<Text style={styles.menuItemText} numberOfLines={1}>{w.title}</Text>
+<Text style={styles.menuItemSub} numberOfLines={1}>{w.path}</Text>
+</View>
+{workspaceFilter === normalizePath(w.path) && <Text style={styles.menuItemTick}>✓</Text>}
+</Pressable>
+))}
+<Text style={styles.menuItemHint}>当前宿主未提供目录浏览能力，仅支持按已列出的工作区筛选。</Text>
+<Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => setWorkspaceSheetVisible(false)} accessibilityRole="button" accessibilityLabel={t.common.cancel}>
+<Text style={[styles.menuItemText, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+</Pressable>
+
+</BottomSheet>
 
       {/* 会话操作菜单（长按触发） */}
-      <Modal visible={menuSession !== null} transparent animationType="fade" onRequestClose={() => setMenuSession(null)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenuSession(null)} accessibilityRole="button" accessibilityLabel="关闭会话菜单" />
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>{menuSession?.title ?? menuSession?.id ?? t.sessions.menuTitle}</Text>
-            <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => { setRenameTitle(menuSession?.title ?? ""); setRenameVisible(true); }} accessibilityRole="button" accessibilityLabel={t.sessions.menuRename}>
-              <Text style={styles.menuItemText}>{t.sessions.menuRename}</Text>
-            </Pressable>
-            <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => void doFork()} accessibilityRole="button" accessibilityLabel={t.sessions.menuFork}>
-              <Text style={styles.menuItemText}>{t.sessions.menuFork}</Text>
-            </Pressable>
-            <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => void doArchive()} accessibilityRole="button" accessibilityLabel={t.sessions.menuArchive}>
-              <Text style={[styles.menuItemText, { color: colors.danger }]}>{t.sessions.menuArchive}</Text>
-            </Pressable>
-            <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => setMenuSession(null)} accessibilityRole="button" accessibilityLabel={t.common.cancel}>
-              <Text style={[styles.menuItemText, { color: colors.textMuted }]}>{t.common.cancel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BottomSheet visible={menuSession !== null} onClose={() => setMenuSession(null)} closeLabel="关闭会话菜单">
+
+<Text style={styles.menuTitle}>{menuSession?.title ?? menuSession?.id ?? t.sessions.menuTitle}</Text>
+<Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => { setRenameTitle(menuSession?.title ?? ""); setRenameVisible(true); }} accessibilityRole="button" accessibilityLabel={t.sessions.menuRename}>
+<Text style={styles.menuItemText}>{t.sessions.menuRename}</Text>
+</Pressable>
+<Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => void doFork()} accessibilityRole="button" accessibilityLabel={t.sessions.menuFork}>
+<Text style={styles.menuItemText}>{t.sessions.menuFork}</Text>
+</Pressable>
+<Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => void doArchive()} accessibilityRole="button" accessibilityLabel={t.sessions.menuArchive}>
+<Text style={[styles.menuItemText, { color: colors.danger }]}>{t.sessions.menuArchive}</Text>
+</Pressable>
+<Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => setMenuSession(null)} accessibilityRole="button" accessibilityLabel={t.common.cancel}>
+<Text style={[styles.menuItemText, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+</Pressable>
+
+</BottomSheet>
 
       {/* 重命名弹窗 */}
-      <Modal visible={renameVisible} transparent animationType="fade" onRequestClose={() => setRenameVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setRenameVisible(false)} accessibilityRole="button" accessibilityLabel="关闭重命名" />
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>{t.sessions.renameTitle}</Text>
-            <TextInput
-              style={styles.renameInput}
-              value={renameTitle}
-              onChangeText={setRenameTitle}
-              placeholder={t.sessions.renamePlaceholder}
-              placeholderTextColor={colors.textDim}
-              autoFocus
-            />
-            <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => void doRename()} accessibilityRole="button" accessibilityLabel={t.sessions.renameConfirm}>
-              <Text style={styles.menuItemText}>{t.sessions.renameConfirm}</Text>
-            </Pressable>
-            <Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => setRenameVisible(false)} accessibilityRole="button" accessibilityLabel={t.common.cancel}>
-              <Text style={[styles.menuItemText, { color: colors.textMuted }]}>{t.common.cancel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BottomSheet visible={renameVisible} onClose={() => setRenameVisible(false)} closeLabel="关闭重命名">
+
+<Text style={styles.menuTitle}>{t.sessions.renameTitle}</Text>
+<TextInput
+style={styles.renameInput}
+value={renameTitle}
+onChangeText={setRenameTitle}
+placeholder={t.sessions.renamePlaceholder}
+placeholderTextColor={colors.textDim}
+autoFocus
+/>
+<Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => void doRename()} accessibilityRole="button" accessibilityLabel={t.sessions.renameConfirm}>
+<Text style={styles.menuItemText}>{t.sessions.renameConfirm}</Text>
+</Pressable>
+<Pressable style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]} onPress={() => setRenameVisible(false)} accessibilityRole="button" accessibilityLabel={t.common.cancel}>
+<Text style={[styles.menuItemText, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+</Pressable>
+
+</BottomSheet>
     </View>
   );
 }
@@ -648,19 +640,8 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
     pressure: { fontSize: font.eyebrow, fontFamily: font.mono, letterSpacing: 0.2 },
     rowArrow: { color: colors.textDim, fontSize: 18, fontWeight: "300" },
     emptyWrap: { alignItems: "center", paddingTop: space.x7 * 2, gap: space.x2, paddingHorizontal: space.x4 },
-    modalBackdrop: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      justifyContent: "flex-end",
-    },
-    menuPanel: {
-      backgroundColor: colors.surface,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      padding: 16,
-      paddingBottom: 28,
-      gap: 8,
-    },
+
+
     menuTitle: { color: colors.text, fontSize: font.section, fontWeight: "600", marginBottom: 6 },
     menuItem: {
       backgroundColor: colors.surface2,

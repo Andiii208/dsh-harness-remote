@@ -206,6 +206,7 @@ export const space = {
 export const radius = {
   card: 15,
   control: 14,
+  sheet: 20,
   pill: 999,
 } as const;
 

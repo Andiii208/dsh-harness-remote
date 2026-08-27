@@ -12,6 +12,7 @@ import { font, radius, space, type ThemeColors } from "../../theme";
 import { useTheme } from "../../theme-context";
 import { EmptyState } from "../EmptyState";
 import { buildTrajectoryRows, formatStepDuration, laneSegments, stepStatusLabel, stepTypeIcon, stepTypeLabel, type TrajectoryRow } from "./trajectory";
+import { BottomSheet } from "../BottomSheet";
 
 const LANE_KINDS = ["turn", "step", "tool"] as const;
 
@@ -107,28 +108,20 @@ export function TrajectoryView({
         }
       />
 
-      <Modal visible={detail !== null} transparent animationType="fade" onRequestClose={() => setDetail(null)}>
-        <Pressable
-          style={styles.backdrop}
-          onPress={() => setDetail(null)}
-          accessibilityRole="button"
-          accessibilityLabel="关闭步骤详情"
-        >
-          <View style={styles.detailPanel}>
-            <Text style={styles.detailTitle}>{detail?.name ?? ""}</Text>
-            <Text style={styles.detailMeta}>
-              {detail
-                ? `${stepTypeLabel(detail.type)} · ${stepStatusLabel(detail.status)} · ${formatStepDuration(detail.durationMs)}`
-                : ""}
-            </Text>
-            {detail?.input ? <Text style={styles.detailLabel}>参数</Text> : null}
-            {detail?.input ? <Text style={styles.detailText}>{detail.input}</Text> : null}
-            {detail?.output ? <Text style={styles.detailLabel}>结果</Text> : null}
-            {detail?.output ? <Text style={styles.detailText}>{detail.output}</Text> : null}
-            <Text style={styles.detailHint}>轻触关闭</Text>
-          </View>
-        </Pressable>
-      </Modal>
+      <BottomSheet visible={detail !== null} onClose={() => setDetail(null)}>
+
+<Text style={styles.detailTitle}>{detail?.name ?? ""}</Text>
+<Text style={styles.detailMeta}>
+{detail
+? `${stepTypeLabel(detail.type)} · ${stepStatusLabel(detail.status)} · ${formatStepDuration(detail.durationMs)}`
+: ""}
+</Text>
+{detail?.input ? <Text style={styles.detailLabel}>参数</Text> : null}
+{detail?.input ? <Text style={styles.detailText}>{detail.input}</Text> : null}
+{detail?.output ? <Text style={styles.detailLabel}>结果</Text> : null}
+{detail?.output ? <Text style={styles.detailText}>{detail.output}</Text> : null}
+<Text style={styles.detailHint}>轻触关闭</Text>
+</BottomSheet>
     </>
   );
 }
@@ -240,19 +233,8 @@ function createStyles(colors: ThemeColors) {
     duration: { color: colors.textDim, fontSize: font.caption, fontFamily: font.mono },
     meta: { color: colors.textMuted, fontSize: font.eyebrow, fontFamily: font.mono },
     summary: { color: colors.textMuted, fontSize: font.caption, lineHeight: 17 },
-    backdrop: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      justifyContent: "flex-end",
-      padding: space.x4,
-    },
-    detailPanel: {
-      backgroundColor: colors.surface,
-      borderRadius: 20,
-      padding: space.x4,
-      gap: space.x2,
-      paddingBottom: space.x5,
-    },
+
+
     detailTitle: { color: colors.text, fontSize: font.title, fontWeight: "600" },
     detailMeta: { color: colors.textMuted, fontSize: font.caption, fontFamily: font.mono },
     detailLabel: { color: colors.textMuted, fontSize: font.eyebrow, fontFamily: font.monoBold, letterSpacing: 1.2, textTransform: "uppercase", marginTop: space.x2 },

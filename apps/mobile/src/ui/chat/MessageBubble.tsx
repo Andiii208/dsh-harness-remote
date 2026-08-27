@@ -18,6 +18,7 @@ import { StreamingCursor } from "../StreamingCursor";
 import { haptic } from "../haptics";
 import { splitCodeWithLang } from "./splitCode";
 import { highlight, type HighlightTokenType } from "./highlight";
+import { BottomSheet } from "../BottomSheet";
 
 function tokenColor(type: HighlightTokenType, colors: ThemeColors): string {
   switch (type) {
@@ -251,55 +252,52 @@ export function MessageBubble({ m, live, sessionId }: { m: TranscriptMessage; li
         </View>
       </Pressable>
 
-      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setMenuOpen(false)}>
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>消息操作</Text>
-            <Pressable
-              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-              onPress={() => void copy(m.content)}
-              accessibilityRole="button"
-              accessibilityLabel="复制消息全文"
-            >
-              <Text style={styles.menuItemText}>复制消息全文</Text>
-            </Pressable>
-            {codeSegments.map((seg, i) => (
-              <Pressable
-                key={`copy-code-${i}`}
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => void copy(seg.text)}
-                accessibilityRole="button"
-                accessibilityLabel={`复制代码块 ${i + 1}`}
-              >
-                <Text style={styles.menuItemText}>复制代码块 #{i + 1}{seg.lang ? `（${seg.lang}）` : ""}</Text>
-              </Pressable>
-            ))}
-            {pluginCommands.length > 0 && (
-              <Text style={styles.menuTitle}>插件指令</Text>
-            )}
-            {pluginCommands.map((cmd) => (
-              <Pressable
-                key={`plugin-${cmd.id}`}
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => void runPluginCommand(cmd)}
-                accessibilityRole="button"
-                accessibilityLabel={cmd.title}
-              >
-                <Text style={styles.menuItemText}>{cmd.title}</Text>
-                {cmd.risk === "approve" && <Text style={styles.menuRisk}>需审批</Text>}
-              </Pressable>
-            ))}
-            <Pressable
-              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-              onPress={() => setMenuOpen(false)}
-              accessibilityRole="button"
-              accessibilityLabel="取消"
-            >
-              <Text style={[styles.menuItemText, styles.menuCancelText]}>取消</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
+      <BottomSheet visible={menuOpen} onClose={() => setMenuOpen(false)}>
+
+<Text style={styles.menuTitle}>消息操作</Text>
+<Pressable
+style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+onPress={() => void copy(m.content)}
+accessibilityRole="button"
+accessibilityLabel="复制消息全文"
+>
+<Text style={styles.menuItemText}>复制消息全文</Text>
+</Pressable>
+{codeSegments.map((seg, i) => (
+<Pressable
+key={`copy-code-${i}`}
+style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+onPress={() => void copy(seg.text)}
+accessibilityRole="button"
+accessibilityLabel={`复制代码块 ${i + 1}`}
+>
+<Text style={styles.menuItemText}>复制代码块 #{i + 1}{seg.lang ? `（${seg.lang}）` : ""}</Text>
+</Pressable>
+))}
+{pluginCommands.length > 0 && (
+<Text style={styles.menuTitle}>插件指令</Text>
+)}
+{pluginCommands.map((cmd) => (
+<Pressable
+key={`plugin-${cmd.id}`}
+style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+onPress={() => void runPluginCommand(cmd)}
+accessibilityRole="button"
+accessibilityLabel={cmd.title}
+>
+<Text style={styles.menuItemText}>{cmd.title}</Text>
+{cmd.risk === "approve" && <Text style={styles.menuRisk}>需审批</Text>}
+</Pressable>
+))}
+<Pressable
+style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+onPress={() => setMenuOpen(false)}
+accessibilityRole="button"
+accessibilityLabel="取消"
+>
+<Text style={[styles.menuItemText, styles.menuCancelText]}>取消</Text>
+</Pressable>
+</BottomSheet>
 
         <Modal visible={zoomImage !== null} transparent animationType="fade" onRequestClose={() => setZoomImage(null)}>
           <Pressable style={styles.zoomBackdrop} onPress={() => setZoomImage(null)} accessibilityRole="button" accessibilityLabel="关闭大图">
@@ -365,11 +363,7 @@ function createStyles(colors: ThemeColors, scale: number) {
     codeText: { color: colors.codeText, fontSize: 12 * scale, lineHeight: 19 * scale, fontFamily: font.mono },
     copied: { color: colors.accent, fontSize: font.eyebrow, fontFamily: font.mono, alignSelf: "flex-end" },
     tail: { color: colors.warn, fontSize: 12, fontFamily: font.mono },
-    modalBackdrop: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      justifyContent: "flex-end",
-    },
+
       zoomBackdrop: {
         flex: 1,
         backgroundColor: "rgba(0,0,0,0.86)",
@@ -387,14 +381,7 @@ function createStyles(colors: ThemeColors, scale: number) {
         marginTop: 12,
         opacity: 0.7,
       },
-    menuPanel: {
-      backgroundColor: colors.surface,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      padding: 16,
-      paddingBottom: 28,
-      gap: 8,
-    },
+
     menuTitle: { color: colors.textMuted, fontSize: font.eyebrow, fontFamily: font.monoBold, letterSpacing: 1.6, textTransform: "uppercase", marginBottom: 6 },
     menuItem: {
       backgroundColor: colors.surface2,

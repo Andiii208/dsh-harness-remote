@@ -27,6 +27,7 @@ import { font, radius, space } from "../../src/theme";
 import { MessageBubble } from "../../src/ui/chat/MessageBubble";
 import { AppIcon } from "../../src/ui/icons";
 import { TrajectoryView } from "../../src/ui/trajectory/TrajectoryView";
+import { BottomSheet } from "../../src/ui/BottomSheet";
 import { SkeletonRow } from "../../src/ui/SkeletonRow";
 import { EmptyState } from "../../src/ui/EmptyState";
 import { Button } from "../../src/ui/Button";
@@ -685,368 +686,338 @@ export default function ChatScreen() {
       )}
 
       {/* 会话头部菜单 */}
-      <Modal visible={showHeaderMenu} transparent animationType="fade" onRequestClose={() => setShowHeaderMenu(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowHeaderMenu(false)} accessibilityRole="button" accessibilityLabel="关闭菜单" />
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>会话</Text>
-            {online && (
-              <Pressable
-                style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-                onPress={() => { setShowHeaderMenu(false); void loadHistory(id, 500); }}
-                accessibilityRole="button"
-                accessibilityLabel="重新加载历史"
-              >
-                <Text style={styles.modelItemName}>重新加载历史</Text>
-              </Pressable>
-            )}
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => setShowHeaderMenu(false)}
-              accessibilityRole="button"
-              accessibilityLabel={t.common.cancel}
-            >
-              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BottomSheet visible={showHeaderMenu} onClose={() => setShowHeaderMenu(false)} closeLabel="关闭菜单">
+
+<Text style={styles.menuTitle}>会话</Text>
+{online && (
+<Pressable
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => { setShowHeaderMenu(false); void loadHistory(id, 500); }}
+accessibilityRole="button"
+accessibilityLabel="重新加载历史"
+>
+<Text style={styles.modelItemName}>重新加载历史</Text>
+</Pressable>
+)}
+<Pressable
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => setShowHeaderMenu(false)}
+accessibilityRole="button"
+accessibilityLabel={t.common.cancel}
+>
+<Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+</Pressable>
+
+</BottomSheet>
 
       {/* 模型选择器弹窗 */}
-      <Modal visible={showModelPicker} transparent animationType="fade" onRequestClose={() => setShowModelPicker(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowModelPicker(false)} accessibilityRole="button" accessibilityLabel={t.chat.closeModel} />
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>{t.chat.chooseModel}</Text>
-            {modelsData ? (
-              <ScrollView style={{ maxHeight: 400 }}>
-                {modelsData.groups.map((group) => (
-                  <View key={group.id} style={{ marginBottom: 12 }}>
-                    <Text style={styles.modelGroupName}>{group.name}</Text>
-                    {group.models.map((m) => (
-                      <Pressable
-                        key={m.id}
-                        style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-                        onPress={() => void pickModelWithDefaultEffort(group, m)}
-                        accessibilityRole="button"
-                        accessibilityLabel={m.name}
-                      >
-                        <Text style={styles.modelItemName}>{m.name}</Text>
-                        {modelsData.current.model === m.id && modelsData.current.provider === group.id && (
-                          <Text style={styles.modelItemTick}>✓</Text>
-                        )}
-                      </Pressable>
-                    ))}
-                  </View>
-                ))}
-                {reasoningEfforts.length > 0 && (
-                  <View>
-                    <Text style={styles.modelGroupName}>{t.chat.thinkingEffort}</Text>
-                    {reasoningEfforts.map((effort) => (
-                      <Pressable
-                        key={effort.id}
-                        style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-                        onPress={() => {
-                          if (modelsData.current.model) {
-                            void pickModel(modelsData.current.provider, modelsData.current.model, effort.id);
-                          }
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel={effort.name}
-                      >
-                        <Text style={styles.modelItemName}>{effort.name}</Text>
-                        {selectedReasoningEffort === effort.id && (
-                          <Text style={styles.modelItemTick}>✓</Text>
-                        )}
-                      </Pressable>
-                    ))}
-                  </View>
-                )}
-              </ScrollView>
-            ) : (
-              <Text style={styles.modelItemName}>{t.common.loading}</Text>
-            )}
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => setShowModelPicker(false)}
-            >
-              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BottomSheet visible={showModelPicker} onClose={() => setShowModelPicker(false)} closeLabel={t.chat.closeModel}>
+
+<Text style={styles.menuTitle}>{t.chat.chooseModel}</Text>
+{modelsData ? (
+<ScrollView style={{ maxHeight: 400 }}>
+{modelsData.groups.map((group) => (
+<View key={group.id} style={{ marginBottom: 12 }}>
+<Text style={styles.modelGroupName}>{group.name}</Text>
+{group.models.map((m) => (
+<Pressable
+key={m.id}
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => void pickModelWithDefaultEffort(group, m)}
+accessibilityRole="button"
+accessibilityLabel={m.name}
+>
+<Text style={styles.modelItemName}>{m.name}</Text>
+{modelsData.current.model === m.id && modelsData.current.provider === group.id && (
+<Text style={styles.modelItemTick}>✓</Text>
+)}
+</Pressable>
+))}
+</View>
+))}
+{reasoningEfforts.length > 0 && (
+<View>
+<Text style={styles.modelGroupName}>{t.chat.thinkingEffort}</Text>
+{reasoningEfforts.map((effort) => (
+<Pressable
+key={effort.id}
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => {
+if (modelsData.current.model) {
+void pickModel(modelsData.current.provider, modelsData.current.model, effort.id);
+}
+}}
+accessibilityRole="button"
+accessibilityLabel={effort.name}
+>
+<Text style={styles.modelItemName}>{effort.name}</Text>
+{selectedReasoningEffort === effort.id && (
+<Text style={styles.modelItemTick}>✓</Text>
+)}
+</Pressable>
+))}
+</View>
+)}
+</ScrollView>
+) : (
+<Text style={styles.modelItemName}>{t.common.loading}</Text>
+)}
+<Pressable
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => setShowModelPicker(false)}
+>
+<Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+</Pressable>
+
+</BottomSheet>
 
       {/* 权限选择器弹窗 */}
-      <Modal visible={showPermissionPicker} transparent animationType="fade" onRequestClose={() => setShowPermissionPicker(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowPermissionPicker(false)} accessibilityRole="button" accessibilityLabel={t.chat.closePermission} />
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>{t.chat.choosePermission}</Text>
-            {permissionOptions.map((preset) => (
-              <Pressable
-                key={preset}
-                style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-                onPress={() => void applyPermission(preset)}
-                accessibilityRole="button"
-                accessibilityLabel={preset}
-              >
-                <Text style={styles.modelItemName}>{preset}</Text>
-                {permissionCurrent === preset && (
-                  <Text style={styles.modelItemTick}>✓</Text>
-                )}
-              </Pressable>
-            ))}
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => setShowPermissionPicker(false)}
-            >
-              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BottomSheet visible={showPermissionPicker} onClose={() => setShowPermissionPicker(false)} closeLabel={t.chat.closePermission}>
+
+<Text style={styles.menuTitle}>{t.chat.choosePermission}</Text>
+{permissionOptions.map((preset) => (
+<Pressable
+key={preset}
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => void applyPermission(preset)}
+accessibilityRole="button"
+accessibilityLabel={preset}
+>
+<Text style={styles.modelItemName}>{preset}</Text>
+{permissionCurrent === preset && (
+<Text style={styles.modelItemTick}>✓</Text>
+)}
+</Pressable>
+))}
+<Pressable
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => setShowPermissionPicker(false)}
+>
+<Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+</Pressable>
+
+</BottomSheet>
 
       {/* Agent 预设选择器弹窗 */}
-      <Modal visible={showPresetPicker} transparent animationType="fade" onRequestClose={() => setShowPresetPicker(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowPresetPicker(false)} accessibilityRole="button" accessibilityLabel={t.chat.closePreset} />
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>{t.chat.choosePreset}</Text>
-            {presetLoading ? (
-              <Text style={styles.modelItemName}>{t.common.loading}</Text>
-            ) : presets.length === 0 ? (
-              <Text style={styles.modelItemName}>{t.chat.loadingPresets}</Text>
-            ) : (
-              presets.map((p) => (
-                <Pressable
-                  key={p.id}
-                  style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-                  onPress={() => void applyPreset(p.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={p.name}
-                >
-                  <Text style={styles.modelItemName}>
-                    {p.name}{p.isDefault ? " · 默认" : ""}{p.broken ? " · 不可用" : ""}
-                  </Text>
-                </Pressable>
-              ))
-            )}
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => setShowPresetPicker(false)}
-            >
-              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BottomSheet visible={showPresetPicker} onClose={() => setShowPresetPicker(false)} closeLabel={t.chat.closePreset}>
+
+<Text style={styles.menuTitle}>{t.chat.choosePreset}</Text>
+{presetLoading ? (
+<Text style={styles.modelItemName}>{t.common.loading}</Text>
+) : presets.length === 0 ? (
+<Text style={styles.modelItemName}>{t.chat.loadingPresets}</Text>
+) : (
+presets.map((p) => (
+<Pressable
+key={p.id}
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => void applyPreset(p.id)}
+accessibilityRole="button"
+accessibilityLabel={p.name}
+>
+<Text style={styles.modelItemName}>
+{p.name}{p.isDefault ? " · 默认" : ""}{p.broken ? " · 不可用" : ""}
+</Text>
+</Pressable>
+))
+)}
+<Pressable
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => setShowPresetPicker(false)}
+>
+<Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+</Pressable>
+
+</BottomSheet>
 
       {/* 技能选择器弹窗 */}
-      <Modal visible={showSkillPicker} transparent animationType="fade" onRequestClose={() => setShowSkillPicker(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowSkillPicker(false)} accessibilityRole="button" accessibilityLabel={t.chat.closeSkill} />
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>{t.chat.chooseSkill}</Text>
-            {skills && skills.length > 0 ? (
-              <>
-                <TextInput
-                  style={styles.skillSearch}
-                  placeholder={t.chat.searchSkillPlaceholder}
-                  placeholderTextColor={colors.textDim}
-                  value={skillQuery}
-                  onChangeText={setSkillQuery}
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                />
-                {filteredSkills.length > 0 ? (
-                  <ScrollView style={{ maxHeight: 400 }}>
-                    {filteredSkills.map((s) => (
-                      <Pressable
-                        key={s.name}
-                        style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-                        onPress={() => pickSkill(s.name)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`@${s.name}`}
-                      >
-                        <View style={{ flex: 1, gap: 3 }}>
-                          <Text style={styles.modelItemName}>@{s.name}</Text>
-                          {s.description.length > 0 && (
-                            <Text style={styles.skillDescription} numberOfLines={2}>{s.description}</Text>
-                          )}
-                          {s.whenToUse !== undefined && s.whenToUse.length > 0 && (
-                            <Text style={styles.skillWhenToUse} numberOfLines={2}>{s.whenToUse}</Text>
-                          )}
-                        </View>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                ) : (
-                  <Text style={styles.modelItemName}>{t.chat.noMatchSkills}</Text>
-                )}
-              </>
-            ) : (
-              <Text style={styles.modelItemName}>{t.chat.noSkills}</Text>
-            )}
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => setShowSkillPicker(false)}
-            >
-              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BottomSheet visible={showSkillPicker} onClose={() => setShowSkillPicker(false)} closeLabel={t.chat.closeSkill}>
+
+<Text style={styles.menuTitle}>{t.chat.chooseSkill}</Text>
+{skills && skills.length > 0 ? (
+<>
+<TextInput
+style={styles.skillSearch}
+placeholder={t.chat.searchSkillPlaceholder}
+placeholderTextColor={colors.textDim}
+value={skillQuery}
+onChangeText={setSkillQuery}
+autoCorrect={false}
+autoCapitalize="none"
+/>
+{filteredSkills.length > 0 ? (
+<ScrollView style={{ maxHeight: 400 }}>
+{filteredSkills.map((s) => (
+<Pressable
+key={s.name}
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => pickSkill(s.name)}
+accessibilityRole="button"
+accessibilityLabel={`@${s.name}`}
+>
+<View style={{ flex: 1, gap: 3 }}>
+<Text style={styles.modelItemName}>@{s.name}</Text>
+{s.description.length > 0 && (
+<Text style={styles.skillDescription} numberOfLines={2}>{s.description}</Text>
+)}
+{s.whenToUse !== undefined && s.whenToUse.length > 0 && (
+<Text style={styles.skillWhenToUse} numberOfLines={2}>{s.whenToUse}</Text>
+)}
+</View>
+</Pressable>
+))}
+</ScrollView>
+) : (
+<Text style={styles.modelItemName}>{t.chat.noMatchSkills}</Text>
+)}
+</>
+) : (
+<Text style={styles.modelItemName}>{t.chat.noSkills}</Text>
+)}
+<Pressable
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => setShowSkillPicker(false)}
+>
+<Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+</Pressable>
+
+</BottomSheet>
 
       {/* M4：/ 命令面板 */}
-      <Modal visible={showCommandPanel} transparent animationType="fade" onRequestClose={() => setShowCommandPanel(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowCommandPanel(false)} accessibilityRole="button" accessibilityLabel="关闭命令面板" />
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>命令</Text>
-            {commandItems.map((c) => (
-              <Pressable
-                key={c.id}
-                style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-                onPress={() => pickCommand(c.id)}
-                accessibilityRole="button"
-                accessibilityLabel={c.label}
-              >
-                <View style={{ flex: 1, gap: 3 }}>
-                  <Text style={styles.modelItemName}>{c.label}</Text>
-                  <Text style={styles.skillDescription}>{c.hint}</Text>
-                </View>
-              </Pressable>
-            ))}
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => setShowCommandPanel(false)}
-            >
-              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BottomSheet visible={showCommandPanel} onClose={() => setShowCommandPanel(false)} closeLabel="关闭命令面板">
+
+<Text style={styles.menuTitle}>命令</Text>
+{commandItems.map((c) => (
+<Pressable
+key={c.id}
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => pickCommand(c.id)}
+accessibilityRole="button"
+accessibilityLabel={c.label}
+>
+<View style={{ flex: 1, gap: 3 }}>
+<Text style={styles.modelItemName}>{c.label}</Text>
+<Text style={styles.skillDescription}>{c.hint}</Text>
+</View>
+</Pressable>
+))}
+<Pressable
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => setShowCommandPanel(false)}
+>
+<Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+</Pressable>
+
+</BottomSheet>
 
       {/* M3：上下文用量 Sheet */}
-      <Modal visible={showContextSheet} transparent animationType="fade" onRequestClose={() => setShowContextSheet(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowContextSheet(false)} accessibilityRole="button" accessibilityLabel="关闭上下文用量" />
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>上下文用量</Text>
-            <View style={styles.contextSheetRow}>
-              <Text style={styles.modelItemName}>当前占用</Text>
-              <Text style={styles.contextSheetValue}>{summary?.contextPercent ?? 0}%</Text>
-            </View>
-            {summary?.tokenUsageTotal !== undefined && (
-              <View style={styles.contextSheetRow}>
-                <Text style={styles.modelItemName}>Token 总量</Text>
-                <Text style={styles.contextSheetValue}>{summary.tokenUsageTotal}</Text>
-              </View>
-            )}
-            <Text style={styles.skillDescription}>数据来自会话投影（contextPressure / tokenUsage），由宿主实时推送。</Text>
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => setShowContextSheet(false)}
-            >
-              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BottomSheet visible={showContextSheet} onClose={() => setShowContextSheet(false)} closeLabel="关闭上下文用量">
+
+<Text style={styles.menuTitle}>上下文用量</Text>
+<View style={styles.contextSheetRow}>
+<Text style={styles.modelItemName}>当前占用</Text>
+<Text style={styles.contextSheetValue}>{summary?.contextPercent ?? 0}%</Text>
+</View>
+{summary?.tokenUsageTotal !== undefined && (
+<View style={styles.contextSheetRow}>
+<Text style={styles.modelItemName}>Token 总量</Text>
+<Text style={styles.contextSheetValue}>{summary.tokenUsageTotal}</Text>
+</View>
+)}
+<Text style={styles.skillDescription}>数据来自会话投影（contextPressure / tokenUsage），由宿主实时推送。</Text>
+<Pressable
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => setShowContextSheet(false)}
+>
+<Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+</Pressable>
+
+</BottomSheet>
 
       {/* M6：后台任务 Sheet（只读；宿主未提供停止 RPC） */}
-      <Modal visible={showJobsSheet} transparent animationType="fade" onRequestClose={() => setShowJobsSheet(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowJobsSheet(false)} accessibilityRole="button" accessibilityLabel="关闭后台任务" />
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>后台任务</Text>
-            {sessionJobs.length === 0 ? (
-              <Text style={styles.modelItemName}>暂无后台任务</Text>
-            ) : (
-              sessionJobs.map((j) => (
-                <View key={j.id} style={styles.jobSheetRow}>
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Text style={styles.modelItemName}>{j.label}</Text>
-                    <Text style={styles.skillDescription}>{j.kind} · {j.status} · {formatJobDuration(j)}</Text>
-                    {j.detail !== undefined && <Text style={styles.skillDescription} numberOfLines={2}>{j.detail}</Text>}
-                  </View>
-                </View>
-              ))
-            )}
-            <Text style={styles.skillDescription}>宿主未提供任务停止能力，此面板为只读展示。</Text>
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => setShowJobsSheet(false)}
-            >
-              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BottomSheet visible={showJobsSheet} onClose={() => setShowJobsSheet(false)} closeLabel="关闭后台任务">
+
+<Text style={styles.menuTitle}>后台任务</Text>
+{sessionJobs.length === 0 ? (
+<Text style={styles.modelItemName}>暂无后台任务</Text>
+) : (
+sessionJobs.map((j) => (
+<View key={j.id} style={styles.jobSheetRow}>
+<View style={{ flex: 1, gap: 3 }}>
+<Text style={styles.modelItemName}>{j.label}</Text>
+<Text style={styles.skillDescription}>{j.kind} · {j.status} · {formatJobDuration(j)}</Text>
+{j.detail !== undefined && <Text style={styles.skillDescription} numberOfLines={2}>{j.detail}</Text>}
+</View>
+</View>
+))
+)}
+<Text style={styles.skillDescription}>宿主未提供任务停止能力，此面板为只读展示。</Text>
+<Pressable
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => setShowJobsSheet(false)}
+>
+<Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+</Pressable>
+
+</BottomSheet>
 
       {/* M8：队列编辑 */}
-      <Modal visible={editQueueItem !== null} transparent animationType="fade" onRequestClose={() => setEditQueueItem(null)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setEditQueueItem(null)} accessibilityRole="button" accessibilityLabel="关闭编辑" />
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>编辑排队消息</Text>
-            <TextInput
-              style={styles.skillSearch}
-              placeholder="输入新的消息内容"
-              placeholderTextColor={colors.textDim}
-              value={queueEditText}
-              onChangeText={setQueueEditText}
-              multiline
-            />
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => void runQueueEdit()}
-              accessibilityRole="button"
-              accessibilityLabel="保存编辑"
-            >
-              <Text style={styles.modelItemName}>保存</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => setEditQueueItem(null)}
-            >
-              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BottomSheet visible={editQueueItem !== null} onClose={() => setEditQueueItem(null)} closeLabel="关闭编辑">
+
+<Text style={styles.menuTitle}>编辑排队消息</Text>
+<TextInput
+style={styles.skillSearch}
+placeholder="输入新的消息内容"
+placeholderTextColor={colors.textDim}
+value={queueEditText}
+onChangeText={setQueueEditText}
+multiline
+/>
+<Pressable
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => void runQueueEdit()}
+accessibilityRole="button"
+accessibilityLabel="保存编辑"
+>
+<Text style={styles.modelItemName}>保存</Text>
+</Pressable>
+<Pressable
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => setEditQueueItem(null)}
+>
+<Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+</Pressable>
+
+</BottomSheet>
 
       {/* M7：目标编辑 Sheet */}
-      <Modal visible={goalEditVisible} transparent animationType="fade" onRequestClose={() => setGoalEditVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setGoalEditVisible(false)} accessibilityRole="button" accessibilityLabel="关闭目标编辑" />
-          <View style={styles.menuPanel}>
-            <Text style={styles.menuTitle}>编辑目标</Text>
-            <TextInput
-              style={styles.skillSearch}
-              placeholder="输入新的目标描述"
-              placeholderTextColor={colors.textDim}
-              value={goalEditText}
-              onChangeText={setGoalEditText}
-              multiline
-            />
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => void runGoalEdit()}
-              accessibilityRole="button"
-              accessibilityLabel="保存目标"
-            >
-              <Text style={styles.modelItemName}>保存</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
-              onPress={() => setGoalEditVisible(false)}
-            >
-              <Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <BottomSheet visible={goalEditVisible} onClose={() => setGoalEditVisible(false)} closeLabel="关闭目标编辑">
+
+<Text style={styles.menuTitle}>编辑目标</Text>
+<TextInput
+style={styles.skillSearch}
+placeholder="输入新的目标描述"
+placeholderTextColor={colors.textDim}
+value={goalEditText}
+onChangeText={setGoalEditText}
+multiline
+/>
+<Pressable
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => void runGoalEdit()}
+accessibilityRole="button"
+accessibilityLabel="保存目标"
+>
+<Text style={styles.modelItemName}>保存</Text>
+</Pressable>
+<Pressable
+style={({ pressed }) => [styles.modelItem, pressed && styles.modelItemPressed]}
+onPress={() => setGoalEditVisible(false)}
+>
+<Text style={[styles.modelItemName, { color: colors.textMuted }]}>{t.common.cancel}</Text>
+</Pressable>
+
+</BottomSheet>
 
       <View style={styles.inputBar}>
         {(turnCount > 0 || stepCount > 0) && (
@@ -1386,20 +1357,8 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     queueRow: { flexDirection: "row", alignItems: "center", gap: space.x3 },
     queueText: { color: colors.text, fontSize: font.caption, flexShrink: 1 },
     queueAction: { color: colors.accent, fontSize: font.caption, fontWeight: "600" },
-    modalBackdrop: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      justifyContent: "flex-end",
-    },
-    menuPanel: {
-      backgroundColor: colors.surface,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      padding: 16,
-      paddingBottom: 28,
-      gap: 8,
-      maxHeight: "80%",
-    },
+
+
     menuTitle: {
       color: colors.textMuted,
       fontSize: font.eyebrow,
