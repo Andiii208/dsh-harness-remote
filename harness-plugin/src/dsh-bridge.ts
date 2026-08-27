@@ -96,7 +96,15 @@ export interface DshBridgeOptions {
   onStatus?: (line: string) => void;
   /** 失败帧回调（不中断桥接）。 */
   onError?: (err: unknown) => void;
+  /**
+   * 404 能力缓存的过期时间（毫秒），默认 24h（审计 2026-08-27 A6）。
+   * 此前永不过期：DSH Desktop 升级补齐方法后，桥接仍永远回 E_UNSUPPORTED，
+   * 只有重启远程才能恢复。过期后重新探测真实宿主。
+   */
+  unsupportedTtlMs?: number;
 }
+
+const DEFAULT_UNSUPPORTED_TTL_MS = 24 * 60 * 60 * 1000;
 
 export interface DshBridgeHandle {
   baseUrl: string;
@@ -242,8 +250,9 @@ export class DshBridge {
   private readonly reconnectTimers = new Set<ReturnType<typeof setTimeout>>();
   private unsubscribeRelay: (() => void) | null = null;
   private stopped = false;
-  /** 已探测为宿主不支持（HTTP 404）的方法缓存；短路后续调用。 */
-  private readonly unsupportedMethods = new Set<string>();
+  /** 已探测为宿主不支持（HTTP 404）的方法 → 首次命中时间；带 TTL，过期重探。 */
+  private readonly unsupportedMethods = new Map<string, number>();
+  private readonly unsupportedTtlMs: number;
   private readonly baseUrlValue: string;
 
   constructor(opts: DshBridgeOptions) {
@@ -256,6 +265,7 @@ export class DshBridge {
     this.getPeerId = opts.getPeerId ?? (() => undefined);
     this.onStatus = opts.onStatus;
     this.onError = opts.onError;
+    this.unsupportedTtlMs = opts.unsupportedTtlMs ?? DEFAULT_UNSUPPORTED_TTL_MS;
   }
 
   get baseUrl(): string {
@@ -317,17 +327,23 @@ export class DshBridge {
     if (!method) return;
 
     // 能力缓存：已知宿主不支持（HTTP 404）的方法直接短路，不再撞墙刷错误日志
-    // （审计 2026-08-23 P0-4：plugin.list / host.settings.* 在 Desktop 2.0.1 上 404）。
-    if (this.unsupportedMethods.has(method)) {
+    // （审计 2026-08-23 P0-4）。缓存带 TTL（A6）：过期后重新探测，
+    // DSH 升级补齐方法后无需重启远程即可恢复。
+    const unsupportedAt = this.unsupportedMethods.get(method);
+    if (unsupportedAt !== undefined && Date.now() - unsupportedAt < this.unsupportedTtlMs) {
       await this.sendRoute(to, {
         rpcId,
         ok: false,
         error: {
           code: "E_UNSUPPORTED",
-          message: `当前 DSH 宿主未实现 ${method}（已探测缓存，不再重试）`,
+          message: `当前 DSH 宿主未实现 ${method}（已探测缓存，稍后自动重探）`,
         },
       });
       return;
+    }
+    if (unsupportedAt !== undefined) {
+      this.unsupportedMethods.delete(method);
+      this.onStatus?.(`能力缓存已过期，重新探测 ${method}…`);
     }
 
     try {
@@ -346,8 +362,8 @@ export class DshBridge {
       });
     } catch (err) {
       if (err instanceof RpcError && err.code === "HTTP_404") {
-        this.unsupportedMethods.add(method);
-        this.onStatus?.(`DSH 宿主不支持 ${method}（HTTP 404）——已缓存，后续调用直接短路`);
+        this.unsupportedMethods.set(method, Date.now());
+        this.onStatus?.(`DSH 宿主不支持 ${method}（HTTP 404）——已缓存，24h 后自动重探`);
       } else {
         this.onError?.(err);
       }

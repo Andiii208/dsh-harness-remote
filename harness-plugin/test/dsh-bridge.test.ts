@@ -291,6 +291,62 @@ describe("DshBridge capability cache", () => {
     expect(statusLines.some((l) => l.includes("plugin.list") && l.includes("缓存"))).toBe(true);
   });
 
+  it("re-probes a cached 404 method after the TTL expires (A6)", async () => {
+    const fetchCalls: { url: string }[] = [];
+    const sent: Array<{ payload: Record<string, unknown> }> = [];
+    const statusLines: string[] = [];
+    let handler: ((env: RelayEnvelope) => void) | null = null;
+    const relay = {
+      onEnvelope: (fn: (env: RelayEnvelope) => void) => {
+        handler = fn;
+        return () => {};
+      },
+      send: async (env: unknown) => {
+        sent.push(env as { payload: Record<string, unknown> });
+      },
+      clientId: "console-test",
+    };
+    const bridge = new DshBridge({
+      baseUrl: "http://127.0.0.1:1",
+      relay: relay as never,
+      unsupportedTtlMs: 50,
+      fetchImpl: (async (input: string | URL | Request) => {
+        fetchCalls.push({ url: String(input) });
+        return {
+          ok: false,
+          status: 404,
+          json: async () => {
+            throw new Error("no body");
+          },
+        } as unknown as Response;
+      }) as unknown as typeof fetch,
+      onStatus: (l) => statusLines.push(l),
+    });
+    const dispatch = (method: string, rpcId: string) =>
+      (
+        bridge as unknown as {
+          handleRelayEnvelope: (env: RelayEnvelope) => Promise<void>;
+        }
+      ).handleRelayEnvelope({
+        type: "relay.route",
+        id: "env-x",
+        from: "device-1",
+        to: "console-test",
+        ts: Date.now(),
+        v: 1,
+        payload: { rpcId, method, to: "device-1" },
+      } as RelayEnvelope);
+
+    await dispatch("plugin.list", "r1");
+    await dispatch("plugin.list", "r2");
+    expect(fetchCalls).toHaveLength(1); // TTL 内短路
+    await new Promise((r) => setTimeout(r, 60));
+    await dispatch("plugin.list", "r3");
+    expect(fetchCalls).toHaveLength(2); // 过期后重探
+    expect(statusLines.some((l) => l.includes("重新探测 plugin.list"))).toBe(true);
+    void handler;
+  });
+
   it("does not cache non-404 failures", async () => {
     const fetchCalls: { url: string }[] = [];
     const { sent, onError, dispatch } = makeBridge(fetchCalls, 500);
