@@ -23,17 +23,19 @@ function normalizePath(p: string): string {
   return p.replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
-function goalLabel(status?: string): string {
+type GoalLabelKey = "goalRunning" | "goalPaused" | "goalCompleted";
+
+function goalStatusKey(status?: string): GoalLabelKey | null {
   switch (status) {
     case "active":
-      return "进行中";
+      return "goalRunning";
     case "paused":
-      return "已暂停";
+      return "goalPaused";
     case "complete":
     case "completed":
-      return "已完成";
+      return "goalCompleted";
     default:
-      return status ?? "";
+      return null;
   }
 }
 
@@ -52,6 +54,9 @@ function FolderIcon({ color, size = 20 }: { color: string; size?: number }) {
 }
 
 function GoalPill({ status, colors }: { status?: string; colors: ReturnType<typeof useTheme>["colors"] }) {
+  const { t } = useI18n();
+  const key = goalStatusKey(status);
+  const statusLabel = key ? t.chat[key] : (status ?? "");
   if (!status) return null;
   const done = status === "complete" || status === "completed";
   return (
@@ -70,7 +75,7 @@ function GoalPill({ status, colors }: { status?: string; colors: ReturnType<type
         done && { color: colors.success, backgroundColor: "rgba(46,158,91,0.08)" },
       ]}
     >
-      {goalLabel(status)}
+      {statusLabel}
     </Text>
   );
 }
@@ -399,8 +404,11 @@ export default function SessionsScreen() {
               <View style={[styles.rowDot, { backgroundColor: item.session.running ? colors.success : colors.textDim }]} />
               <View style={styles.rowBody}>
                 <View style={styles.rowHeader}>
-                  <Text style={styles.rowTitle} numberOfLines={1}>
-                    {item.session.title ?? item.session.id}
+                  <Text
+                    style={[styles.rowTitle, item.session.title ? null : styles.rowTitleFallback]}
+                    numberOfLines={1}
+                  >
+                    {item.session.title ?? `${item.session.id.slice(0, 16)}…`}
                   </Text>
                   <GoalPill status={item.session.goalStatus} colors={colors} />
                   {item.session.contextPercent !== undefined && item.session.contextPercent >= 70 && (
@@ -632,6 +640,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
     rowBody: { flex: 1, gap: 3 },
     rowHeader: { flexDirection: "row", alignItems: "center", gap: space.x2 },
     rowTitle: { color: colors.text, fontSize: 15 * scale, fontWeight: "600", letterSpacing: -0.2, flexShrink: 1 },
+    rowTitleFallback: { fontFamily: font.monoMedium, fontSize: 13 * scale, color: colors.textMuted },
     rowMeta: { flexDirection: "row", alignItems: "center", gap: space.x2 },
     time: { color: colors.textMuted, fontSize: 12, fontFamily: font.mono },
     rowPreview: { color: colors.textMuted, fontSize: font.caption * scale, lineHeight: 18 * scale, letterSpacing: 0.1 },

@@ -398,7 +398,7 @@ export default function SettingsScreen() {
             </>
           )}
           {defaults.models.length === 0 && defaults.thinking === undefined && (
-            <Text style={styles.hint}>宿主未提供默认模型/思考强度配置。</Text>
+            <Text style={styles.hint}>{t.settings.defaultsMissingHint}</Text>
           )}
         </Group>
       )}
@@ -406,8 +406,8 @@ export default function SettingsScreen() {
       {pluginsRowVisible(pluginRead, pluginCount) && (
         <Group eyebrow={t.settings.plugins}>
           <PressableRow
-            label="用户插件"
-            value={`${pluginCount} 个可用`}
+            label={t.settings.userPlugins}
+            value={`${pluginCount} ${t.settings.pluginsAvailable}`}
             onPress={() => router.push("/plugins" as never)}
             last
           />
@@ -416,14 +416,14 @@ export default function SettingsScreen() {
 
       <Group eyebrow={t.settings.display}>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>外观</Text>
-          <Text style={styles.rowValue}>{preference === "light" ? "浅色" : preference === "dark" ? "深色" : "跟随系统"}</Text>
+          <Text style={styles.rowLabel}>{t.settings.appearanceTitle}</Text>
+          <Text style={styles.rowValue}>{preference === "light" ? t.settings.appearanceCurrentLight : preference === "dark" ? t.settings.appearanceCurrentDark : t.settings.appearanceCurrentSystem}</Text>
         </View>
         <View style={styles.optionsRow}>
           {([
-            ["light", "浅色"],
-            ["dark", "深色"],
-            ["system", "跟随系统"],
+            ["light", t.settings.appearanceLight],
+            ["dark", t.settings.appearanceDark],
+            ["system", t.settings.appearanceSystem],
           ] as Array<[ThemePreference, string]>).map(([value, label]) => (
             <OptionChip
               key={value}
@@ -436,16 +436,16 @@ export default function SettingsScreen() {
             />
           ))}
         </View>
-        <Text style={styles.hint}>默认浅色；深色模式适合夜间使用，跟随系统会随手机外观自动切换。</Text>
+        <Text style={styles.hint}>{t.settings.appearanceHint}</Text>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>语言 / Language</Text>
-          <Text style={styles.rowValue}>{locale === "zh-CN" ? "中文" : "English"}</Text>
+          <Text style={styles.rowLabel}>{t.settings.languageTitle}</Text>
+          <Text style={styles.rowValue}>{locale === "zh-CN" ? t.settings.languageZh : t.settings.languageEn}</Text>
         </View>
         <View style={styles.optionsRow}>
           {(["zh-CN", "en"] as const).map((lang) => (
             <OptionChip
               key={lang}
-              label={lang === "zh-CN" ? "中文" : "English"}
+              label={lang === "zh-CN" ? t.settings.languageZh : t.settings.languageEn}
               active={locale === lang}
               onPress={() => {
                 void haptic("light");
@@ -454,16 +454,16 @@ export default function SettingsScreen() {
             />
           ))}
         </View>
-        <Text style={styles.hint}>中英界面切换立即生效并保存在本机。</Text>
+        <Text style={styles.hint}>{t.settings.languageHint}</Text>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>字体大小</Text>
-          <Text style={styles.rowValue}>{fontSize === "small" ? "小" : fontSize === "large" ? "大" : "标准"}</Text>
+          <Text style={styles.rowLabel}>{t.settings.fontTitle}</Text>
+          <Text style={styles.rowValue}>{fontSize === "small" ? t.settings.fontSmall : fontSize === "large" ? t.settings.fontLarge : t.settings.fontStandard}</Text>
         </View>
         <View style={styles.optionsRow}>
           {(["small", "standard", "large"] as FontSize[]).map((s) => (
             <OptionChip
               key={s}
-              label={s === "small" ? "小" : s === "large" ? "大" : "标准"}
+              label={s === "small" ? t.settings.fontSmall : s === "large" ? t.settings.fontLarge : t.settings.fontStandard}
               active={s === fontSize}
               onPress={() => {
                 void haptic("light");
@@ -472,7 +472,7 @@ export default function SettingsScreen() {
             />
           ))}
         </View>
-        <Text style={styles.hint}>只影响聊天正文与列表正文，不缩放 UI 框架。</Text>
+        <Text style={styles.hint}>{t.settings.fontHint}</Text>
       </Group>
 
       <Group eyebrow={t.settings.about}>
@@ -540,7 +540,9 @@ function createStyles(colors: ThemeColors) {
       fontSize: font.eyebrow,
       paddingHorizontal: 7,
       paddingVertical: 3,
-      backgroundColor: colors.surface2,
+      backgroundColor: colors.bg,
+      borderWidth: 1,
+      borderColor: colors.separator,
       borderRadius: radius.pill,
       overflow: "hidden",
     },

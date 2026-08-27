@@ -1,7 +1,7 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -54,6 +54,22 @@ function RootNavigator() {
   );
 }
 
+/** 主题内层壳：让手势根视图的底色跟随主题，深色冷启动不再闪白。 */
+function ThemedRootShell({
+  onLayout,
+  children,
+}: {
+  onLayout: () => void;
+  children: ReactNode;
+}) {
+  const { colors } = useTheme();
+  return (
+    <GestureHandlerRootView style={[styles.root, { backgroundColor: colors.bg }]} onLayout={onLayout}>
+      {children}
+    </GestureHandlerRootView>
+  );
+}
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     JetBrainsMono_400Regular,
@@ -91,9 +107,9 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <GestureHandlerRootView style={styles.root} onLayout={onLayout}>
-      <SafeAreaProvider>
-        <ThemeProvider>
+    <ThemeProvider>
+      <ThemedRootShell onLayout={onLayout}>
+        <SafeAreaProvider>
           <I18nProvider>
             <AppSettingsProvider>
               <ConnectionProvider>
@@ -101,12 +117,12 @@ export default function RootLayout() {
               </ConnectionProvider>
             </AppSettingsProvider>
           </I18nProvider>
-        </ThemeProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+        </SafeAreaProvider>
+      </ThemedRootShell>
+    </ThemeProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F7F7FA" },
+  root: { flex: 1 },
 });

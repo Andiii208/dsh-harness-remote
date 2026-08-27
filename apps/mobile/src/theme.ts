@@ -152,7 +152,7 @@ const dark: ThemeColors = {
   mist: "#BFD4FF",
   text: "#F2F2F6",
   textMuted: "#8E8E9C",
-  textDim: "#555560",
+  textDim: "#7A7A88",
   accent: "#5686FE", // DeepSeek Chat 深色模式主按钮蓝
   accentSoft: "rgba(86,134,254,0.12)",
   success: "#3ECF8E",
