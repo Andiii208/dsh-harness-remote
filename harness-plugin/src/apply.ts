@@ -89,12 +89,13 @@ export function apply(
 
   ctx.effect?.(() => async () => {
     disposeRpc();
-    await service.stop();
+    // 宿主退出走 dispose：不动持久化，重启后按用户上次意愿自启（A1）。
+    await service.dispose();
   }, "dsh-harness-remote: stop remote access");
 
   // 返回 dispose 供不支持 ctx.effect 的宿主显式调用。
   return () => {
     disposeRpc();
-    void service.stop();
+    void service.dispose();
   };
 }

@@ -133,4 +133,44 @@ describe("createRemoteAccessService", () => {
     await expect(service.start("tunnel")).resolves.toMatchObject({ running: true });
     await expect(service.stop()).resolves.toMatchObject({ running: false });
   });
+
+  it("dispose() releases resources but never touches persisted config (A1)", async () => {
+    let stopped = false;
+    const writes: Array<{ enabled?: boolean; mode?: string }> = [];
+    const service = createRemoteAccessService({
+      autoDetectDsh: false,
+      startImpl: async () => fakeHandle({ stop: async () => { stopped = true; } }),
+      qrDataUrlImpl: async () => "data:image/png;base64,x",
+      persist: {
+        read: () => null,
+        write: (c) => writes.push({ ...c }),
+      },
+    });
+    await service.start("tunnel");
+    await service.dispose();
+    expect(stopped).toBe(true);
+    expect(service.status().running).toBe(false);
+    // 只有 start 写过一次 enabled=true；dispose 不得追加写入。
+    expect(writes).toEqual([{ enabled: true, mode: "tunnel" }]);
+  });
+
+  it("stop() after dispose still persists enabled=false exactly once", async () => {
+    const writes: Array<{ enabled?: boolean; mode?: string }> = [];
+    const service = createRemoteAccessService({
+      autoDetectDsh: false,
+      startImpl: async () => fakeHandle(),
+      qrDataUrlImpl: async () => "data:image/png;base64,x",
+      persist: {
+        read: () => null,
+        write: (c) => writes.push({ ...c }),
+      },
+    });
+    await service.start("tunnel");
+    await service.dispose();
+    await service.stop();
+    expect(writes).toEqual([
+      { enabled: true, mode: "tunnel" },
+      { enabled: false, mode: "tunnel" },
+    ]);
+  });
 });

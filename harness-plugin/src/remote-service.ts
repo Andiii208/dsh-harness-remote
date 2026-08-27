@@ -39,7 +39,14 @@ export interface RemoteStatus {
 
 export interface RemoteAccessService {
   start(mode?: RemoteAccessMode, dshBaseUrl?: string): Promise<RemoteStatus>;
+  /** 用户显式停止：释放资源，并把持久化开关写回 enabled=false。 */
   stop(): Promise<RemoteStatus>;
+  /**
+   * 宿主/插件卸载时的清理（审计 2026-08-27 A1）：只释放资源，绝不动持久化配置。
+   * 之前 cleanup 走 stop() 会把用户「保持开启」的意愿抹成 enabled=false，
+   * 导致 DSH Desktop 优雅退出后远程永不自启（只有崩溃才意外保住）。
+   */
+  dispose(): Promise<RemoteStatus>;
   status(): RemoteStatus;
 }
 
@@ -191,7 +198,8 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
     return startPromise;
   }
 
-  async function stop(): Promise<RemoteStatus> {
+  /** 停止并释放底层资源（relay/tunnel/console/桥接），不动持久化。 */
+  const releaseResources = async (): Promise<RemoteStatus> => {
     if (dshRetryTimer) {
       clearTimeout(dshRetryTimer);
       dshRetryTimer = null;
@@ -202,14 +210,24 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
       await h.stop().catch(() => {});
     }
     status = { ...status, running: false, starting: false, code: null, qrPayload: null, qrDataUrl: null, pairedDeviceId: null, dshUrl: null, dshDetected: false };
-    // P0-1：显式停止也要持久化（保留最后模式，便于下次开启复用）。
+    return status;
+  };
+
+  async function stop(): Promise<RemoteStatus> {
+    const next = await releaseResources();
+    // P0-1：用户显式停止才落盘 enabled=false（保留最后模式，便于下次开启复用）。
     try {
       options.persist?.write({ enabled: false, ...(status.mode ? { mode: status.mode } : {}) });
     } catch {
       /* 同上，降级不抛错 */
     }
-    return status;
+    return next;
   }
 
-  return { start, stop, status: () => status };
+  async function dispose(): Promise<RemoteStatus> {
+    // 宿主关闭/插件卸载：保留持久化配置，重启后按用户意愿自启（审计 2026-08-27 A1）。
+    return releaseResources();
+  }
+
+  return { start, stop, dispose, status: () => status };
 }
