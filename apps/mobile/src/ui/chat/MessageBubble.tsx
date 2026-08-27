@@ -13,7 +13,7 @@ import type { TranscriptMessage } from "../../data/SessionStore";
 import { useConnection } from "../../transport/ConnectionProvider";
 import { useI18n } from "../../i18n";
 import { useAppSettings } from "../../data/appSettingsContext";
-import { font, radius, type ThemeColors } from "../../theme";
+import { font, type ThemeColors } from "../../theme";
 import { useTheme } from "../../theme-context";
 import { StreamingCursor } from "../StreamingCursor";
 import { haptic } from "../haptics";

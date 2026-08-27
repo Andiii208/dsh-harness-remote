@@ -14,7 +14,7 @@ import AnimatedCard from "react-native-reanimated";
 import * as Network from "expo-network";
 import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
-import { useEntering, useExiting } from "../src/ui/anim";
+import { useEntering } from "../src/ui/anim";
 import { useConnection } from "../src/transport/ConnectionProvider";
 import { isRelayUrl, toRelayWsUrl } from "../src/transport/relayMode";
 import { tokenStore } from "../src/data/secureStoreAdapter";

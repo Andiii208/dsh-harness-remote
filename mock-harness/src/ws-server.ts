@@ -19,8 +19,10 @@ function playStream(
   ws: WebSocket,
   stream: "mux" | "host",
   fixtures: FixtureSet[],
-  state: ApiServerState,
+  _state: ApiServerState,
 ): void {
+    void _state;
+
   void (async () => {
     for (const fixture of fixtures) {
       const frames = fixture.wsFrames.filter((f) => f.stream === stream);

@@ -73,11 +73,12 @@ class TestClient {
       if (env) return Promise.resolve(env);
     }
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(
+      const timerRef: { current?: NodeJS.Timeout } = {};
+      timerRef.current = setTimeout(
         () => reject(new Error(`timeout waiting for ${type}`)),
         timeoutMs,
       );
-      this.waiters.push({ type, resolve, timer });
+      this.waiters.push({ type, resolve, timer: timerRef.current! });
     });
   }
 
@@ -88,11 +89,11 @@ class TestClient {
         reject(new Error(`unexpected ${type}`));
         return;
       }
-      let timer: NodeJS.Timeout;
+      const timerRef: { current?: NodeJS.Timeout } = {};
       const waiter = {
         type,
         resolve: (): void => {
-          clearTimeout(timer);
+          clearTimeout(timerRef.current);
           reject(new Error(`unexpected ${type}`));
         },
         timer: setTimeout(() => {
@@ -101,8 +102,7 @@ class TestClient {
           resolve();
         }, timeoutMs),
       };
-      timer = waiter.timer;
-      this.waiters.push(waiter);
+      if (timerRef.current !== undefined) this.waiters.push(waiter);
     });
   }
 

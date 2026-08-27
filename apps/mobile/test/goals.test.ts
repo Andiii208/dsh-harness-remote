@@ -1,15 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { GoalsClient, type GoalRef, type GoalsApi } from "../src/data/goals";
+import { GoalsClient, type GoalRef } from "../src/data/goals";
 
 const ref: GoalRef = { id: "g1", revision: 3 };
-
-function stubApi(handler: (method: string, payload: unknown) => unknown): GoalsApi {
-  return {
-    async unary(method, payload) {
-      return { ok: true, result: handler(method, payload) };
-    },
-  };
-}
 
 describe("GoalsClient", () => {
   it("create calls goal.create and returns ref", async () => {

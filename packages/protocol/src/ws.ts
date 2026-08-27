@@ -18,7 +18,6 @@ export interface WsLike {
 
 export type WsCtor = new (url: string) => WsLike;
 
-const OPEN = 1;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);

@@ -484,17 +484,18 @@ export class RelayClient {
     return payload as unknown as RelayRegistration;
   }
 
-  private async handleMessage(data: unknown): Promise<void> {
-    let env: RelayEnvelope | null = null;
-    if (typeof data === "string") {
-      try {
-        env = parseRelayEnvelope(JSON.parse(data) as unknown);
-      } catch {
-        env = null;
-      }
-    } else {
-      env = parseRelayEnvelope(data);
+  /** 宽容解析入站信封；非法/未知帧返回 null 直接忽略。 */
+  private parseEnvelope(data: unknown): RelayEnvelope | null {
+    try {
+      const raw = typeof data === "string" ? (JSON.parse(data) as unknown) : data;
+      return parseRelayEnvelope(raw);
+    } catch {
+      return null;
     }
+  }
+
+  private async handleMessage(data: unknown): Promise<void> {
+    const env = this.parseEnvelope(data);
     if (!env) return;
 
     if (env.type === "relay.register.ack") {

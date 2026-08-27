@@ -256,7 +256,7 @@ describe("RpcClient real DSH envelope compatibility", () => {
     const client = new RpcClient({
       baseUrl: "http://h:3080",
       fetchImpl: async (_url, init) => {
-        const req = JSON.parse(String(init?.body)) as { rpcId: string };
+        void JSON.parse(String(init?.body));
         return jsonResponse({ accepted: true });
       },
     });

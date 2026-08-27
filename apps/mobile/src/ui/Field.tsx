@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
+import { StyleSheet, TextInput, View, type TextInputProps } from "react-native";
 import { font, radius } from "../theme";
 import { useTheme } from "../theme-context";
 import { SectionLabel } from "./SectionLabel";

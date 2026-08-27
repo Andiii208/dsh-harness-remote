@@ -416,7 +416,7 @@ describe("RelayTransport.connect", () => {
       peerPublicKey: console_.publicKeyJwk,
     });
 
-    const unaryP = conn.unary("host.describe", { want: "list" });
+    const _unaryP = conn.unary("host.describe", { want: "list" });
     await vi.waitFor(() => expect(ws.sent).toHaveLength(4));
     const route = JSON.parse(ws.sent[3]!) as {
       type: string;

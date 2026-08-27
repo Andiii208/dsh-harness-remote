@@ -43,7 +43,7 @@ import { autoReconnectStore } from "../discovery/autoReconnectStoreAdapter";
 import { tokenStore, secureStoreApi } from "../data/secureStoreAdapter";
 import { approvalHistoryStore } from "../data/approvalHistoryStoreAdapter";
 import { KeepaliveScheduler } from "../notify/keepalive";
-import { backgroundTaskApi, KEEPALIVE_TASK } from "../notify/keepaliveAdapter";
+import { backgroundTaskApi } from "../notify/keepaliveAdapter";
 import { GoalsClient, type GoalsApi } from "../data/goals";
 import { parseSkillList, type SkillEntry } from "../data/skillList";
 import { toImageMediaType, type ImageMediaType } from "../data/imageMessage";

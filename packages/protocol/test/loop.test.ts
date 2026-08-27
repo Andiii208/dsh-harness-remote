@@ -170,8 +170,7 @@ describe("ConnectionLoop states & resync", () => {
   it("jitter bounds: delays stay within [0.875, 1.125] × raw", async () => {
     const delays: number[] = [];
     const mk = (rand: () => number) => {
-      let loop!: ConnectionLoop;
-      loop = new ConnectionLoop({
+      const loop = new ConnectionLoop({
         endpoint: { host: "h", port: 3080 },
         transport: alwaysFailingTransport(),
         random: rand,
@@ -201,7 +200,7 @@ describe("ConnectionLoop states & resync", () => {
       onError: (e) => {
         errors.push(e);
       },
-      sleep: async (ms) => {
+      sleep: async () => {
         await new Promise((r) => setTimeout(r, 0));
         if (errors.length >= 1) loop.stop();
       },

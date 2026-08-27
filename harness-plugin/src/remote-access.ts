@@ -101,11 +101,14 @@ export function lanIp(): string | undefined {
     for (const net of nets ?? []) {
       if (net.family !== "IPv4" || net.internal) continue;
       const a = net.address;
-      let score = 0;
-      if (a.startsWith("192.168.")) score = 4;
-      else if (a.startsWith("10.")) score = 3;
-      else if (/^172\.(1[6-9]|2\d|3[01])\./.test(a)) score = 2;
-      else score = 1;
+      // RFC1918 分段打分：192.168 优先，其次 10.、172.16-31，其他地址兜底。
+      const score = a.startsWith("192.168.")
+        ? 4
+        : a.startsWith("10.")
+          ? 3
+          : /^172\.(1[6-9]|2\d|3[01])\./.test(a)
+            ? 2
+            : 1;
       if (/(wi-fi|wlan|ethernet|以太)/.test(lower)) score += 1;
       candidates.push({ addr: a, score });
     }

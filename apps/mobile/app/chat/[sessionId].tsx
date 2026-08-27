@@ -2,7 +2,6 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -33,7 +32,6 @@ import { BottomSheet } from "../../src/ui/BottomSheet";
 import { SkeletonRow } from "../../src/ui/SkeletonRow";
 import { EmptyState } from "../../src/ui/EmptyState";
 import { Button } from "../../src/ui/Button";
-import { SectionLabel } from "../../src/ui/SectionLabel";
 import { useTheme } from "../../src/theme-context";
 import { haptic } from "../../src/ui/haptics";
 
@@ -665,7 +663,7 @@ export default function ChatScreen() {
             </View>
           </View>
         }
-        renderItem={({ item, index }) =>
+        renderItem={({ item }) =>
           item.kind === "day" ? (
             <View style={styles.dayDivider}>
               <Text style={styles.dayDividerText}>{item.label}</Text>

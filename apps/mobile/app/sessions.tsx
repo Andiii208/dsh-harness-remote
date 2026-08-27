@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FlashList } from "@shopify/flash-list";
 import Svg, { Path } from "react-native-svg";

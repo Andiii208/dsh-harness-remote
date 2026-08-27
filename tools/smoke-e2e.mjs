@@ -56,7 +56,9 @@ function startMockDsh() {
         let rpcId = "r1";
         try {
           rpcId = JSON.parse(body).rpcId ?? rpcId;
-        } catch {}
+        } catch {
+      /* 忽略 */
+    }
         const reply = (value) => {
           res.writeHead(200, { "content-type": "application/json" });
           res.end(JSON.stringify({ type: "server-response", rpcId, result: { ok: true, value } }));
@@ -151,14 +153,20 @@ try {
 } finally {
   try {
     conn?.close();
-  } catch {}
+  } catch {
+      /* 忽略 */
+    }
   try {
     await handle?.stop();
-  } catch {}
+  } catch {
+      /* 忽略 */
+    }
   try {
     mock?.server.closeAllConnections?.();
     mock?.server.close();
-  } catch {}
+  } catch {
+      /* 忽略 */
+    }
   clearTimeout(watchdog);
   // 给 libuv 一点收尾时间，避免 Windows 上退出时的 handle 竞态断言噪音。
   await new Promise((r) => setTimeout(r, 250));

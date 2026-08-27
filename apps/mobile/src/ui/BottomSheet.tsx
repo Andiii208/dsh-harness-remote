@@ -7,7 +7,7 @@
  * - 内容由调用方渲染，保留各自菜单项样式。
  */
 
-import { Modal, Pressable, StyleSheet, View, type ViewStyle } from "react-native";
+import { Modal, Pressable, StyleSheet, View } from "react-native";
 import type { ReactNode } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme-context";

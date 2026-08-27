@@ -222,21 +222,15 @@ describe("slimSessionListResult", () => {
 });
 
 describe("DshBridge capability cache", () => {
-  interface FakeRelay {
-    onEnvelope: (fn: (env: RelayEnvelope) => void) => () => void;
-    send: (env: unknown) => Promise<void>;
-    clientId: string;
-  }
-
   function makeBridge(fetchCalls: { url: string }[], status: number) {
     const sent: Array<{ payload: Record<string, unknown> }> = [];
     const statusLines: string[] = [];
-    let handler: ((env: RelayEnvelope) => void) | null = null;
-    const relay = {
-      onEnvelope: (fn: (env: RelayEnvelope) => void) => {
-        handler = fn;
-        return () => {};
-      },
+    const relay: Record<string, unknown> & {
+      onEnvelope: (fn: (env: RelayEnvelope) => void) => () => void;
+      send: (env: unknown) => Promise<void>;
+      clientId: string;
+    } = {
+      onEnvelope: () => () => {},
       send: async (env: unknown) => {
         sent.push(env as { payload: Record<string, unknown> });
       },

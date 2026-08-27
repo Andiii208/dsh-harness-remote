@@ -4,7 +4,7 @@
  */
 
 import { useMemo } from "react";
-import { StyleSheet, Text, type TextProps, type TextStyle } from "react-native";
+import { Text, type TextProps, type TextStyle } from "react-native";
 import { font, type ThemeColors } from "../theme";
 import { useTheme } from "../theme-context";
 import { useAppSettings } from "../data/appSettingsContext";

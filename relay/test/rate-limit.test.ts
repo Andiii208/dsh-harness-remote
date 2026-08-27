@@ -7,7 +7,7 @@ import { createRateLimiter } from "../src/index.js";
 
 describe("createRateLimiter", () => {
   it("allows up to burst then rejects with retryAfterMs", () => {
-    let now = 1_000;
+    const now = 1_000;
     const limiter = createRateLimiter({
       perMinute: 60_000, // 1 token per ms
       burst: 2,
@@ -39,7 +39,7 @@ describe("createRateLimiter", () => {
   });
 
   it("tracks clients independently", () => {
-    let now = 1_000;
+    const now = 1_000;
     const limiter = createRateLimiter({
       perMinute: 60_000,
       burst: 1,

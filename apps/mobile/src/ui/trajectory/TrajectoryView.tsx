@@ -4,7 +4,7 @@
  */
 
 import { useMemo, useState, type MutableRefObject } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import Svg, { Rect } from "react-native-svg";
 import type { TranscriptStep } from "../../data/transcriptSteps";
@@ -21,7 +21,7 @@ export function TrajectoryView({
   listRef,
 }: {
   steps: TranscriptStep[];
-  listRef: MutableRefObject<FlashListRef<any> | null>;
+  listRef: MutableRefObject<FlashListRef<TranscriptStep> | null>;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -36,9 +36,9 @@ export function TrajectoryView({
     () => (
       <View style={styles.header}>
         <View style={styles.statsRow}>
-          <Stat label="Duration" value={formatStepDuration(totalMs)} colors={colors} styles={styles} />
-          <Stat label="Turns" value={String(turns)} colors={colors} styles={styles} />
-          <Stat label="Calls" value={String(calls)} colors={colors} styles={styles} />
+          <Stat label="Duration" value={formatStepDuration(totalMs)} styles={styles} />
+          <Stat label="Turns" value={String(turns)} styles={styles} />
+          <Stat label="Calls" value={String(calls)} styles={styles} />
         </View>
         <View style={styles.lanesCard}>
           <Text style={styles.lanesTitle}>TIMELINE</Text>
@@ -129,12 +129,10 @@ export function TrajectoryView({
 function Stat({
   label,
   value,
-  colors,
   styles,
 }: {
   label: string;
   value: string;
-  colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }) {
   return (

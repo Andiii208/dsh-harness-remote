@@ -21,6 +21,7 @@ jobs:
       # workspace 依赖的类型/产物来自各自 dist（gitignored）——先构建再检查
       - run: pnpm -r build
       - run: pnpm typecheck
+      - run: pnpm lint --max-warnings=50
       - run: pnpm test
       # 字号令牌走查门禁（P1-3）：v8 白名单外出现原始 fontSize 即失败
       - name: Font token lint (--strict)

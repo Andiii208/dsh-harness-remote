@@ -7,7 +7,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useColorScheme } from "react-native";
 import type { PropsWithChildren } from "react";
-import { createTheme, type ThemeColors, type ThemePreference, type ThemeScheme, type ThemeValue } from "./theme";
+import { createTheme, type ThemePreference, type ThemeScheme, type ThemeValue } from "./theme";
 import { themePreferenceStore } from "./data/themePreferenceStoreAdapter";
 
 export type { ThemeColors, ThemeScheme, ThemeValue, ThemePreference } from "./theme";

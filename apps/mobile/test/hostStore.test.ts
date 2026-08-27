@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HostStore, MAX_RECENT_HOSTS, type RecentHost } from "../src/discovery/hostStore";
+import { HostStore, MAX_RECENT_HOSTS } from "../src/discovery/hostStore";
 import type { SecureStoreApi } from "../src/data/tokenStore";
 
 function memStore(): SecureStoreApi & { dump(): Record<string, string> } {

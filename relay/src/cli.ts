@@ -3,7 +3,7 @@
  * relay CLI — start the M3.1 control-plane MVP.
  */
 
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { createRelayServer } from "./server.js";
 import { randomPairingCode } from "./credential.js";
 

@@ -224,8 +224,8 @@ describe("SessionStore", () => {
     const s = new SessionStore();
     s.applyFrame(frame("session/projection", { sessionId: "s1", goal: { status: "active" }, tokenUsage: { total: 100 } }) as never);
     s.applySessionList([
-      { id: "s1", title: "deploy", workspace: "D:\app" },
-      { id: "s2", title: "debug", workspace: "D:\app" },
+      { id: "s1", title: "deploy", workspace: "D:/app" },
+      { id: "s2", title: "debug", workspace: "D:/app" },
     ] as never);
     const list = s.getSessions();
     expect(list.map((x) => x.id)).toEqual(["s2", "s1"]); // 按 updatedAt 倒序

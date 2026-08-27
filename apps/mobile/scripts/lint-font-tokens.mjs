@@ -37,7 +37,6 @@ const re = /fontSize:\s*(\d+(?:\.\d+)?)/g;
 const GLYPH_STYLE = /(icon|arrow|chevron|glyph|emoji|dot)/i;
 for (const file of files) {
   const text = readFileSync(file, "utf8");
-  const lines = text.split("\n");
   let m;
   while ((m = re.exec(text)) !== null) {
     const v = Number(m[1]);

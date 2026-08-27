@@ -229,16 +229,18 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
       return;
     }
 
-    let env: RelayEnvelope | null = null;
-    try {
-      env = parseRelayEnvelope(JSON.parse(text) as unknown);
-    } catch {
-      env = null;
-    }
-    if (!env) {
+    const parsedEnv = (() => {
+      try {
+        return parseRelayEnvelope(JSON.parse(text) as unknown);
+      } catch {
+        return null;
+      }
+    })();
+    if (!parsedEnv) {
       sendError(ws, "0", "E_BAD_ENVELOPE", "invalid relay envelope", "");
       return;
     }
+    const env = parsedEnv;
 
     logLine("rx", env);
     const authClientId = socketAuth.get(ws);
