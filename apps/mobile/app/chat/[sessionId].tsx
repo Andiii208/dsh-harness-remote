@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { useConnection } from "../../src/transport/ConnectionProvider";
 import { useI18n } from "../../src/i18n";
@@ -471,11 +472,16 @@ export default function ChatScreen() {
     }
   };
 
+  // B5：键盘偏移与底部安全区不再用魔法数——偏移取原生 Stack header
+  // 标准高度，输入栏底部 padding 取设备手势条 inset。
+  const insets = useSafeAreaInsets();
+  const keyboardOffset = 52 + insets.top;
+
   return (
     <KeyboardAvoidingView
       style={styles.screen}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={90}
+      keyboardVerticalOffset={keyboardOffset}
     >
       <Stack.Screen
         options={{
@@ -1019,7 +1025,7 @@ onPress={() => setGoalEditVisible(false)}
 
 </BottomSheet>
 
-      <View style={styles.inputBar}>
+      <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         {(turnCount > 0 || stepCount > 0) && (
           <View style={styles.statsPillWrap}>
             <Pressable
