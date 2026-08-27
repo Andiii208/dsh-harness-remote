@@ -16,10 +16,8 @@ import {
 import {
   LanTransport,
   RelayTransport,
-  readHostSettings,
   readPluginList,
   type ConnectionState,
-  type HostSettings,
   type PluginListResult,
 } from "@dsh-remote/protocol";
 import {
@@ -94,9 +92,7 @@ export interface ConnectionApi {
   /** R2：执行宿主插件命令；读不到/离线返回 null。 */
   pluginExec(commandId: string, args?: Record<string, unknown>): Promise<{ ok: boolean; result?: unknown; error?: { code: string; message: string } } | null>;
   /** R3：读取宿主设置；宿主不支持/离线返回 null（UI 自动隐藏）。 */
-  hostSettingsGet(): Promise<HostSettings | null>;
   /** R3：写回宿主设置；宿主不支持返回 false。 */
-  hostSettingsSet(patch: { model?: string; thinking?: string }): Promise<boolean>;
   /** 加载会话历史转录（session.history）；支持 beforeSeq 分页。成功返回 true，失败返回 false。 */
   loadHistory(sessionId: string, maxMessages?: number, beforeSeq?: number): Promise<boolean>;
   /** 读取会话可用模型列表与当前模型。 */
@@ -463,29 +459,6 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  // R3：宿主设置读取/写回。读不到返回 null（UI 隐藏），写失败返回 false。
-  const hostSettingsGet = useCallback(async (): Promise<HostSettings | null> => {
-    const c = pipelineRef.current?.loop.connection;
-    if (!c) return null;
-    try {
-      const r = await c.unary("host.settings.get", {});
-      if (!r.ok) return null;
-      return readHostSettings(r.result);
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const hostSettingsSet = useCallback(async (patch: { model?: string; thinking?: string }): Promise<boolean> => {
-    const c = pipelineRef.current?.loop.connection;
-    if (!c) return false;
-    try {
-      const r = await c.unary("host.settings.set", patch);
-      return r.ok;
-    } catch {
-      return false;
-    }
-  }, []);
 
   const transcript = useCallback((sessionId: string) => {
     return pipelineRef.current?.store.getTranscript(sessionId) ?? [];
@@ -878,8 +851,6 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       interruptStream,
       pluginList,
       pluginExec,
-      hostSettingsGet,
-      hostSettingsSet,
       loadHistory,
       sessionModels,
       selectModel,
@@ -898,7 +869,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       agentPresetSelect,
       skillList,
     }),
-    [state, describe, relayPeerId, lastError, givenUp, retry, stopRetrying, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, createSession, connect, disconnect, sendMessage, sendImageMessage, attachment, respond, interruptStream, transcript, liveMessage, steps, setNotificationsEnabled, pluginList, pluginExec, hostSettingsGet, hostSettingsSet, loadHistory, sessionModels, selectModel, executeCommand, queueItems, jobs, updateQueue, renameSession, forkSession, workspaceList, archiveSession, searchSessions, settingsDescribe, settingsMutate, agentPresetList, agentPresetSelect, skillList],
+    [state, describe, relayPeerId, lastError, givenUp, retry, stopRetrying, version, notifications, notificationsEnabled, goals, setGoalStatus, refreshSessions, createSession, connect, disconnect, sendMessage, sendImageMessage, attachment, respond, interruptStream, transcript, liveMessage, steps, setNotificationsEnabled, pluginList, pluginExec, loadHistory, sessionModels, selectModel, executeCommand, queueItems, jobs, updateQueue, renameSession, forkSession, workspaceList, archiveSession, searchSessions, settingsDescribe, settingsMutate, agentPresetList, agentPresetSelect, skillList],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;
