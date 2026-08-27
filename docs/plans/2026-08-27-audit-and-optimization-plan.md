@@ -139,6 +139,7 @@
 - P0：A1→230cbd0、A2/C5→7b2c807、A3→5be0d71、A4/A5→647f5cf、A6→bbcb6ba、A11→f47d702、死代码→be7c331
 - P1：速赢批→0791f15、图标→337d44b、BottomSheet×14→5c400ac、ErrorCard→c63fc70
 - 验证：typecheck 7 包全绿；test 501/501；字号门禁 strict 通过。完整记录见 PROGRESS.md 同日条目。
+- 追加安全批（C1/C2）：CSPRNG 配对码 + register 公钥绑定防顶替（relay 40/40）。勘误：P2b pair 失败锁定此前已存在。C3-C7 仍列后续。
 
 仍未完成（后续批次按序）：
 1. 0.4 tunnel URL 轮换闭环（命名隧道引导 + `tunnel.url-changed` 控制面帧推送手机端）

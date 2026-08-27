@@ -1,5 +1,10 @@
 # PROGRESS
 
+## 2026-08-27 追加批次：公网发布门槛级安全速赢（C1/C2）
+- randomPairingCode() CSPRNG 配对码替换 Math.random（store/sqlite 支持 generatePairingCode 注入，server/CLI 统一喂入）；
+- register 公钥绑定防顶替：同 clientId 换公钥重复注册回 E_AUTH，不带公钥沿用旧绑定不覆盖记录；回归测试覆盖抢注/空钥重注册/合法重连三态。
+- 回归：relay 包 typecheck+test 40/40。审计勘误：未认证 pair 爆破锁定（P2b）此前已存在。
+
 ## 2026-08-27 全面审计后自主执行：P0 可用性救援 7 项 + P1 观感 4 批（本机 10 commits）
 - 审计来源：4 路并行深查（UI/功能完整性/后端链路/工程健康度）产出 `docs/plans/2026-08-27-audit-and-optimization-plan.md`（A17+B11+C7+D4 条发现，全部带文件:行号）。
 - **P0 可用性（LAN 模式自此「电脑重启→手机回连免扫码」）**：
