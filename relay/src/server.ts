@@ -630,7 +630,13 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
     },
     async stop() {
       if (!started) return;
-      for (const ws of wss.clients) ws.close();
+      // 先同步摘除所有连接的认证态/在线位（此时 store 仍可写，落库成功），
+      // 再发起优雅关闭——残留 close 事件即使后到，也会被 store 的
+      // isOpen 守卫无害化。
+      for (const ws of [...wss.clients]) {
+        unauthSocket(ws);
+        ws.close();
+      }
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
         setTimeout(resolve, 1000).unref();

@@ -28,6 +28,20 @@ function pairKey(a: string, b: string): string {
   return [a, b].sort().join("\u0000");
 }
 
+/**
+ * 库是否仍可写（A2 关闭时序防御）：relay.stop() 关闭 store 后，残留 socket
+ * 的 close 事件仍会补一次 setOnline(false)——库已关时直接无害放行，
+ * 避免 ERR_INVALID_STATE "database is not open" 带崩进程。
+ */
+function isDbOpen(db: DatabaseSync): boolean {
+  try {
+    const openFlag = (db as { isOpen?: boolean }).isOpen;
+    return openFlag === undefined ? true : openFlag;
+  } catch {
+    return true;
+  }
+}
+
 function toClientRecord(row: Record<string, unknown>): ClientRecord {
   return {
     clientId: String(row.client_id),
@@ -77,6 +91,7 @@ export function createSqliteRelayStore(
   `);
 
   const getClient = (clientId: string): ClientRecord | undefined => {
+    if (!isDbOpen(db)) return undefined;
     const row = db.prepare(
       `SELECT client_id, kind, public_key, push_token, platform, online,
               registered_at, last_seen_at
@@ -114,6 +129,7 @@ export function createSqliteRelayStore(
     getClient,
 
     setOnline(clientId: string, online: boolean): boolean {
+      if (!isDbOpen(db)) return false;
       const res = db.prepare(
         `UPDATE relay_clients SET online = ?, last_seen_at = ? WHERE client_id = ?`,
       ).run(online ? 1 : 0, now(), clientId);
