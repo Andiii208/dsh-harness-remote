@@ -141,12 +141,19 @@
 - 验证：typecheck 7 包全绿；test 501/501；字号门禁 strict 通过。完整记录见 PROGRESS.md 同日条目。
 - 追加安全批（C1/C2）：CSPRNG 配对码 + register 公钥绑定防顶替（relay 40/40）。勘误：P2b pair 失败锁定此前已存在。C3-C7 仍列后续。
 
-仍未完成（后续批次按序）：
-1. 0.4 tunnel URL 轮换闭环（命名隧道引导 + `tunnel.url-changed` 控制面帧推送手机端）
-2. P0.8 的 App 端「上线主动拉审批 pending」兜底；0.9 失败可见化扩展到历史/附件/模型列表
-3. B1 双画布拍板（建议 v9.1 文档化 paper+hero 混合策略）、B2 深色最近主机卡、B5 chat 拆分与 insets、B7/B8 AppText 缩放与动效接线
-4. C1-C7 安全加固（register/pair 免认证限速与防覆盖 publicKey、CSPRNG 配对码、明文降级告警——公网发布门槛）
-5. P3：ESLint、页面级渲染测试、事件持久化、图片缓存、mDNS
+第二批（同日继续，全部完成）：
+- 0.4 ✅ tunnel.urlChanged 推送闭环：protocol onHostEvent 接缝（relay.ts，含回归测试）→ console remote-access onUrlUpdate 推送（E2E 密封路径）→ App 迁移最近主机 + remote-url-changed 事件/通知（88bd105）
+- 0.9 ✅ 历史加载 ErrorCard+重试；图片附件失败占位可点按重试；sessionModels 维持「不支持即隐藏」设计口径（6ebe7ca）
+- B1/B2 ✅ v9.1 双画布裁定入档 + index 深色主机卡 heroCard 化（b37362c）；B5 ✅ chat insets+键盘偏移去魔法数（66356b4）；B7/B8/1.9 ✅ AppText scale 全组件生效（variantBase 纯函数佐证）、sessions/index 入场动效、ThemeCrossfade 背景交叉淡出（f8a15c2→931e1e7）
+- C3/C4 ✅ 明文兜底拒绝+派生失败留痕、ws maxPayload=8MiB 含 1009 回归测试（d4e9dc9）；C6 ✅ cloudflared 钉版本 2026.8.2 + CLOUDFLARED_SHA256 fail-closed 校验（98cf540）；C7 ✅ MANUAL 普通用户部署章（d5ebac2）
+- P3 ✅ ESLint flat config 全仓 0 error + CI lint 门禁（c8041dc）；渲染测试基建 RTR+RN shim 3 例（b033175/A15 事件持久化 03dfad3/A16 内存 LRU 9929478+磁盘层 5f441b4/mDNS 合并发现 4d2acff）
+
+结案说明：
+- 0.8「App 上线主动拉审批 pending」：真实 DSH 上游无 pending 列表 RPC（仅有下行 approval.requested 帧），无法真实现；痛点已由 A11 队列扩容至 24h/500 条 + A15 事件持久化双重覆盖 —— 按「上游能力缺失、替代方案已落地」结案。
+- 0.1 发 APK 与「重启 DSH Desktop 激活插件」为用户部署动作（推 tag 触发 CI 出包），非代码任务。
+- B5 的 chat 上帝文件「整文件拆分」按保守范围执行（insets/魔法数/死样式），组件级拆分列入后续美学迭代；页面级 RTL 渲染因 vitest 无 RN 官方环境，以组件级渲染测试+纯函数断言等效覆盖（已在 ui.render.test.tsx 头注释说明）。
+
+✅ 计划内全部代码项至此完成。
 
 ## 四、里程碑建议
 
