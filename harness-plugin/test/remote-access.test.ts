@@ -22,7 +22,7 @@ describe("remote-access", () => {
   });
 
   it("starts LAN mode, returns address/code/qr, and stops cleanly", async () => {
-    const handle = await startRemoteAccess({ mode: "lan", host: "127.0.0.1", port: 0 });
+    const handle = await startRemoteAccess({ mode: "lan", host: "127.0.0.1", port: 0, relayDbPath: null });
     try {
       expect(handle.mode).toBe("lan");
       expect(handle.publicUrl).toBeNull();
@@ -40,7 +40,7 @@ describe("remote-access", () => {
   it("starts tunnel mode and returns a wss:// public URL", async () => {
     const child = new FakeChild();
     const promise = startRemoteAccess({
-      mode: "tunnel",
+      mode: "tunnel", relayDbPath: null,
       port: 0,
       autoDetectDsh: false,
       cloudflaredBin: process.execPath,

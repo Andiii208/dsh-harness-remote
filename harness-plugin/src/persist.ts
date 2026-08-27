@@ -7,6 +7,10 @@
  * - 设置页 start/stop 同步写盘；
  * - 插件加载（apply）时读取，enabled=true 则按上次模式自启。
  *
+ * 审计 2026-08-27 A2 扩展：consoleId 与 console 端 ECDH 密钥也落盘。
+ * 重启后复用同一 console 身份与同一把私钥（配合 device 端已持久化的
+ * 公钥），LAN 模式下手机回连无需重新扫码即可恢复加密数据面。
+ *
  * 安全默认不变：从未开启过的安装不会有配置文件 → 不会自动开隧道。
  */
 
@@ -20,6 +24,19 @@ export interface RemotePersistedConfig {
   enabled?: boolean;
   /** 上次使用的模式（tunnel / lan），重启自启时复用。 */
   mode?: RemoteAccessMode;
+  /** 稳定的 console clientId：跨重启不变，relay 配对绑定不因重启失效。 */
+  consoleId?: string;
+  /** console 端 ECDH P-256 私钥 JWK：跨重启解密能力不断档。 */
+  ecdhPrivateJwk?: JsonWebKey;
+  /** 已配对 device 的公钥 JWK：pair.ack 时捕获，下次启动直接派生会话密钥。 */
+  ecdhPeerPublicJwk?: JsonWebKey;
+}
+
+function isPlausiblePublicJwk(v: unknown): v is JsonWebKey {
+  return (
+    typeof v === "object" && v !== null && !Array.isArray(v) &&
+    typeof (v as { kty?: unknown }).kty === "string"
+  );
 }
 
 /** 配置文件默认路径：<DSH_HOME>/dsh-harness-remote/config.json。 */
@@ -40,6 +57,9 @@ export function readPersistedConfig(path: string = defaultConfigPath()): RemoteP
     const out: RemotePersistedConfig = {};
     if (typeof rec.enabled === "boolean") out.enabled = rec.enabled;
     if (rec.mode === "tunnel" || rec.mode === "lan") out.mode = rec.mode;
+    if (typeof rec.consoleId === "string" && rec.consoleId.length > 0) out.consoleId = rec.consoleId;
+    if (isPlausiblePublicJwk(rec.ecdhPrivateJwk)) out.ecdhPrivateJwk = rec.ecdhPrivateJwk;
+    if (isPlausiblePublicJwk(rec.ecdhPeerPublicJwk)) out.ecdhPeerPublicJwk = rec.ecdhPeerPublicJwk;
     return Object.keys(out).length > 0 ? out : null;
   } catch {
     return null;

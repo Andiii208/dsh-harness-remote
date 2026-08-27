@@ -35,6 +35,44 @@ describe("persist", () => {
     expect(readPersistedConfig(path)).toBeNull();
   });
 
+  it("round-trips consoleId and ECDH JWKs (A2)", () => {
+    const path = tmpFile();
+    const peerJwk: JsonWebKey = { kty: "EC", crv: "P-256", x: "x1", y: "y1" };
+    const privJwk: JsonWebKey = { kty: "EC", crv: "P-256", x: "x2", y: "y2", d: "d2" };
+    writePersistedConfig(
+      {
+        enabled: true,
+        mode: "lan",
+        consoleId: "console-fixed",
+        ecdhPrivateJwk: privJwk,
+        ecdhPeerPublicJwk: peerJwk,
+      },
+      path,
+    );
+    expect(readPersistedConfig(path)).toEqual({
+      enabled: true,
+      mode: "lan",
+      consoleId: "console-fixed",
+      ecdhPrivateJwk: privJwk,
+      ecdhPeerPublicJwk: peerJwk,
+    });
+  });
+
+  it("rejects malformed consoleId / JWK fields instead of trusting them", () => {
+    const path = tmpFile();
+    writeFileSync(
+      path,
+      JSON.stringify({
+        enabled: true,
+        consoleId: 42,
+        ecdhPrivateJwk: "not-an-object",
+        ecdhPeerPublicJwk: { nope: true },
+      }),
+      "utf8",
+    );
+    expect(readPersistedConfig(path)).toEqual({ enabled: true });
+  });
+
   it("creates missing parent directories on write", () => {
     const dir = mkdtempSync(join(tmpdir(), "dsh-remote-persist-"));
     const path = join(dir, "a", "b", "config.json");

@@ -8,8 +8,12 @@
  */
 
 import type { ChildProcess } from "node:child_process";
+import { mkdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { networkInterfaces } from "node:os";
+import { dirname, join } from "node:path";
 import { createRelayServer } from "relay";
+import { createSqliteRelayStore } from "relay";
 import { buildRemotePairPayload } from "@dsh-remote/protocol";
 import { RelayClient } from "./relay-client.js";
 import { DshBridge, detectDshApiUrl } from "./dsh-bridge.js";
@@ -24,8 +28,8 @@ export interface RemoteAccessOptions {
   host?: string;
   /** 首选 relay 端口；默认 4090，被占用自动选空闲端口。 */
   port?: number;
-  /** 配对成功回调（宿主面板可弹提示）。 */
-  onPaired?: (info: { deviceId: string }) => void;
+  /** 配对成功回调（宿主面板可弹提示）。peerPublicKey 用于落盘以跨重启续连。 */
+  onPaired?: (info: { deviceId: string; peerPublicKey?: unknown }) => void;
   /** 显式指定 DSH API baseUrl（如 http://127.0.0.1:56734）。如果提供则跳过自动探测。 */
   dshBaseUrl?: string | null;
   /** 未显式指定 baseUrl 时，是否自动探测 DSH_WEB_URL / 默认端口。CLI 默认开启。 */
@@ -40,6 +44,25 @@ export interface RemoteAccessOptions {
   tunnelTimeoutMs?: number;
   /** 注入 cloudflared spawn（测试用）。 */
   tunnelSpawnImpl?: (cmd: string, args: string[]) => ChildProcess;
+  /** 持久化的 console clientId：提供则跨重启复用同一配对身份（审计 A2）。 */
+  consoleId?: string | null;
+  /** 持久化的 console ECDH 私钥 JWK：重启后立即具备解密能力。 */
+  ecdhPrivateJwk?: JsonWebKey | null;
+  /** 持久化的对端 device 公钥 JWK：重启后无需等 pair.ack 即可派生会话密钥。 */
+  ecdhPeerPublicJwk?: JsonWebKey | null;
+  /**
+   * 内置 relay 注册/配对 SQLite 落盘路径。缺省 <DSH_HOME>/dsh-harness-remote/relay.db；
+   * 显式 null 强制内存态（测试用）。node:sqlite 不可用时同样降级内存态。
+   */
+  relayDbPath?: string | null;
+}
+
+/** 内置 relay 的 SQLite 落盘路径；node:sqlite 不可用时返回 null（内存态降级）。 */
+function embeddedRelayStorePath(explicit?: string | null): string | null {
+  if (explicit !== undefined) return explicit;
+  if (typeof process === "undefined") return null;
+  const home = process.env.DSH_HOME ?? join(homedir(), ".dsh");
+  return join(home, "dsh-harness-remote", "relay.db");
 }
 
 export interface RemoteAccessHandle {
@@ -99,7 +122,24 @@ export async function startRemoteAccess(
   const mode = opts.mode ?? "tunnel";
   // tunnel 模式只监听回环（公网入口由 cloudflared 承担）；LAN 模式监听所有网卡。
   const relayHost = mode === "tunnel" ? "127.0.0.1" : "0.0.0.0";
-  const relay = createRelayServer({ host: relayHost });
+  // 审计 A2/C5：内置 relay 默认走 SQLite 落盘，PC 重启后注册/配对不丢，
+  // 手机回连无需重新扫码。node:sqlite 不可用（Node <22）时静默降级内存态。
+  let store: ReturnType<typeof createSqliteRelayStore> | null = null;
+  try {
+    const dbPath = embeddedRelayStorePath(opts.relayDbPath);
+    if (dbPath) {
+      // node:sqlite 不会自建父目录；fresh 安装首次开启时必须先行创建。
+      if (dbPath !== ":memory:") mkdirSync(dirname(dbPath), { recursive: true });
+      store = createSqliteRelayStore(dbPath);
+    }
+  } catch (err) {
+    opts.onStatus?.(`SQLite 落盘不可用，本次运行 relay 为内存态：${err instanceof Error ? err.message : String(err)}`);
+    store = null;
+  }
+  const relay = createRelayServer({
+    host: relayHost,
+    ...(store ? { store } : {}),
+  });
   let port = opts.port ?? 4090;
   try {
     await relay.start(port);
@@ -113,17 +153,42 @@ export async function startRemoteAccess(
   // 实际监听端口（port 0 / 被占用自动分配后以 relay.port 为准）。
   if (relay.port > 0) port = relay.port;
 
-  const clientId = `console-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  const clientId = opts.consoleId ?? `console-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   let peerId: string | undefined;
   const client = new RelayClient({
     url: `ws://127.0.0.1:${port}`,
     clientId,
     kind: "console",
+    ...(opts.ecdhPrivateJwk ? { privateKeyJwk: opts.ecdhPrivateJwk } : {}),
+    // 已知对端公钥时直接派生会话密钥：重启后不等 pair.ack 即可解密。
+    ...(opts.ecdhPrivateJwk && opts.ecdhPeerPublicJwk
+      ? { peerPublicKeyJwk: opts.ecdhPeerPublicJwk }
+      : {}),
     onPaired: (info) => {
       peerId = info.deviceId;
-      opts.onPaired?.({ deviceId: info.deviceId });
+      opts.onPaired?.({ deviceId: info.deviceId, peerPublicKey: info.peerPublicKey });
     },
   });
+
+  /** 统一清理：桥接 → console → 隧道 → relay（含 SQLite 句柄）。 */
+  const releaseAll = async (): Promise<void> => {
+    if (bridge) {
+      bridge.stop();
+      bridge = null;
+    }
+    client.close();
+    if (tunnel) {
+      try {
+        await tunnel.stop();
+      } catch {
+        /* ignore */
+      }
+      tunnel = null;
+    }
+    await relay.stop().catch(() => {});
+    store?.close?.();
+    store = null;
+  };
 
   let bridge: DshBridge | null = null;
   let tunnel: TunnelHandle | null = null;
@@ -183,16 +248,7 @@ export async function startRemoteAccess(
       mode,
       publicUrl,
       stop: async () => {
-        bridge?.stop();
-        client.close();
-        if (tunnel) {
-          try {
-            await tunnel.stop();
-          } catch {
-            /* ignore */
-          }
-        }
-        await relay.stop();
+        await releaseAll();
       },
       attachDsh: async (newBaseUrl: string) => {
         if (bridge) return;
@@ -211,16 +267,7 @@ export async function startRemoteAccess(
     };
     return handle;
   } catch (err) {
-    bridge?.stop();
-    client.close();
-    if (tunnel) {
-      try {
-        await tunnel.stop();
-      } catch {
-        /* ignore */
-      }
-    }
-    await relay.stop();
+    await releaseAll();
     throw err;
   }
 }

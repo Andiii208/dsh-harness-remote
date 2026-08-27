@@ -9,6 +9,9 @@
 
 import QRCode from "qrcode";
 import {
+  generateRelayKeyPair,
+} from "@dsh-remote/protocol";
+import {
   startRemoteAccess,
   type RemoteAccessHandle,
   type RemoteAccessMode,
@@ -66,6 +69,10 @@ export interface RemoteAccessServiceOptions {
     read(): RemotePersistedConfig | null;
     write(config: RemotePersistedConfig): void;
   };
+  /** 注入 consoleId 生成器（测试用）；缺省用时间戳+随机后缀。 */
+  generateConsoleId?: () => string;
+  /** 注入 ECDH 私钥生成（测试用）；返回 null 表示不持久化密钥。 */
+  generateEcdhPrivateJwk?: () => Promise<JsonWebKey | null>;
 }
 
 const EMPTY_STATUS: RemoteStatus = {
@@ -97,6 +104,51 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
   const pushLog = (line: string): void => {
     status = { ...status, lastLogs: [...status.lastLogs.slice(-9), line] };
     options.onStatus?.(line);
+  };
+
+  /** 合并写入持久化配置：只覆盖 patch 字段，保留 consoleId/密钥等其余内容。 */
+  const mergePersisted = (patch: Partial<RemotePersistedConfig>): void => {
+    const persist = options.persist;
+    if (!persist) return;
+    try {
+      persist.write({ ...(persist.read() ?? {}), ...patch });
+    } catch {
+      /* 持久化失败仅降级为「重启后需手动处理」 */
+    }
+  };
+
+  /** 解析本次启动身份：持久化的 consoleId/ECDH 私钥优先，没有则生成。 */
+  const resolveBootIdentity = async (): Promise<{
+    consoleId: string;
+    ecdhPrivateJwk?: JsonWebKey;
+  }> => {
+    const persisted = options.persist?.read?.() ?? {};
+    const consoleId =
+      persisted.consoleId ?? options.generateConsoleId?.() ?? `console-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    if (persisted.ecdhPrivateJwk) return { consoleId, ecdhPrivateJwk: persisted.ecdhPrivateJwk };
+    const generated = options.generateEcdhPrivateJwk
+      ? await options.generateEcdhPrivateJwk()
+      : await generateEphemeralEcdh();
+    return generated ? { consoleId, ecdhPrivateJwk: generated } : { consoleId };
+  };
+
+  /** 缺省 ECDH 私钥生成（审计 A2）：无 WebCrypto 时返回 null 走旧行为。 */
+  const generateEphemeralEcdh = async (): Promise<JsonWebKey | null> => {
+    try {
+      if (typeof globalThis.crypto === "undefined") return null;
+      const pair = await generateRelayKeyPair(globalThis.crypto);
+      return pair.privateKeyJwk;
+    } catch {
+      return null;
+    }
+  };
+
+  /** 配对时捕获对端公钥落盘，下次启动直接派生会话密钥免等 pair.ack。 */
+  const rememberPeerPublicKey = (peerPublicKey: unknown): void => {
+    if (!handle || typeof peerPublicKey !== "object" || peerPublicKey === null) return;
+    const kty = (peerPublicKey as { kty?: unknown }).kty;
+    if (typeof kty !== "string") return;
+    mergePersisted({ ecdhPeerPublicJwk: peerPublicKey as JsonWebKey });
   };
 
   /** 定期重试 DSH API 探测（启动时未检测到 DSH 时的后备机制）。 */
@@ -137,13 +189,17 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
       }
       status = { ...status, starting: true, running: false, error: null, pairedDeviceId: null, code: null, qrPayload: null, qrDataUrl: null };
       try {
+        const bootIdentity = await resolveBootIdentity();
         const h = await startImpl({
           mode,
           dshBaseUrl: dshBaseUrl ?? null,
           autoDetectDsh: options.autoDetectDsh ?? true,
+          consoleId: bootIdentity.consoleId,
+          ...(bootIdentity.ecdhPrivateJwk ? { ecdhPrivateJwk: bootIdentity.ecdhPrivateJwk } : {}),
           onStatus: pushLog,
           onPaired: (info) => {
             status = { ...status, pairedDeviceId: info.deviceId };
+            rememberPeerPublicKey(info.peerPublicKey);
           },
         });
         handle = h;
@@ -167,12 +223,14 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
         if (!h.dshUrl && !dshBaseUrl) {
           scheduleDshRetry();
         }
-        // P0-1：持久化用户意愿，DSH 重启后按此自启（失败不影响运行）。
-        try {
-          options.persist?.write({ enabled: true, mode: h.mode });
-        } catch {
-          /* 持久化失败仅降级为「重启后需手动开启」 */
-        }
+        // P0-1/A2：持久化用户意愿与本次身份（consoleId/ECDH 私钥），
+        // DSH 重启后按此自启且配对身份不变（合并写，不覆盖其他字段）。
+        mergePersisted({
+          enabled: true,
+          mode: h.mode,
+          consoleId: bootIdentity.consoleId,
+          ...(bootIdentity.ecdhPrivateJwk ? { ecdhPrivateJwk: bootIdentity.ecdhPrivateJwk } : {}),
+        });
         return status;
       } catch (err) {
         status = {
@@ -215,12 +273,9 @@ export function createRemoteAccessService(options: RemoteAccessServiceOptions = 
 
   async function stop(): Promise<RemoteStatus> {
     const next = await releaseResources();
-    // P0-1：用户显式停止才落盘 enabled=false（保留最后模式，便于下次开启复用）。
-    try {
-      options.persist?.write({ enabled: false, ...(status.mode ? { mode: status.mode } : {}) });
-    } catch {
-      /* 同上，降级不抛错 */
-    }
+    // P0-1：用户显式停止才落盘 enabled=false；合并写保留 consoleId/ECDH
+    // 密钥与最后模式，下次开启/自启复用同一身份（审计 A2）。
+    mergePersisted({ enabled: false, ...(status.mode ? { mode: status.mode } : {}) });
     return next;
   }
 
