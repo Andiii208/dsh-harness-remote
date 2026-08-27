@@ -23,7 +23,7 @@ import {
   type RelayEnvelopeType,
   type RelayErrorCode,
 } from "@dsh-remote/protocol";
-import { createCredentialService } from "./credential.js";
+import { createCredentialService, randomPairingCode } from "./credential.js";
 import { createOfflineQueue, type OfflineQueue } from "./queue.js";
 import type { PushProvider } from "./push.js";
 import { createRateLimiter } from "./rate-limit.js";
@@ -125,7 +125,9 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
   const host = options.host ?? "127.0.0.1";
   const credentialTtlMs = options.credentialTtlMs ?? 12 * 60 * 60 * 1000;
   const credentials = createCredentialService(options.credentialSecret);
-  const store = options.store ?? createRelayStore();
+  // 审计 C2：默认与自带 store 统一走 CSPRNG 配对码。
+  const store = options.store
+    ?? createRelayStore({ generatePairingCode: randomPairingCode });
   const queue = createOfflineQueue({
     ...(options.queueTtlMs !== undefined ? { ttlMs: options.queueTtlMs } : {}),
   });
@@ -295,10 +297,34 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
           kind = consoleId ? "console" : "device";
         }
 
+        // 审计 C1：identity 防顶替——同一 clientId 已绑定过公钥时，
+        // 携带不同公钥的重复注册直接拒绝；未携带公钥则沿用旧绑定，
+        // 防止整条记录（公钥/pushToken）被后来者覆盖。
+        const existingClient = store.getClient(clientId);
+        const incomingPublicKey = payload.publicKey;
+        const publicKeyMismatch =
+          existingClient?.publicKey !== undefined &&
+          incomingPublicKey !== undefined &&
+          JSON.stringify(existingClient.publicKey) !== JSON.stringify(incomingPublicKey);
+        if (publicKeyMismatch) {
+          sendError(
+            ws,
+            env.id,
+            "E_AUTH",
+            "clientId already bound to a different publicKey",
+            authClientId ?? env.from,
+          );
+          auditEvent("register", clientId, "relay", false);
+          break;
+        }
+        const retainedPublicKey =
+          incomingPublicKey !== undefined
+            ? incomingPublicKey
+            : existingClient?.publicKey;
         store.registerClient({
           clientId,
           kind,
-          ...(payload.publicKey !== undefined ? { publicKey: payload.publicKey } : {}),
+          ...(retainedPublicKey !== undefined ? { publicKey: retainedPublicKey } : {}),
           ...(str(payload.pushToken) !== undefined ? { pushToken: str(payload.pushToken) } : {}),
           ...(str(payload.platform) !== undefined ? { platform: str(payload.platform) } : {}),
         });

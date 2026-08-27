@@ -412,6 +412,50 @@ describe("relay server", () => {
     consoleClient.close();
   });
 
+  it("rejects re-register with a different publicKey for a bound clientId (C1)", async () => {
+    const relay = await startRelay();
+    const legitKey = { kty: "EC", crv: "P-256", x: "legit-x", y: "legit-y" };
+    const attackerKey = { kty: "EC", crv: "P-256", x: "evil-x", y: "evil-y" };
+
+    const device = await TestClient.connect(relay.port);
+    device.send(registerEnvelope("reg-d1", "device-1", { deviceId: "device-1" }));
+    await device.next("relay.register.ack");
+
+    const legit = await TestClient.connect(relay.port);
+    legit.send(
+      registerEnvelope("reg-c1", "console-1", { consoleId: "console-1", publicKey: legitKey }),
+    );
+    await legit.next("relay.register.ack");
+
+    // 攻击者以同一 consoleId 但不同公钥抢注 → E_AUTH，且 store 中公钥不变。
+    const attacker = await TestClient.connect(relay.port);
+    attacker.send(
+      registerEnvelope("reg-c2", "console-1", { consoleId: "console-1", publicKey: attackerKey }),
+    );
+    const err = await attacker.next("relay.error");
+    expect(err.payload).toMatchObject({ code: "E_AUTH" });
+    expect(relay.store.getClient("console-1")?.publicKey).toEqual(legitKey);
+
+    // 未携带公钥的重复注册不得清掉既有公钥绑定。
+    const naive = await TestClient.connect(relay.port);
+    naive.send(registerEnvelope("reg-c3", "console-1", { consoleId: "console-1" }));
+    await naive.next("relay.register.ack");
+    expect(relay.store.getClient("console-1")?.publicKey).toEqual(legitKey);
+
+    // 合法客户端持同一把公钥重连仍然成功（重启回连场景）。
+    const legitReconnect = await TestClient.connect(relay.port);
+    legitReconnect.send(
+      registerEnvelope("reg-c4", "console-1", { consoleId: "console-1", publicKey: legitKey }),
+    );
+    await legitReconnect.next("relay.register.ack");
+
+    device.close();
+    legit.close();
+    attacker.close();
+    naive.close();
+    legitReconnect.close();
+  });
+
   it("notifies an online console when a device pairs (relay.pair.ack)", async () => {
     const relay = await startRelay();
     const devicePublicKey = { kty: "EC", crv: "P-256", x: "dev-x", y: "dev-y" };

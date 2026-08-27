@@ -47,7 +47,20 @@ function pairKey(a: string, b: string): string {
   return [a, b].sort().join("\u0000");
 }
 
-export function createRelayStore(now: () => number = Date.now): RelayStore {
+export interface RelayStoreOptions {
+  /** 注入六位配对码生成器；缺省保留可预测回退，server 会传 CSPRNG 实现。 */
+  generatePairingCode?: () => string;
+  /** 可注入时钟（原第二参数位置语义保留）。 */
+  now?: () => number;
+}
+
+export function createRelayStore(
+  optsOrNow: (() => number) | RelayStoreOptions = {},
+): RelayStore {
+  const isOpts = typeof optsOrNow !== "function";
+  const generatePairingCode = isOpts ? optsOrNow.generatePairingCode : undefined;
+  const now: () => number = isOpts ? (optsOrNow.now ?? Date.now) : (optsOrNow as () => number);
+
   const clients = new Map<string, ClientRecord>();
   const pairingCodes = new Map<string, { code: string; consoleId: string; expiresAt: number; used: boolean }>();
   const pairs = new Set<string>();
@@ -85,7 +98,7 @@ export function createRelayStore(now: () => number = Date.now): RelayStore {
     },
 
     createPairingCode(consoleId, ttlMs = 10 * 60 * 1000) {
-      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const code = generatePairingCode?.() ?? String(Math.floor(100000 + Math.random() * 900000));
       pairingCodes.set(code, { code, consoleId, expiresAt: now() + ttlMs, used: false });
       return code;
     },

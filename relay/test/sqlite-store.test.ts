@@ -70,7 +70,7 @@ describe("createSqliteRelayStore", () => {
   it("keeps pairing codes one-time and TTL-gated", async () => {
     const { path } = await tempPath("pairing");
     let clock = 1_000_000;
-    const store = createSqliteRelayStore(path, () => clock);
+    const store = createSqliteRelayStore(path, { now: () => clock });
     stores.push(store);
 
     const code = store.createPairingCode("console-1", 10_000);

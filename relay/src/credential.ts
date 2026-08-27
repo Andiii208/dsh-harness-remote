@@ -6,10 +6,15 @@
  * only carries a clientId and an expiry timestamp — never any DSH content.
  */
 
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 
 const DEFAULT_SECRET =
   process.env.RELAY_CREDENTIAL_SECRET ?? randomBytes(32).toString("hex");
+
+/** CSPRNG 六位配对码（审计 C2：替换 Math.random 可预测序列）。 */
+export function randomPairingCode(): string {
+  return String(randomInt(100000, 1000000));
+}
 
 export interface RelayCredentialService {
   issue(clientId: string, ttlMs: number): string;

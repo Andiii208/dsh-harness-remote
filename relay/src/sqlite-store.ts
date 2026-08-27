@@ -49,8 +49,10 @@ function toClientRecord(row: Record<string, unknown>): ClientRecord {
 
 export function createSqliteRelayStore(
   dbPath: string,
-  now: () => number = Date.now,
+  opts: { generatePairingCode?: () => string; now?: () => number } = {},
 ): SqliteRelayStore {
+  const generatePairingCode = opts.generatePairingCode;
+  const now = opts.now ?? Date.now;
   const db = new DatabaseSync(dbPath);
   db.exec(`
     CREATE TABLE IF NOT EXISTS relay_clients (
@@ -126,7 +128,7 @@ export function createSqliteRelayStore(
     },
 
     createPairingCode(consoleId: string, ttlMs = 10 * 60 * 1000): string {
-      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const code = generatePairingCode?.() ?? String(Math.floor(100000 + Math.random() * 900000));
       db.prepare(
         `INSERT INTO relay_pairing_codes (code, console_id, expires_at, used)
          VALUES (?, ?, ?, 0)

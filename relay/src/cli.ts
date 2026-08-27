@@ -5,6 +5,7 @@
 
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRelayServer } from "./server.js";
+import { randomPairingCode } from "./credential.js";
 
 const HELP = `relay — DSH relay control plane (M3.1 MVP)
 
@@ -53,7 +54,9 @@ async function main(argv: string[]): Promise<number> {
   const serverOpts: Parameters<typeof createRelayServer>[0] = { host: opts.host };
   if (opts.store) {
     const { createSqliteRelayStore } = await import("./sqlite-store.js");
-    serverOpts.store = createSqliteRelayStore(opts.store);
+    serverOpts.store = createSqliteRelayStore(opts.store, {
+      generatePairingCode: randomPairingCode,
+    });
   }
   if (opts.push === "expo") {
     const { createExpoPushProviderFromEnv } = await import("./push.js");
