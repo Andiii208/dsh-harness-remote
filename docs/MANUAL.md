@@ -3,6 +3,89 @@
 > 目标：在真机上验证「连接 → 会话列表 → 流式聊天 → 通知 → 审批 → goal 控制」全链路。
 > 前置：`mock-harness` 已启动（无需真实 DSH 即可联调）；或真实 DSH 已开 LAN（见 SECURITY.md）。
 
+---
+
+# 普通用户部署指南（C7，2026-08-27）
+
+> 目标读者：只想「电脑上装一次，手机随时连」的 DSH 用户。开发者联调内容见上文。
+
+## A. 前置要求
+
+| 项 | 要求 | 说明 |
+|---|---|---|
+| 电脑 | Windows / macOS / Linux，已运行 DSH Desktop 2.0.1+ | 插件以 DSH Desktop 为宿主 |
+| Node.js | **≥ 22**（内置 relay 的 SQLite 落盘依赖 `node:sqlite`） | 低版本自动降级为内存态：重启电脑后需重新扫码 |
+| 手机 | 从 GitHub Releases 安装 `app-release.apk`（Android）；iOS 包暂未发布（EAS 阻塞） | |
+
+## B. 安装与开启（三步）
+
+```bash
+# 1) 电脑装插件
+dsh plugin --profile web add dsh-harness-remote -w
+
+# 2) 重启 dsh web / DSH Desktop（插件随宿主加载）
+
+# 3) 打开 DSH 设置页 → 手机远程：
+#    「仅局域网」= LAN 模式；「开启公网访问」= 隧道模式
+```
+
+手机端：App 扫描设置页上的二维码即完成配对。
+
+### 模式怎么选
+
+- **LAN 模式**：同一 Wi-Fi 直连。自 v0.3.3 起电脑重启后插件按上次开关自启，
+  且 console 身份/密钥与 relay 注册均落盘——**手机回连无需重新扫码**。
+- **隧道模式（cloudflared quick tunnel）**：手机不在同一局域网也能用，免费、无需账号。
+  注意：quick tunnel 地址每次启动都会变化（`xxx.trycloudflare.com`），
+  因此**电脑重启后手机需要重新扫码**；介意请改用 LAN 或自部署固定域名 relay。
+  固定地址属于 M 后续计划（命名隧道引导 + `tunnel.url-changed` 推送）。
+
+### Windows 防火墙（LAN 模式必须）
+
+首次开启时系统若弹窗，选择允许「专用网络」；或手动放行 4090 入站：
+
+```powershell
+netsh advfirewall firewall add rule name="dsh-remote relay" dir=in action=allow protocol=TCP localport=4090
+```
+
+## C. cloudflared 说明（隧道模式）
+
+- 首次开启会从 GitHub Release 自动下载二进制到 `~/.dsh/dsh-harness-remote/bin/`；
+  公司代理/防火墙可能拦截下载——可用 `CLOUDFLARED_PATH` 指向本地已有二进制跳过。
+- 版本默认钉住（`DEFAULT_CLOUDFLARED_VERSION`），如需指定：`CLOUDFLARED_VERSION=2026.8.2`。
+- 完整性校验：上游不提供 per-file sha 资产；如你通过可信渠道取得哈希，
+  可设 `CLOUDFLARED_SHA256=<hex>` 强校验（不匹配拒绝使用）。
+- cloudflared 中途崩溃会自动重启（≤5 次），日志可在设置页看到「公网隧道故障」。
+
+## D. 排障表
+
+| 症状 / 错误 | 含义 | 处理 |
+|---|---|---|
+| 手机一直「连接中」后失败 | 地址错 / 电脑端远程未开 / 端口不通 | 核对二维码地址；DSH 设置页确认开关状态；LAN 检查防火墙 |
+| `E_PAIR invalid...pairing code` | 配对码错误/过期/已被用 | 在 DSH 设置页刷新配对码再扫 |
+| `E_RATE pair attempts temporarily locked` | 短时间内多次输错码触发防爆破锁定 | 等 1 分钟后再试 |
+| 连接成功但 **会话列表空** | 电脑端未桥接上 DSH API | 设置页日志看「未检测到 DSH API」；确认 DSH Desktop 正在运行；必要时重启远程 |
+| 连接正常但突然全部离线 | 休眠唤醒/网络抖动后旧链路已断 | 新版会自动重连恢复；仍离线则停止并重开远程 |
+| 停止后重启电脑没自启 | 只有「优雅退出前开启过」才会自启 | 到 DSH 设置页手动开启一次即写回开关 |
+
+## E. 彻底关闭与卸载
+
+```bash
+# 关闭远程访问（开关写回 false，不再自启）
+#   DSH 设置页 → 手机远程 → 停止
+
+# 彻底清除自启配置与本机身份
+rm -ri ~/.dsh/dsh-harness-remote        # config.json / relay.db / bin/
+
+# 卸载插件
+dsh plugin --profile web remove dsh-harness-remote
+```
+
+安全提醒：隧道 URL 是公开可访问入口，门禁靠 6 位一次性配对码 + E2E 加密；
+配对码勿外传，不用时建议在设置页停止远程。
+
+---
+
 ## 0. 准备
 
 ```bash
