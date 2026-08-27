@@ -30,9 +30,12 @@ import { requestInterrupt } from "./interrupt";
 import { getExpoPushToken } from "../notify/pushToken";
 import { EventLogStore, MAX_EVENT_LOG } from "../notify/eventLogStore";
 
-/** 附件内存 LRU：历史滚动不再重复经 relay 拉同一批图（A16）。 */
-const attachmentCache = createAttachmentCache();
+/** 附件内存 LRU + 磁盘层：历史滚动/冷启动都不再重复经 relay 拉同一批图（A16/P3）。 */
+const attachmentMemoryCache = createAttachmentCache();
+const attachmentDisk = createFilesystemAttachmentDiskLayer();
 import { createAttachmentCache } from "../data/attachmentCache";
+import { createFilesystemAttachmentDiskLayer } from "../data/attachmentDiskAdapter";
+import { getFromLayers } from "../data/attachmentCache";
 import { notificationService } from "../notify/expoAdapter";
 import { notificationPrefsStore } from "../notify/notificationPrefsStoreAdapter";
 import { hostStore } from "../discovery/hostStoreAdapter";
@@ -367,7 +370,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   /** session.attachment：读取图片附件 base64。 */
   const attachment = useCallback(async (sessionId: string, attachmentId: string) => {
     const cacheKey = `${sessionId}:${attachmentId}`;
-    const cached = attachmentCache.get(cacheKey);
+    const cached = await getFromLayers({ memory: attachmentMemoryCache, disk: attachmentDisk ?? undefined }, cacheKey);
     if (cached) return cached;
     const c = pipelineRef.current?.loop.connection;
     if (!c) return null;
@@ -379,7 +382,8 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       const mediaType = toImageMediaType(value.attachment?.mediaType);
       if (!mediaType) return null;
       const payload = { mediaType, data: value.data };
-      attachmentCache.put(cacheKey, payload);
+      attachmentMemoryCache.put(cacheKey, payload);
+      void attachmentDisk?.put(cacheKey, payload);
       return payload;
     } catch {
       return null;

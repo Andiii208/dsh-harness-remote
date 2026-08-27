@@ -46,3 +46,27 @@ export function createAttachmentCache(maxEntries: number = DEFAULT_MAX_ENTRIES):
     },
   };
 }
+
+/** 可插拔磁盘层：读写字符串化的 AttachmentPayload（JSON）。 */
+export interface AttachmentDiskLayer {
+  get(key: string): Promise<AttachmentPayload | null>;
+  put(key: string, value: AttachmentPayload): Promise<void>;
+}
+
+/**
+ * 组合读取口径：内存命中即返回；未命中走磁盘并回填内存；
+ * 都未命中返回 undefined（调用方再走网络）。
+ */
+export async function getFromLayers(
+  layers: { memory: AttachmentCache; disk?: AttachmentDiskLayer },
+  key: string,
+): Promise<AttachmentPayload | undefined> {
+  const hit = layers.memory.get(key);
+  if (hit) return hit;
+  const diskValue = layers.disk ? await layers.disk.get(key) : null;
+  if (diskValue) {
+    layers.memory.put(key, diskValue);
+    return diskValue;
+  }
+  return undefined;
+}
