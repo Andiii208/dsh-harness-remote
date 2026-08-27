@@ -11,7 +11,9 @@ export type NotificationKind =
   | "goal-blocked"
   | "approval-waiting"
   | "question-waiting"
-  | "context-pressure";
+  | "context-pressure"
+  /** 0.4：电脑端隧道地址变更推送（仅 App 本地构造，classifier 不产生）。 */
+  | "remote-url-changed";
 
 export interface NotificationEvent {
   kind: NotificationKind;

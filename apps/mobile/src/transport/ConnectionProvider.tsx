@@ -43,6 +43,7 @@ import { autoReconnectStore } from "../discovery/autoReconnectStoreAdapter";
 import { tokenStore, secureStoreApi } from "../data/secureStoreAdapter";
 import { approvalHistoryStore } from "../data/approvalHistoryStoreAdapter";
 import { KeepaliveScheduler } from "../notify/keepalive";
+import { haptic } from "../ui/haptics";
 import { backgroundTaskApi } from "../notify/keepaliveAdapter";
 import { GoalsClient, type GoalsApi } from "../data/goals";
 import { parseSkillList, type SkillEntry } from "../data/skillList";
@@ -261,6 +262,27 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
           privateKeyJwk: relayDevice!.privateKeyJwk ?? undefined,
           pairCode: pairCode?.trim() || undefined,
           onPairAck: (ack) => setRelayPeerId(ack.consoleId),
+          // 0.4：接收电脑端推送的隧道地址变更，自动迁移最近主机记录。
+          onHostEvent: (event) => {
+            if (event.__dshRemoteEvent !== "tunnel.urlChanged") return;
+            const url = typeof event.url === "string" ? event.url : "";
+            if (!url || !isRelayUrl(url)) return;
+            void hostStore.add(url, 0, undefined, lastConnectParamsRef.current?.token);
+            void haptic("success");
+            setNotifications((prev) => {
+              if (prev.some((e) => e.dedupeKey === `tunnel-url-${url}`)) return prev;
+              return [
+                ...prev.slice(-MAX_EVENT_LOG + 1),
+                {
+                  kind: "turn-complete",
+                  sessionId: undefined,
+                  prompt: `公网地址已更新：${url}`,
+                  dedupeKey: `tunnel-url-${url}`,
+                  receivedAt: Date.now(),
+                } as NotificationEvent,
+              ];
+            });
+          },
           pushToken,
         })
       : new LanTransport({

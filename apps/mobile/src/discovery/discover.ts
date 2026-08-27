@@ -96,10 +96,12 @@ export async function discoverHosts(opts: DiscoverOptions): Promise<DiscoveredHo
   // mDNS 候选与 /24 扫描并行产出；去重交给探活后的 merge。
   const mdns = opts.mdnsSource ?? browseZeroconfHttp;
   let mdnsList: Array<{ host: string; port: number; name?: string }> = [];
-  try {
-    mdnsList = opts.signal?.aborted ? [] : await mdns(opts.signal);
-  } catch {
-    mdnsList = [];
+  if (!opts.signal?.aborted) {
+    try {
+      mdnsList = await mdns(opts.signal);
+    } catch {
+      mdnsList = [];
+    }
   }
   const fromMdns = mdnsList.map((e) => ({ host: e.host, port: e.port, name: e.name }));
   const sweep = deriveCandidates(opts.localIp, port).map((c) => ({

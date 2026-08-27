@@ -14,7 +14,7 @@ import { networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
 import { createRelayServer } from "relay";
 import { createSqliteRelayStore } from "relay";
-import { buildRemotePairPayload } from "@dsh-remote/protocol";
+import { buildRemotePairPayload, makeRpcId, RELAY_ENVELOPE_VERSION } from "@dsh-remote/protocol";
 import { RelayClient } from "./relay-client.js";
 import { DshBridge, detectDshApiUrl } from "./dsh-bridge.js";
 import { startCloudflaredTunnel, type TunnelHandle } from "./tunnel.js";
@@ -101,15 +101,17 @@ export function lanIp(): string | undefined {
     for (const net of nets ?? []) {
       if (net.family !== "IPv4" || net.internal) continue;
       const a = net.address;
-      // RFC1918 分段打分：192.168 优先，其次 10.、172.16-31，其他地址兜底。
-      const score = a.startsWith("192.168.")
+      // RFC1918 分段打分（192.168 优先 → 10. → 172.16-31 → 兜底），
+      // 常见无线/有线命名加 1 分（避开 Docker/WSL 虚拟网卡）。
+      const segmentScore = a.startsWith("192.168.")
         ? 4
         : a.startsWith("10.")
           ? 3
           : /^172\.(1[6-9]|2\d|3[01])\./.test(a)
             ? 2
             : 1;
-      if (/(wi-fi|wlan|ethernet|以太)/.test(lower)) score += 1;
+      const namedBonus = /(wi-fi|wlan|ethernet|以太)/.test(lower) ? 1 : 0;
+      const score = segmentScore + namedBonus;
       candidates.push({ addr: a, score });
     }
   }
@@ -199,6 +201,30 @@ export async function startRemoteAccess(
     store = null;
   };
 
+  /** 0.4：隧道地址变更时主动推送给已配对手机（免重扫码自动迁移）。 */
+  const pushTunnelUrlChanged = async (publicUrl: string): Promise<void> => {
+    if (!peerId || !client.isOnline()) return;
+    try {
+      await client.send({
+        v: RELAY_ENVELOPE_VERSION,
+        type: "relay.route",
+        id: makeRpcId(),
+        from: clientId,
+        to: peerId,
+        ts: Date.now(),
+        payload: {
+          to: peerId,
+          rpcId: `srv-${Date.now().toString(36)}`,
+          ok: true,
+          result: { __dshRemoteEvent: "tunnel.urlChanged", url: publicUrl },
+        },
+      });
+      opts.onStatus?.("已向手机推送新的隧道地址");
+    } catch {
+      /* 手机离线时失败可接受：下次配对/扫码自然获得新地址 */
+    }
+  };
+
   let bridge: DshBridge | null = null;
   let tunnel: TunnelHandle | null = null;
   try {
@@ -219,7 +245,10 @@ export async function startRemoteAccess(
         spawnImpl: opts.tunnelSpawnImpl,
         logger: (line) => opts.onStatus?.(line),
         // 审计 A4：崩溃自愈的状态对用户可见。
-        onUrlUpdate: (url) => opts.onStatus?.(`公网隧道地址已更新：${url}`),
+        onUrlUpdate: (url) => {
+          opts.onStatus?.(`公网隧道地址已更新：${url}`);
+          void pushTunnelUrlChanged(url);
+        },
         onFatal: (err) => opts.onStatus?.(`公网隧道故障：${err.message}`),
       });
       publicUrl = tunnel.publicUrl;

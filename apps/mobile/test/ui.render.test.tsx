@@ -54,10 +54,8 @@ vi.mock("expo-secure-store", () => ({
 }));
 
 import { colors as lightPalette, font } from "../src/theme";
-import { AppText, variantBase } from "../src/ui/AppText";
+import { variantBase } from "../src/ui/AppText";
 import { ErrorCard } from "../src/ui/ErrorCard";
-import { ThemeProvider } from "../src/theme-context";
-import { AppSettingsProvider } from "../src/data/appSettingsContext";
 
 describe("AppText（B7：字号设置全组件生效）", () => {
   it("variantBase 纯函数按 scale 计算字号", () => {

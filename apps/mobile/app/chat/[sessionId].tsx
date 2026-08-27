@@ -17,7 +17,6 @@ import * as ImagePicker from "expo-image-picker";
 import { useConnection } from "../../src/transport/ConnectionProvider";
 import { useI18n } from "../../src/i18n";
 import type { QueueItem, TranscriptMessage } from "../../src/data/SessionStore";
-import type { TranscriptStep } from "../../src/data/transcriptSteps";
 import { filterSkills, type SkillEntry } from "../../src/data/skillList";
 import { estimateBase64Bytes, resolveImageMediaType } from "../../src/data/imageMessage";
 import { shouldStickToBottom } from "../../src/ui/chat/stickyBottom";

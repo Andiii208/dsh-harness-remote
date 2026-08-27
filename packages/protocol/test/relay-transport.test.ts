@@ -369,6 +369,47 @@ describe("RelayTransport.connect", () => {
     await p;
   });
 
+  it("surfaces unsolicited host events via onHostEvent (0.4)", async () => {
+    const hostEvents: Array<Record<string, unknown>> = [];
+    const transport = new RelayTransport({
+      wsImpl: FakeWs.fresh(),
+      deviceId: "device-a",
+      onHostEvent: (e) => hostEvents.push(e),
+    });
+    const p = transport.connect({ host: "relay", port: 4090 }, { token: undefined });
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(2));
+    const hello = JSON.parse(ws.sent[0]!) as { id: string };
+    const register = JSON.parse(ws.sent[1]!) as { id: string };
+    ws.recv(relayAck("relay.hello.ack", hello.id, "device-a"));
+    ws.recv(relayAck("relay.register.ack", register.id, "device-a"));
+    const conn = await p;
+
+    // console 推送（relay.route 信封直投，无 pending 对应）→ onHostEvent 收到。
+    ws.recv(
+      JSON.stringify({
+        v: 1,
+        type: "relay.route",
+        id: "srv-frame",
+        from: "console-c",
+        to: "device-a",
+        ts: Date.now(),
+        payload: {
+          rpcId: "srv-abc",
+          ok: true,
+          result: { __dshRemoteEvent: "tunnel.urlChanged", url: "https://new.trycloudflare.com" },
+        },
+      }),
+    );
+    await vi.waitFor(() => expect(hostEvents).toHaveLength(1));
+    expect(hostEvents[0]).toMatchObject({
+      __dshRemoteEvent: "tunnel.urlChanged",
+      url: "https://new.trycloudflare.com",
+    });
+    void conn;
+  });
+
   it("derives the session key from relay.pair.ack and seals unary routes", async () => {
     const device = await generateRelayKeyPair(crypto);
     const console_ = await generateRelayKeyPair(crypto);

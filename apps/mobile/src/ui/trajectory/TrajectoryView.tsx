@@ -3,7 +3,7 @@
  * + 步骤列表（类型图标、名称、耗时、参数/结果摘要，点开看详情）。
  */
 
-import { useMemo, useState, type MutableRefObject } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import Svg, { Rect } from "react-native-svg";

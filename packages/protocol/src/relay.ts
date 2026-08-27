@@ -133,6 +133,8 @@ export interface RelayTransportOptions {
   pairCode?: string;
   /** M3.5: called after relay.pair.ack (pairing succeeded). */
   onPairAck?: (ack: { consoleId: string; peerPublicKey: unknown }) => void;
+  /** 0.4：接收 console 推送的主机事件（隧道地址变更等）。 */
+  onHostEvent?: (event: Record<string, unknown>) => void;
   /** Data-plane unary timeout in ms (default 30s). Prevents an App RPC from
    * hanging forever when a large response stalls on a mobile tunnel. */
   unaryTimeoutMs?: number;
@@ -374,6 +376,11 @@ class RelayConnection implements Connection {
   onControl: ((env: RelayEnvelope) => void) | null = null;
   onRelayError: ((err: RelayError) => void) | null = null;
   onClosed: (() => void) | null = null;
+  /**
+   * 0.4：console 主动推送的主机级事件（如隧道地址变更）。
+   * payload 形如 { __dshRemoteEvent: string, ... }，无对应 pending RPC 时触发。
+   */
+  onHostEvent: ((event: Record<string, unknown>) => void) | null = null;
 
   private readonly queue = new FrameQueue();
   private closed = false;
@@ -592,6 +599,11 @@ class RelayConnection implements Connection {
       const rpcId = str(payload.rpcId);
       if (rpcId && typeof payload.ok === "boolean") {
         const entry = this.pending.get(rpcId);
+        if (!entry && isRecord(payload.result) && typeof payload.result.__dshRemoteEvent === "string") {
+          // 0.4：console 推送的主机事件（无 pending 对应）——交给宿主回调。
+          this.onHostEvent?.(payload.result);
+          return;
+        }
         if (entry) {
           this.pending.delete(rpcId);
           clearTimeout(entry.timer);
@@ -674,6 +686,7 @@ export class RelayTransport implements Transport {
     const conn = new RelayConnection(ws, from, crypto, encKey, peerId, {
       unaryTimeoutMs: this.opts.unaryTimeoutMs,
     });
+    conn.onHostEvent = (event) => this.opts.onHostEvent?.(event);
     const timeoutMs = this.opts.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
 
     return new Promise<Connection>((resolve, reject) => {
