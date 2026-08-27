@@ -28,6 +28,7 @@ import { MessageBubble } from "../../src/ui/chat/MessageBubble";
 import { AppIcon } from "../../src/ui/icons";
 import { ErrorCard } from "../../src/ui/ErrorCard";
 import { TrajectoryView } from "../../src/ui/trajectory/TrajectoryView";
+import type { TrajectoryRow } from "../../src/ui/trajectory/trajectory";
 import { BottomSheet } from "../../src/ui/BottomSheet";
 import { SkeletonRow } from "../../src/ui/SkeletonRow";
 import { EmptyState } from "../../src/ui/EmptyState";
@@ -74,7 +75,7 @@ export default function ChatScreen() {
   const [sendingImage, setSendingImage] = useState(false);
   const showJumpRef = useRef(false);
   const listRef = useRef<FlashListRef<TranscriptRow> | null>(null);
-  const trajectoryRef = useRef<FlashListRef<TranscriptStep> | null>(null);
+  const trajectoryRef = useRef<FlashListRef<TrajectoryRow> | null>(null);
   const swipeRef = useRef<ScrollView | null>(null);
   const historyLoadedFor = useRef<string | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);

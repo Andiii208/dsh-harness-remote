@@ -17,7 +17,8 @@ interface AppTextProps extends TextProps {
   tone?: "text" | "muted" | "dim" | "accent" | "danger" | "success";
 }
 
-function base(variant: AppTextVariant, colors: ThemeColors, scale: number): TextStyle {
+/** 导出为纯函数：渲染测试与调用方均可直接断言缩放结果。 */
+export function variantBase(variant: AppTextVariant, colors: ThemeColors, scale: number): TextStyle {
   switch (variant) {
     case "display":
       return {
@@ -79,7 +80,7 @@ export function AppText({ variant = "body", tone = "text", style, ...rest }: App
   // B7：设置页的字体大小从「仅聊天气泡」升级为统一文字组件全生效。
   const { scale } = useAppSettings();
   const styles = useMemo(() => {
-    const b = base(variant, colors, scale);
+    const b = variantBase(variant, colors, scale);
     return { ...b, color: toneColor(tone, colors) };
   }, [variant, tone, colors, scale]);
   return <Text {...rest} style={[styles, style]} />;

@@ -21,7 +21,7 @@ export function TrajectoryView({
   listRef,
 }: {
   steps: TranscriptStep[];
-  listRef: MutableRefObject<FlashListRef<TranscriptStep> | null>;
+  listRef: { current: FlashListRef<TrajectoryRow> | null };
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
