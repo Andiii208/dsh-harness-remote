@@ -35,6 +35,7 @@ import { useTheme } from "../src/theme-context";
 import { AppIcon } from "../src/ui/icons";
 import { useI18n } from "../src/i18n";
 import { haptic } from "../src/ui/haptics";
+import { ErrorCard } from "../src/ui/ErrorCard";
 
 const STATE_TONE: Record<string, StatusTone> = {
   online: "success",
@@ -468,7 +469,9 @@ export default function ConnectScreen() {
               )}
             </>
           )}
-          {connectError.length > 0 && <Text style={styles.connectError}>{connectError}</Text>}
+          {connectError.length > 0 && (
+            <ErrorCard message={connectError} retryLabel={t.common.tryAgain} onRetry={() => void onConnect()} />
+          )}
 
           {mode === "remote" && !online && (
             <View style={styles.linksCard}>
@@ -644,7 +647,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], isDark: boo
     quickRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.x3 },
     quickLink: { color: linkDim, fontSize: font.body, fontWeight: "500" },
     quickSeparator: { color: headingDim, fontSize: font.body },
-    connectError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono, textAlign: "center" },
+
     linksCard: {
       backgroundColor: surface,
       borderRadius: radius.card,

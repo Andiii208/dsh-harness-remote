@@ -20,6 +20,7 @@ import { Button } from "../src/ui/Button";
 import { HarnessMark } from "../src/ui/HarnessMark";
 import type { SessionSummary } from "../src/data/SessionStore";
 import { filterSessions, formatSessionTime, groupByWorkspace, pressureTier, workspaceDisplayName } from "../src/data/sessionViews";
+import { ErrorCard } from "../src/ui/ErrorCard";
 
 function normalizePath(p: string): string {
   return p.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -372,7 +373,13 @@ export default function SessionsScreen() {
                 autoFocus
               />
             )}
-            {refreshError.length > 0 && <Text style={styles.refreshError}>{refreshError}</Text>}
+            {refreshError.length > 0 && (
+              <ErrorCard
+                message={refreshError}
+                retryLabel={t.common.tryAgain}
+                onRetry={() => { setRefreshError(""); void refreshSessions().catch(() => setRefreshError(t.sessions.refreshFailed)); }}
+              />
+            )}
             {pending.length > 0 && (
               <Pressable
                 style={styles.pendingRow}
@@ -605,7 +612,7 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], scale: numb
     },
     pendingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.amber },
     pendingText: { color: colors.text, fontSize: 13, fontWeight: "500", letterSpacing: -0.1 },
-    refreshError: { color: colors.danger, fontSize: font.caption, fontFamily: font.mono },
+
     groupHeaderRow: {
       flexDirection: "row",
       alignItems: "center",
