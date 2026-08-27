@@ -93,7 +93,7 @@ describe("createOfflineQueue", () => {
 
   it("rejects expired envelopes on enqueue", () => {
     const q = createOfflineQueue({ now: () => 1_000 });
-    const expired = routeEnv("e1", 1_000 - 120_001); // older than default 2 min TTL
+    const expired = routeEnv("e1", 1_000 - 24 * 60 * 60 * 1000 - 1); // older than default 24h TTL (A11)
     expect(q.enqueue("b", expired)).toEqual({ queued: false, dropped: true });
     expect(q.drain("b")).toEqual([]);
   });

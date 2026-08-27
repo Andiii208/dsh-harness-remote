@@ -52,7 +52,7 @@ export interface RelayServerOptions {
   credentialTtlMs?: number;
   /** Optional push provider used to wake offline peers. */
   push?: PushProvider;
-  /** Offline queue TTL in ms. Defaults to 2 minutes. */
+  /** Offline queue TTL in ms. Defaults to 24 hours (audit A11). */
   queueTtlMs?: number;
   /** Simple token-bucket rate limit. Defaults: perMinute=120, burst=240. */
   rateLimit?: RelayRateLimitOptions;
@@ -126,7 +126,9 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
   const credentialTtlMs = options.credentialTtlMs ?? 12 * 60 * 60 * 1000;
   const credentials = createCredentialService(options.credentialSecret);
   const store = options.store ?? createRelayStore();
-  const queue = createOfflineQueue({ ttlMs: options.queueTtlMs ?? 2 * 60 * 1000 });
+  const queue = createOfflineQueue({
+    ...(options.queueTtlMs !== undefined ? { ttlMs: options.queueTtlMs } : {}),
+  });
   const pushProvider = options.push;
   const rateLimiter = createRateLimiter({
     perMinute: options.rateLimit?.perMinute ?? 120,

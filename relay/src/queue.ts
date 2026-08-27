@@ -8,9 +8,10 @@
 import type { RelayEnvelope } from "@dsh-remote/protocol";
 
 export interface OfflineQueueOptions {
-  /** Envelope TTL in ms. Defaults to 2 minutes. */
+  /** Envelope TTL in ms. Defaults to 24 hours (audit A11: was 2 minutes —
+   *  a phone offline for one coffee break permanently lost approvals). */
   ttlMs?: number;
-  /** Max queued envelopes per peer. Defaults to 50; when full the oldest envelope is dropped. */
+  /** Max queued envelopes per peer. Defaults to 500; when full the oldest envelope is dropped. */
   maxPerPeer?: number;
   now?: () => number;
 }
@@ -24,8 +25,8 @@ export interface OfflineQueue {
 }
 
 export function createOfflineQueue(opts: OfflineQueueOptions = {}): OfflineQueue {
-  const ttlMs = opts.ttlMs ?? 2 * 60 * 1000;
-  const maxPerPeer = opts.maxPerPeer ?? 50;
+  const ttlMs = opts.ttlMs ?? 24 * 60 * 60 * 1000;
+  const maxPerPeer = opts.maxPerPeer ?? 500;
   const now = opts.now ?? Date.now;
   const queues = new Map<string, RelayEnvelope[]>();
 
