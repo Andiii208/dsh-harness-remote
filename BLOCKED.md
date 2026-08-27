@@ -1,3 +1,6 @@
+## 2026-08-27 自主执行批次：部署性阻塞不变
+- 代码侧 P0/P1 已完成（见 PROGRESS.md 同日条目）；两项既有部署性阻塞维持：① 0.3.2 插件需重启 DSH Desktop 激活；② App 侧 unary 30s 超时需随下一版 APK 生效（打 tag v* 即出包）。
+
 ## 2026-08-25 session.list 瘦身修复：1 项部署性阻塞（非代码）
 
 - **dsh-harness-remote 0.3.2（瘦身版）需 DSH Desktop 重启激活**：修复已实现（`slimSessionListResult`，session.list 11.8MB→117KB）、测试/回归全绿、tgz 已重新 pack 并热装配进 profile。`dev_reload_package` 仍报「loader.internal 不可用」无法热重载。**重启 DSH Desktop 后生效**，现有 v0.3.2 APK 无需重装即可看到历史会话。

@@ -1,5 +1,23 @@
 # PROGRESS
 
+## 2026-08-27 全面审计后自主执行：P0 可用性救援 7 项 + P1 观感 4 批（本机 10 commits）
+- 审计来源：4 路并行深查（UI/功能完整性/后端链路/工程健康度）产出 `docs/plans/2026-08-27-audit-and-optimization-plan.md`（A17+B11+C7+D4 条发现，全部带文件:行号）。
+- **P0 可用性（LAN 模式自此「电脑重启→手机回连免扫码」）**：
+  - A1 自启开关不再被优雅退出清除（`dispose()` 与用户 `stop()` 分离，230cbd0）；
+  - A2/C5 consoleId + console 端 ECDH 私钥/对端公钥落盘合并写 + 内置 relay 默认 SQLite（relay.db，node:sqlite 缺失自动降级内存态；实测 tmpdir 冒烟建库成功），pair 回调上抛 peerPublicKey 落盘、下次启动直接派生会话密钥免等 pair.ack（7b2c807）；
+  - A3 console→relay 断线指数退避自动重连（1s→60s 封顶）+ 30s 心跳保活 + 握手超时不再视作用户放弃；`RemoteStatus.relayOnline` 反映真实健康度（5be0d71）；
+  - A4/A5 cloudflared 崩溃有界自愈（≤5 次、3s 间隔，URL 变更 onUrlUpdate 上报、耗尽 onFatal 可见）+ Windows taskkill 树杀不再留孤儿进程（decideOnTunnelExit 纯函数可测，647f5cf）;
+  - A6 DSH 404 能力缓存加 24h TTL 过期重探（bbcb6ba）；
+  - A11 relay 离线队列 2min/50 条 → **24h/500 条**，手机离线超两分钟不再永久丢审批（f47d702）；
+  - 0.10 死代码清除：interrupt 桩/plugin-catalog/hostSettingsGet/Set（真实宿主 404 且零调用），协议层 HostSettings 类型与纯函数保留（be7c331）。
+- **P1 观感**：
+  - 0791f15：settings 预设胶囊零对比度 bug、深色 textDim #555560→#7A7A88 达 AA、root 壳底色随主题不闪白、外观/语言/字体大小/用户插件硬编码中文全部入 i18n、无标题会话显示 mono 前 16 位 id、goal 标签接 i18n；
+  - 337d44b：`ui/icons.tsx` 统一 SVG 图标替换 ⚙🛡↑↓↻✓⛔?◔ 全部 emoji/unicode（连接页/会话列表/聊天权限 chip/发送/FAB/事件页），删对应死样式；
+  - 5c400ac：`ui/BottomSheet` 收敛 chat 10 处 + sessions 3 处 + MessageBubble + TrajectoryView 共 **14 处**底部弹层拷贝，paddingBottom 改 insets.bottom 避手势条；
+  - c63fc70：`ui/ErrorCard`（v9 §5.1 规格）接线连接失败与会话刷新失败——首次拥有可见错误卡 + 重试按钮。
+- 回归证据：`pnpm -r typecheck` 全绿；`pnpm -r test` **501/501 通过**（protocol 129 / mobile 192 / plugin 88 / mock 29 / relay 39 / capture 24）；mobile 字号门禁 --strict 通过。
+- 已知残留（下一批）：tunnel URL 轮换仍需人工换地址（0.4 的命名隧道引导与 url-changed 协议帧未做）；chat 上帝文件拆分与 AppText/anim 接线（B5/B7/B8）；安全项 C1-C7（register/pair 鉴权收紧为公网发布门槛）；ESLint 与页面级渲染测试（P3）。App 侧 unary 超时仍待新 APK 发版。
+
 ## 2026-08-25 真机「会话列表 EMPTY」根因修复：session.list 响应 10MB 瘦身 + relay unary 超时
 - 现象：用户 CI 下载 v0.3.2 APK，公网隧道（wss://…trycloudflare.com + 6 位码）连接成功进入会话页后，列表 EMPTY、新建会话后进入聊天无历史。Web 预览与 `tools/smoke-e2e.mjs` 均正常，差异只在真机 5G + 公网隧道。
 - 根因 1（主）：真实 DSH `session.list` 返回全量 projections（实测 237 会话 ≈ **11.8MB** JSON），经 cloudflared 公网隧道到手机必然超时/挂起；App 侧 `RelayConnection.unary` 又无超时，UI 永远停在 EMPTY 且无错误提示。LAN 直连的 smoke-e2e 从未暴露此问题（本地回环传 10MB 无压力）。
