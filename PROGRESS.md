@@ -1,5 +1,12 @@
 # PROGRESS
 
+## 2026-08-27 第二批收尾：计划文档剩余项全部完成（B5/B7/B8/1.9、C3-C7、P3 全套、0.4 闭环、0.9 扩展）
+- **UI**：v9.1 双画布裁定+深色主机卡修复(b37362c)；chat 安全区+键盘偏移去魔法数(66356b4)；AppText 字号缩放全组件生效 + sessions/index 入场动效接线 + 主题切换 ThemeCrossfade 交叉淡出(f8a15c2→amend 为 931e1e7)。
+- **安全**：静默明文降级消除（密文无钥丢弃告警）+ ws maxPayload=8MiB 超限 1009(d4e9dc9)；cloudflared 钉版本 2026.8.2 + CLOUDFLARED_SHA256 fail-closed 校验(98cf540)；MANUAL 普通用户部署指南含排障表(d5ebac2)。
+- **功能补全**：历史/图片附件失败可见化可重试(6ebe7ca)；events 事件持久化成真通知中心(A15)(03dfad3)；附件内存 LRU+磁盘缓存双层(A16)(9929478/5f441b4)；mDNS+_24 双路局域网发现(4d2acff)；tunnel URL 变更自动迁移手机端(0.4)(88bd105，含 protocol onHostEvent 回归测试)。
+- **工程**：ESLint flat config 全仓 0 error + CI lint 门禁(c8041dc)；RTR 渲染测试基建 3 例(b033175)；新依赖 expo-file-system/@testing-library/react-native/react-test-renderer/react-native-zeroconf。
+- **回归证据**：typecheck 6 包 Done；test protocol 130 / harness-plugin 92 / relay 41 / mobile 197(+ui.render/discover 已计入总数) / mock 29 / capture 24 全绿；lint 0 error(exhaustive-deps warn×5)；字号门禁 strict 通过。
+- **结案**：0.8 pull 审批列表因上游无 RPC 以队列扩容+事件持久化双保险结案；0.1 发版与 DSH Desktop 重启属用户部署动作（推 tag 触发 android-apk CI）。
 ## 2026-08-27 追加批次：公网发布门槛级安全速赢（C1/C2）
 - randomPairingCode() CSPRNG 配对码替换 Math.random（store/sqlite 支持 generatePairingCode 注入，server/CLI 统一喂入）；
 - register 公钥绑定防顶替：同 clientId 换公钥重复注册回 E_AUTH，不带公钥沿用旧绑定不覆盖记录；回归测试覆盖抢注/空钥重注册/合法重连三态。
