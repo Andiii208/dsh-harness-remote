@@ -579,6 +579,8 @@ export default function ConnectScreen() {
   );
 }
 
+const HERO_ROW_PRESSED = "rgba(255,255,255,0.07)";
+
 function createStyles(colors: ReturnType<typeof useTheme>["colors"], isDark: boolean) {
   // 双画布：深色 = 深海品牌画布（hero 令牌）；浅色 = 纸面（paper 令牌）。
   const surface = isDark ? colors.heroCard : colors.surface;
@@ -676,11 +678,12 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], isDark: boo
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: stroke,
     },
+    // B2：深色下走 hero 半透明卡，避免不透明 surface 在深海画布上成视觉补丁。
     listCard: {
-      backgroundColor: colors.surface,
+      backgroundColor: surface,
       borderRadius: radius.card,
       borderWidth: 1,
-      borderColor: colors.separator,
+      borderColor: stroke,
       overflow: "hidden",
     },
     listHeader: {
@@ -700,9 +703,9 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"], isDark: boo
       paddingHorizontal: space.x5,
       paddingVertical: space.x4,
       borderTopWidth: 1,
-      borderTopColor: colors.separator,
+      borderTopColor: stroke,
     },
-    hostRowPressed: { backgroundColor: colors.surface2 },
+    hostRowPressed: { backgroundColor: isDark ? HERO_ROW_PRESSED : colors.surface2 },
     hostRowText: { color: colors.text, fontSize: font.body, fontFamily: font.mono, flexShrink: 1 },
     hostRowArrow: { color: colors.textDim, fontSize: 18, fontWeight: "300" },
     historyButton: { alignItems: "center", paddingVertical: 2 },
