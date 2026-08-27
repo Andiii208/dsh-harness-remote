@@ -589,6 +589,15 @@ export function createRelayServer(options: RelayServerOptions = {}): RelayServer
     ws.on("message", (data: RawData) => {
       handleMessage(ws, data);
     });
+    ws.on("error", (err) => {
+      // Audit C4：单连接异常（含 maxPayload 超限的 WS_ERR_*、网络抖动）必须
+      // 就地消化——Node 的 EventEmitter 若无 error 监听，一次异常会带崩整个
+      // relay。连接已不可用，直接按断线清理并留痕。
+      socketPeers.delete(ws);
+      unauthSocket(ws);
+      auditEvent("ws_error", req.socket.remoteAddress ?? "", "relay", false);
+      console.warn(`[relay] ws error: ${err.name}: ${err.message}`);
+    });
     ws.on("close", () => {
       socketPeers.delete(ws);
       unauthSocket(ws);
